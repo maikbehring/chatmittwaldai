@@ -12,6 +12,7 @@ import {
 } from "./modelPresets";
 import { ModelSettingsDock } from "./ModelSettingsDock";
 import { SettingsGlossaryOverlay } from "./SettingsGlossaryOverlay";
+import { ModelsOverviewOverlay } from "./ModelsOverviewOverlay";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { estimateInferenceCo2Grams } from "./inferenceFootprint";
 import { GITHUB_NEW_BUG_ISSUE_URL } from "./repoLinks";
@@ -403,6 +404,7 @@ export function App() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showGlossary, setShowGlossary] = useState(false);
+  const [showModelsOverview, setShowModelsOverview] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
@@ -910,6 +912,14 @@ export function App() {
                     Developer-Dokumentation
                   </a>
                   <span className="text-neutral-300 dark:text-neutral-600"> · </span>
+                  <button
+                    type="button"
+                    className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
+                    onClick={() => setShowModelsOverview(true)}
+                  >
+                    Modellübersicht
+                  </button>
+                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
                   <a
                     className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
                     href="https://www.mittwald.de/impressum"
@@ -1115,6 +1125,14 @@ export function App() {
                 Doku
               </a>
               {" · "}
+              <button
+                type="button"
+                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
+                onClick={() => setShowModelsOverview(true)}
+              >
+                Modellübersicht
+              </button>
+              {" · "}
               <a
                 className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
                 href="https://www.mittwald.de/impressum"
@@ -1153,6 +1171,7 @@ export function App() {
       </div>
 
       <SettingsGlossaryOverlay open={showGlossary} onClose={() => setShowGlossary(false)} />
+      <ModelsOverviewOverlay open={showModelsOverview} onClose={() => setShowModelsOverview(false)} />
     </div>
   );
 }
