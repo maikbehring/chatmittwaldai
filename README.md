@@ -1,6 +1,6 @@
-# Mittwald KI-Playground
+# Mittwald KI-Playground (Beta)
 
-Öffentlicher Test-Chat für [mittwald AI-Hosting](https://developer.mittwald.de/de/docs/v2/platform/aihosting/): OpenAI-kompatible API (`https://llm.aihosting.mittwald.de/v1`), **Chatverlauf nur im Browser** (localStorage), **API-Key nur auf dem Server**.
+Öffentlicher **Beta**-Test-Chat für [mittwald AI-Hosting](https://developer.mittwald.de/de/docs/v2/platform/aihosting/): OpenAI-kompatible API (`https://llm.aihosting.mittwald.de/v1`), **Chatverlauf nur im Browser** (localStorage), **API-Key nur auf dem Server**.
 
 ## Voraussetzungen
 
@@ -61,6 +61,10 @@ Details: [.env.example](./.env.example).
 - `GET /api/config` — Titel u. a. für die UI
 - `GET /api/models` — weitergeleitete Modellliste (gefiltert nach Allowlist)
 - `POST /api/chat/completions` — Streaming zu mittwald; nur erlaubte JSON-Felder; Vision nur mit `data:image/…` Base64
+
+## Bugs melden
+
+[Fehler oder Verbesserungsvorschläge auf GitHub erstellen](https://github.com/maikbehring/chatmittwaldai/issues/new?template=bug_report.md) — Vorlage: `.github/ISSUE_TEMPLATE/bug_report.md`. Im Playground verlinkt unter **Bug melden** (Fußzeile, Sidebar, Leerzustand, Glossar).
 
 ## Lizenz
 

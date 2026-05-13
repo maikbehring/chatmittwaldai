@@ -14,6 +14,7 @@ import { ModelSettingsDock } from "./ModelSettingsDock";
 import { SettingsGlossaryOverlay } from "./SettingsGlossaryOverlay";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { estimateInferenceCo2Grams } from "./inferenceFootprint";
+import { GITHUB_NEW_BUG_ISSUE_URL } from "./repoLinks";
 
 const STORAGE_KEY = "mittwald-ai-playground-state-v2";
 const LEGACY_STORAGE_KEY = "mittwald-ai-playground-state-v1";
@@ -277,6 +278,17 @@ async function streamChatCompletion(
   return lastUsage;
 }
 
+function BetaBadge() {
+  return (
+    <span
+      className="shrink-0 rounded border border-amber-500/70 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/60 dark:text-amber-100"
+      title="Öffentliche Beta — Funktion und Modelle können sich ändern."
+    >
+      Beta
+    </span>
+  );
+}
+
 function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
   const fmt = (n: number | null) => (n == null ? "—" : n.toLocaleString("de-DE"));
   const tps =
@@ -465,6 +477,10 @@ export function App() {
     mq.addEventListener("change", apply);
     return () => mq.removeEventListener("change", apply);
   }, [themePreference]);
+
+  useEffect(() => {
+    document.title = `${title} · Beta`;
+  }, [title]);
 
   useEffect(() => {
     const state: Persisted = {
@@ -747,22 +763,12 @@ export function App() {
             <span className="text-lg leading-none">≡</span>
           </button>
           {!sidebarCollapsed && (
-            <span className="truncate text-sm font-semibold tracking-tight dark:text-neutral-100">{title}</span>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <span className="truncate text-sm font-semibold tracking-tight dark:text-neutral-100">{title}</span>
+              <BetaBadge />
+            </div>
           )}
         </div>
-
-        <button
-          type="button"
-          onClick={clearChat}
-          disabled={busy}
-          className={`mx-2 mt-2 flex shrink-0 items-center gap-2 rounded-lg py-2.5 text-sm text-neutral-800 hover:bg-neutral-200/70 disabled:opacity-50 dark:text-neutral-200 dark:hover:bg-neutral-800/80 ${
-            sidebarCollapsed ? "justify-center px-0" : "px-3"
-          }`}
-          title="Neuer Chat"
-        >
-          <span className="text-lg font-light leading-none">✎</span>
-          {!sidebarCollapsed && <span>Neuer Chat</span>}
-        </button>
 
         {!sidebarCollapsed && <div className="min-h-0 flex-1" aria-hidden="true" />}
 
@@ -806,6 +812,14 @@ export function App() {
               >
                 Impressum (mittwald)
               </a>
+              <a
+                className="block truncate rounded-md px-2 py-1.5 text-[11px] text-neutral-500 hover:bg-neutral-200/50 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/50 dark:hover:text-neutral-200"
+                href={GITHUB_NEW_BUG_ISSUE_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Bug auf GitHub melden
+              </a>
             </>
           )}
           <button
@@ -823,7 +837,7 @@ export function App() {
 
       <div className="flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950">
         <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-2 sm:px-3 dark:border-neutral-800">
-          <div className="flex min-w-0 flex-1 items-center">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
             <label htmlFor="model-select" className="sr-only">
               Modell
             </label>
@@ -849,6 +863,7 @@ export function App() {
                 ))
               )}
             </select>
+            {sidebarCollapsed ? <BetaBadge /> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
             <label htmlFor="theme-select" className="sr-only sm:not-sr-only text-xs text-neutral-500 dark:text-neutral-400">
@@ -902,6 +917,15 @@ export function App() {
                     rel="noreferrer"
                   >
                     Impressum
+                  </a>
+                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
+                  <a
+                    className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
+                    href={GITHUB_NEW_BUG_ISSUE_URL}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    Bug melden
                   </a>
                 </p>
               </div>
@@ -1062,6 +1086,15 @@ export function App() {
                   </div>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={clearChat}
+                disabled={busy || messages.length === 0}
+                className="mb-1 shrink-0 self-end rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[11px] font-medium text-neutral-700 shadow-sm outline-none hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                title="Clear conversation"
+              >
+                Clear chat
+              </button>
             </div>
             <p className="mx-auto mt-2 max-w-3xl px-2 text-center text-[10px] leading-relaxed text-neutral-400 dark:text-neutral-500">
               <a
@@ -1089,6 +1122,15 @@ export function App() {
                 rel="noreferrer"
               >
                 Impressum
+              </a>
+              {" · "}
+              <a
+                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
+                href={GITHUB_NEW_BUG_ISSUE_URL}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Bug melden
               </a>
               {" · "}
               <a

@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { GITHUB_NEW_BUG_ISSUE_URL } from "./repoLinks";
 
 type Props = {
   open: boolean;
@@ -182,6 +183,15 @@ export function SettingsGlossaryOverlay({ open, onClose }: Props) {
               rel="noreferrer"
             >
               Impressum (mittwald.de)
+            </a>
+            . Bugs und Wünsche am besten direkt im{" "}
+            <a
+              className="text-accent underline"
+              href={GITHUB_NEW_BUG_ISSUE_URL}
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub-Repo melden
             </a>
             .
           </p>
