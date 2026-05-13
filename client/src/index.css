@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --surface: 248 250 252;
+  --surface-muted: 241 245 249;
+  --ink: 15 23 42;
+  --ink-muted: 71 85 105;
+  --accent: 13 148 136;
+  --accent-hover: 15 118 110;
+}
+
+html.dark {
+  --surface: 15 23 42;
+  --surface-muted: 30 41 59;
+  --ink: 248 250 252;
+  --ink-muted: 148 163 184;
+  --accent: 45 212 191;
+  --accent-hover: 94 234 212;
+}
+
+body {
+  @apply bg-surface text-ink min-h-screen;
+}
