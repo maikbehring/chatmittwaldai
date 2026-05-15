@@ -282,9 +282,11 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
               <p className="mb-2 text-[10px] leading-snug text-neutral-500 dark:text-neutral-400">
                 Standard: {webSearchConfig.providers.duckduckgo?.label ?? "DuckDuckGo"} (kostenlos, ohne
                 API-Key). Pro Chat im Header mit „Websuche“ ein-/ausschalten.
-                {webSearchConfig.provider === "serper"
-                  ? ` Aktiv: Serper (Google).`
-                  : ""}
+                {webSearchConfig.provider === "serpapi"
+                  ? " Aktiv: Google (SerpAPI)."
+                  : webSearchConfig.provider === "serper"
+                    ? " Aktiv: Google (Serper)."
+                    : ""}
               </p>
               <label className="flex cursor-pointer items-center gap-2">
                 <input

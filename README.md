@@ -27,7 +27,7 @@ Repository: [github.com/maikbehring/chatmittwaldai](https://github.com/maikbehri
 - **Mehrere Chats** in der Sidebar (Verlauf pro Thread im Browser, „Neuer Chat“)
 - Chat mit Streaming-Antworten (Markdown, Code)
 - Modellauswahl inkl. Modellübersicht und Einstellungen (Temperatur, System-Prompt, …)
-- **Websuche** (optional, pro Chat): Suchergebnisse werden dem Modell als Kontext mitgegeben — Standard **DuckDuckGo** ohne API-Key; optional **Serper** (Google) per Server-Konfiguration
+- **Websuche** (optional, pro Chat): Suchergebnisse werden dem Modell als Kontext mitgegeben — Standard **DuckDuckGo** ohne API-Key; optional **Google** via [SerpAPI](https://serpapi.com/) oder Serper per Server-Konfiguration
 - **Bilder** im Chat (Vision-Modelle) mit Lightbox
 - **Spracheingabe** (Whisper über mittwald, z. B. `whisper-large-v3-turbo`)
 - Geschätzte **Token-Statistik** und **CO₂-Hinweis** pro Antwort (Orientierungswerte, keine Bilanzierung)
@@ -101,15 +101,18 @@ Alle Variablen sind in [.env.example](./.env.example) dokumentiert. Wichtigste:
 | `RATE_LIMIT_*` | Schutz vor Missbrauch (Chat, Modellliste, Transkription, Websuche) |
 | `PLAYGROUND_MAX_MESSAGES` | Max. Nachrichten pro Request (Standard: 60) |
 | `PLAYGROUND_WHISPER_*` | Spracheingabe (Modell, Sprache, max. Audio-Größe) |
-| `WEB_SEARCH_PROVIDER` | `duckduckgo` (Standard, kostenlos) oder `serper` (Google, API-Key nötig) |
-| `WEB_SEARCH_SERPER_API_KEY` | Nur bei `WEB_SEARCH_PROVIDER=serper` — Key von [serper.dev](https://serper.dev/) |
+| `WEB_SEARCH_PROVIDER` | `duckduckgo` (Standard), `serpapi` (Google) oder `serper` (Google) |
+| `WEB_SEARCH_SERPAPI_API_KEY` | Bei `serpapi` — Key aus dem [SerpAPI Dashboard](https://serpapi.com/dashboard) |
+| `WEB_SEARCH_SERPER_API_KEY` | Bei `serper` — Key von [serper.dev](https://serper.dev/) |
+| `WEB_SEARCH_GOOGLE_GL` / `HL` / `LOCATION` | Optional Region/Sprache für Google (z. B. `de`, `Germany`) |
 | `WEB_SEARCH_MAX_RESULTS` | Treffer pro Anfrage (Standard: 5) |
 | `RATE_LIMIT_MAX_WEB_SEARCH` | Rate-Limit für `POST /api/web/search` (Standard: 30 pro Fenster) |
 
 ### Websuche (Betrieb & UI)
 
-- **Standard:** DuckDuckGo HTML-Suche über den Proxy — **kein** zusätzlicher API-Key.
-- **Optional:** `WEB_SEARCH_PROVIDER=serper` und `WEB_SEARCH_SERPER_API_KEY` für Google-Ergebnisse via Serper.
+- **Standard:** DuckDuckGo über den Proxy — **kein** zusätzlicher API-Key.
+- **Google (empfohlen):** `WEB_SEARCH_PROVIDER=serpapi` und `WEB_SEARCH_SERPAPI_API_KEY` ([SerpAPI](https://serpapi.com/google-search-api)).
+- **Alternativ:** `WEB_SEARCH_PROVIDER=serper` und `WEB_SEARCH_SERPER_API_KEY` für Google via Serper.
 - Im UI: Button **„Websuche“** im Header schaltet die Suche **pro Chat** ein/aus; in den Modell-Einstellungen kann festgelegt werden, dass **neue Chats** mit aktivierter Websuche starten.
 - Beim Senden einer Textnachricht mit aktiver Websuche ruft der Client `POST /api/web/search` auf; Treffer landen als zusätzliche System-Nachricht im Request an mittwald (nicht dauerhaft serverseitig gespeichert).
 
@@ -135,7 +138,7 @@ Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
 - Chats liegen **nur im localStorage** des jeweiligen Browsers (inkl. mehrerer Threads und Websuche-Einstellung pro Chat).
 - Der **API-Key** liegt nur in der Server-Umgebung (`.env`), nicht im Frontend.
 - Anfragen gehen über euren **Proxy** an mittwald; Inhalte unterliegen auch der [mittwald-Dokumentation](https://developer.mittwald.de/de/docs/v2/platform/aihosting/).
-- Bei aktivierter **Websuche** sendet der Proxy Suchanfragen an **DuckDuckGo** oder (optional) **Serper** — dabei gelten deren Nutzungsbedingungen; Suchbegriffe verlassen euren Server in Richtung des gewählten Anbieters.
+- Bei aktivierter **Websuche** sendet der Proxy Suchanfragen an **DuckDuckGo**, **SerpAPI** oder **Serper** — dabei gelten deren Nutzungsbedingungen; Suchbegriffe verlassen euren Server in Richtung des gewählten Anbieters.
 - CO₂- und Token-Werte sind **Schätzungen** zur Orientierung.
 
 ---
@@ -149,7 +152,7 @@ Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
 | `GET /api/models` | Modellliste (gefiltert) |
 | `POST /api/chat/completions` | Chat (Streaming); nur erlaubte JSON-Felder |
 | `POST /api/audio/transcriptions` | Sprache → Text (Whisper) |
-| `POST /api/web/search` | Websuche (`{ "query": "…" }`) — DuckDuckGo oder Serper |
+| `POST /api/web/search` | Websuche (`{ "q": "…" }`) — DuckDuckGo, SerpAPI oder Serper |
 
 Vision: Bilder nur als `data:image/…` Base64 im Request.
 
@@ -165,7 +168,7 @@ Vision: Bilder nur als `data:image/…` Base64 im Request.
 | `Vite: command not found` | Im Projektroot `npm install` ausführen, nicht nur im `client/`-Ordner |
 | Mikrofon funktioniert nicht | Browser-Berechtigung; HTTPS in Produktion (localhost ist Ausnahme) |
 | CORS-Fehler in Produktion | `CORS_ORIGIN` auf die öffentliche Frontend-URL setzen |
-| Websuche liefert keine Treffer / Fehler | Rate-Limit prüfen; bei Serper Key und `WEB_SEARCH_PROVIDER=serper`; DuckDuckGo kann IP-Limits haben — ggf. Serper nutzen |
+| Websuche liefert keine Treffer / Fehler | Rate-Limit prüfen; bei SerpAPI/Serper Key und passenden `WEB_SEARCH_PROVIDER`; DuckDuckGo kann IP-Limits haben — ggf. SerpAPI nutzen |
 
 ---
 

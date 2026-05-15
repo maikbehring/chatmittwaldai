@@ -1,6 +1,7 @@
 /**
  * Websuche für den Playground.
- * Standard: DuckDuckGo (ohne API-Key). Optional: Serper (WEB_SEARCH_SERPER_API_KEY).
+ * Standard: DuckDuckGo (ohne API-Key).
+ * Optional: SerpAPI (Google), Serper (Google) — jeweils per API-Key in .env.
  */
 
 const MAX_QUERY_LEN = 400;
@@ -183,6 +184,44 @@ async function searchDuckDuckGo(query, maxResults) {
   return results;
 }
 
+/** SerpAPI (Google) — https://serpapi.com */
+async function searchSerpApi(query, maxResults, apiKey) {
+  const params = new URLSearchParams({
+    engine: "google",
+    q: query,
+    api_key: apiKey,
+    num: String(Math.min(maxResults, 10)),
+    output: "json",
+  });
+  const gl = process.env.WEB_SEARCH_GOOGLE_GL?.trim();
+  const hl = process.env.WEB_SEARCH_GOOGLE_HL?.trim();
+  const location = process.env.WEB_SEARCH_GOOGLE_LOCATION?.trim();
+  if (gl) params.set("gl", gl);
+  if (hl) params.set("hl", hl);
+  if (location) params.set("location", location);
+
+  const res = await fetch(`https://serpapi.com/search.json?${params}`, {
+    signal: AbortSignal.timeout(15_000),
+  });
+  const json = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg =
+      typeof json.error === "string"
+        ? json.error
+        : json.error?.message || `SerpAPI ${res.status}`;
+    throw new Error(String(msg).slice(0, 300));
+  }
+  const organic = Array.isArray(json?.organic_results) ? json.organic_results : [];
+  return normalizeResults(
+    organic.map((o) => ({
+      title: String(o.title ?? ""),
+      url: String(o.link ?? ""),
+      snippet: String(o.snippet ?? ""),
+    })),
+    maxResults,
+  );
+}
+
 /** Serper (Google) — optional mit API-Key. */
 async function searchSerper(query, maxResults, apiKey) {
   const res = await fetch("https://google.serper.dev/search", {
@@ -210,21 +249,39 @@ async function searchSerper(query, maxResults, apiKey) {
   );
 }
 
+function resolveWebSearchProvider(requested, keys) {
+  if (requested === "serpapi" && keys.serpapi) return "serpapi";
+  if (requested === "serper" && keys.serper) return "serper";
+  return "duckduckgo";
+}
+
 export function getWebSearchConfig() {
-  const provider = (process.env.WEB_SEARCH_PROVIDER || "duckduckgo").toLowerCase();
+  const requested = (process.env.WEB_SEARCH_PROVIDER || "duckduckgo").toLowerCase();
+  const serpapiKey =
+    process.env.WEB_SEARCH_SERPAPI_API_KEY?.trim() ||
+    process.env.SERPAPI_API_KEY?.trim() ||
+    "";
   const serperKey = process.env.WEB_SEARCH_SERPER_API_KEY?.trim() || "";
   const maxResults = Math.min(
     Math.max(Number(process.env.WEB_SEARCH_MAX_RESULTS || DEFAULT_MAX_RESULTS), 1),
     10,
   );
-  const effectiveProvider =
-    provider === "serper" && serperKey ? "serper" : "duckduckgo";
+  const effectiveProvider = resolveWebSearchProvider(requested, {
+    serpapi: serpapiKey,
+    serper: serperKey,
+  });
   return {
     enabled: true,
     provider: effectiveProvider,
+    requestedProvider: requested,
     providers: {
       duckduckgo: { label: "DuckDuckGo", requiresApiKey: false },
-      serper: { label: "Serper (Google)", requiresApiKey: true, configured: Boolean(serperKey) },
+      serpapi: {
+        label: "Google (SerpAPI)",
+        requiresApiKey: true,
+        configured: Boolean(serpapiKey),
+      },
+      serper: { label: "Google (Serper)", requiresApiKey: true, configured: Boolean(serperKey) },
     },
     maxResults,
   };
@@ -238,14 +295,30 @@ export async function searchWeb(rawQuery, options = {}) {
   }
 
   const cfg = getWebSearchConfig();
+  const requested = cfg.requestedProvider;
   const maxResults = Math.min(options.maxResults ?? cfg.maxResults, 10);
 
   let results;
-  if (cfg.provider === "serper") {
+  if (cfg.provider === "serpapi") {
+    const key =
+      process.env.WEB_SEARCH_SERPAPI_API_KEY?.trim() ||
+      process.env.SERPAPI_API_KEY?.trim();
+    if (!key) {
+      throw new Error(
+        "SerpAPI ist gewählt, aber WEB_SEARCH_SERPAPI_API_KEY (oder SERPAPI_API_KEY) fehlt.",
+      );
+    }
+    results = await searchSerpApi(query, maxResults, key);
+  } else if (cfg.provider === "serper") {
     const key = process.env.WEB_SEARCH_SERPER_API_KEY?.trim();
     if (!key) throw new Error("Serper ist gewählt, aber WEB_SEARCH_SERPER_API_KEY fehlt.");
     results = await searchSerper(query, maxResults, key);
   } else {
+    if (requested === "serpapi" || requested === "serper") {
+      throw new Error(
+        `WEB_SEARCH_PROVIDER=${requested}, aber kein passender API-Key in .env gesetzt.`,
+      );
+    }
     results = await searchDuckDuckGo(query, maxResults);
   }
 
