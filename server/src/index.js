@@ -9,6 +9,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
+import { getPlaygroundLinks } from "./playgroundLinks.js";
 import { getWebSearchConfig, searchWeb } from "./webSearch.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -249,6 +250,7 @@ async function main() {
         maxAudioBytes: MAX_AUDIO_BYTES,
       },
       webSearch: getWebSearchConfig(),
+      links: getPlaygroundLinks(),
     });
   });
 

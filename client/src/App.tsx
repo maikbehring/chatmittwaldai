@@ -21,7 +21,13 @@ import { ChatMarkdown } from "./ChatMarkdown";
 import { ImageLightbox } from "./ImageLightbox";
 import { createRafStreamBatcher } from "./streamDeltaBatch";
 import { CO2_FOOTPRINT_TOOLTIP, estimateInferenceCo2Grams } from "./inferenceFootprint";
-import { GITHUB_NEW_BUG_ISSUE_URL } from "./repoLinks";
+import { formatPlaygroundTodayContext } from "./playgroundDate";
+import {
+  PlaygroundLinksFooter,
+  PlaygroundLinksInline,
+  PlaygroundLinksSidebar,
+} from "./PlaygroundExternalLinks";
+import { withDefaultBugLink, type PlaygroundLink } from "./playgroundLinks";
 import {
   createEmptyThread,
   deriveThreadTitle,
@@ -34,6 +40,8 @@ import {
   fetchWebSearch,
   formatWebSearchContext,
   providerLabel,
+  webSearchDataTransferHint,
+  webSearchDataTransferHintShort,
   type WebSearchConfig,
   type WebSearchResponse,
 } from "./webSearch";
@@ -377,10 +385,14 @@ function renderMessageContent(
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   streaming,
+  webSearchPending,
+  webSearchProviderLabel,
   onImageOpen,
 }: {
   message: ChatMessage;
   streaming: boolean;
+  webSearchPending?: boolean;
+  webSearchProviderLabel?: string;
   onImageOpen: (src: string, alt: string) => void;
 }) {
   if (message.role === "user") {
@@ -401,7 +413,21 @@ const ChatMessageRow = memo(function ChatMessageRow({
     <div className="flex justify-start">
       <div className="flex max-w-full flex-col items-start">
         <div className="max-w-full text-[15px] leading-relaxed text-neutral-900 dark:text-neutral-100">
-          {renderMessageContent(message.content, streaming, onImageOpen)}
+          {webSearchPending ? (
+            <p className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400" role="status">
+              <span
+                className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-sky-500 border-t-transparent dark:border-sky-400"
+                aria-hidden
+              />
+              Suche im Internet
+              {webSearchProviderLabel ? (
+                <span className="text-neutral-400 dark:text-neutral-500"> · {webSearchProviderLabel}</span>
+              ) : null}
+              …
+            </p>
+          ) : (
+            renderMessageContent(message.content, streaming, onImageOpen)
+          )}
         </div>
         {message.usage ? <AssistantTokenFooter stats={message.usage} /> : null}
       </div>
@@ -483,6 +509,8 @@ export function App() {
     return initialPreset.maxTokens;
   });
   const [systemPrompt, setSystemPrompt] = useState(() => initial.systemPrompt ?? "");
+  const [playgroundLinks, setPlaygroundLinks] = useState<PlaygroundLink[]>([]);
+  const footerLinks = useMemo(() => withDefaultBugLink(playgroundLinks), [playgroundLinks]);
   const [webSearchConfig, setWebSearchConfig] = useState<WebSearchConfig | null>(null);
   const [webSearchDefaultEnabled, setWebSearchDefaultEnabled] = useState(
     () => Boolean(initial.webSearchDefaultEnabled),
@@ -569,8 +597,8 @@ export function App() {
       return;
     }
 
-    if (busy) {
-      // Während des Streams: sofort ans Ende — kein smooth, sonst kämpft die Animation
+    if (busy || webSearchBusy) {
+      // Während des Streams / Websuche: sofort ans Ende — kein smooth, sonst kämpft die Animation
       // mit wachsendem Inhalt und der Text „springt“.
       const id = requestAnimationFrame(() => {
         sc.scrollTop = sc.scrollHeight;
@@ -582,7 +610,7 @@ export function App() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
     return () => cancelAnimationFrame(id);
-  }, [messages, busy]);
+  }, [messages, busy, webSearchBusy]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -700,6 +728,8 @@ export function App() {
           }
           const cWeb = (c as { webSearch?: WebSearchConfig }).webSearch;
           if (cWeb?.enabled) setWebSearchConfig(cWeb);
+          const cLinks = (c as { links?: PlaygroundLink[] }).links;
+          if (Array.isArray(cLinks)) setPlaygroundLinks(cLinks);
         }
         if (!modRes.ok) {
           const t = await modRes.text();
@@ -877,10 +907,11 @@ export function App() {
     const textNow = inputValueRef.current.trim();
     const hasContent = textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
-    if (options?.force && (!hasContent || busy || speechBusy)) return;
+    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy)) return;
     setError(null);
     const text = textNow;
     const file = imageFile;
+    const messagesBeforeSend = messages;
 
     let userContent: string | ContentPart[];
     if (file) {
@@ -906,18 +937,29 @@ export function App() {
       !file &&
       webSearchConfig?.enabled !== false;
 
+    setInput("");
+    setImageFile(null);
+
     if (useWebSearch) {
+      const optimisticUser: ChatMessage = { role: "user", content: userContent };
+      setMessages([
+        ...messagesBeforeSend,
+        optimisticUser,
+        { role: "assistant", content: "" },
+      ]);
       setWebSearchBusy(true);
       try {
         webSearchPayload = await fetchWebSearch(text, ctrl.signal);
       } catch (e) {
         setWebSearchBusy(false);
+        setMessages(messagesBeforeSend);
         if (e instanceof Error && e.name === "AbortError") throw e;
         setError(e instanceof Error ? e.message : "Websuche fehlgeschlagen.");
         return;
       }
       setWebSearchBusy(false);
       if (webSearchPayload.results.length === 0) {
+        setMessages(messagesBeforeSend);
         setError(
           "Websuche: keine Treffer (DuckDuckGo blockiert evtl. die Anfrage). Erneut versuchen oder in .env Serper nutzen.",
         );
@@ -925,15 +967,12 @@ export function App() {
       }
     }
 
-    setInput("");
-    setImageFile(null);
-
     const userMessage: ChatMessage = {
       role: "user",
       content: userContent,
       ...(webSearchPayload ? { webSearch: webSearchPayload } : {}),
     };
-    const nextThread = [...messages, userMessage];
+    const nextThread = [...messagesBeforeSend, userMessage];
 
     setMessages([...nextThread, { role: "assistant", content: "" }]);
     setBusy(true);
@@ -964,7 +1003,9 @@ export function App() {
       }
     }
 
-    let apiMessages: ApiMessage[] = [];
+    let apiMessages: ApiMessage[] = [
+      { role: "system", content: formatPlaygroundTodayContext() },
+    ];
     if (model === MODEL_GPT_OSS) {
       const line = `Reasoning: ${gptOssReasoning}`;
       const rest = systemPrompt.trim();
@@ -1262,42 +1303,7 @@ export function App() {
         )}
 
         <div className="mt-auto shrink-0 space-y-1 border-t border-neutral-200/80 p-2 dark:border-neutral-800">
-          {!sidebarCollapsed && (
-            <>
-              <a
-                className="block truncate rounded-md px-2 py-1.5 text-[11px] text-neutral-500 hover:bg-neutral-200/50 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/50 dark:hover:text-neutral-200"
-                href="https://www.mittwald.de/mstudio/ai-hosting"
-                target="_blank"
-                rel="noreferrer"
-              >
-                AI Hosting bei mittwald
-              </a>
-              <a
-                className="block truncate rounded-md px-2 py-1.5 text-[11px] text-neutral-500 hover:bg-neutral-200/50 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/50 dark:hover:text-neutral-200"
-                href="https://developer.mittwald.de/de/docs/v2/platform/aihosting/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Developer-Dokumentation
-              </a>
-              <a
-                className="block truncate rounded-md px-2 py-1.5 text-[11px] text-neutral-500 hover:bg-neutral-200/50 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/50 dark:hover:text-neutral-200"
-                href="https://www.mittwald.de/impressum"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Impressum (mittwald)
-              </a>
-              <a
-                className="block truncate rounded-md px-2 py-1.5 text-[11px] text-neutral-500 hover:bg-neutral-200/50 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/50 dark:hover:text-neutral-200"
-                href={GITHUB_NEW_BUG_ISSUE_URL}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Bug auf GitHub melden
-              </a>
-            </>
-          )}
+          {!sidebarCollapsed ? <PlaygroundLinksSidebar links={footerLinks} /> : null}
           <button
             type="button"
             onClick={() => setShowGlossary(true)}
@@ -1347,28 +1353,40 @@ export function App() {
                 type="button"
                 onClick={() => setActiveThreadWebSearch(!activeThreadWebSearch)}
                 disabled={busy || webSearchBusy}
+                aria-pressed={activeThreadWebSearch}
+                aria-describedby={activeThreadWebSearch ? "web-search-privacy-hint" : undefined}
                 title={
                   activeThreadWebSearch
-                    ? `Websuche aktiv (${providerLabel(webSearchConfig)}) — klicken zum Deaktivieren`
-                    : `Websuche für diesen Chat aktivieren (${providerLabel(webSearchConfig)})`
+                    ? `${webSearchDataTransferHint(webSearchConfig)} Klicken zum Deaktivieren.`
+                    : `Websuche für diesen Chat aktivieren (${providerLabel(webSearchConfig)}). ${webSearchDataTransferHint(webSearchConfig)}`
                 }
-                className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${
+                className={`max-w-[11rem] shrink-0 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition sm:max-w-[12rem] ${
                   activeThreadWebSearch
-                    ? "bg-sky-100 text-sky-900 ring-1 ring-sky-300/80 dark:bg-sky-950/60 dark:text-sky-100 dark:ring-sky-700"
+                    ? "flex flex-col gap-0.5 bg-sky-100 text-sky-900 ring-1 ring-sky-300/80 dark:bg-sky-950/60 dark:text-sky-100 dark:ring-sky-700"
                     : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 }`}
               >
-                {webSearchBusy ? (
-                  <>
-                    Suche
-                    <span className="font-normal opacity-75"> · {providerLabel(webSearchConfig)}</span>…
-                  </>
-                ) : (
-                  <>
-                    Websuche
-                    <span className="font-normal opacity-75"> · {providerLabel(webSearchConfig)}</span>
-                  </>
-                )}
+                <span className="leading-tight">
+                  {webSearchBusy ? (
+                    <>
+                      Suche
+                      <span className="font-normal opacity-75"> · {providerLabel(webSearchConfig)}</span>…
+                    </>
+                  ) : (
+                    <>
+                      Websuche
+                      <span className="font-normal opacity-75"> · {providerLabel(webSearchConfig)}</span>
+                    </>
+                  )}
+                </span>
+                {activeThreadWebSearch && !webSearchBusy ? (
+                  <span
+                    id="web-search-privacy-hint"
+                    className="text-[10px] font-normal leading-tight text-sky-800/85 dark:text-sky-200/85"
+                  >
+                    {webSearchDataTransferHintShort(webSearchConfig)}
+                  </span>
+                ) : null}
               </button>
             ) : null}
             <label htmlFor="theme-select" className="sr-only sm:not-sr-only text-xs text-neutral-500 dark:text-neutral-400">
@@ -1396,25 +1414,10 @@ export function App() {
                 <p className="mt-3 max-w-md text-center text-sm text-neutral-500 dark:text-neutral-400">
                   Stelle eine Frage oder nutze + für ein Bild. Nur in diesem Browser gespeichert.
                 </p>
-                <p className="mt-5 max-w-md text-center text-xs text-neutral-500 dark:text-neutral-400">
-                  <a
-                    className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                    href="https://www.mittwald.de/mstudio/ai-hosting"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    AI Hosting
-                  </a>
-                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
-                  <a
-                    className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                    href="https://developer.mittwald.de/de/docs/v2/platform/aihosting/"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Developer-Dokumentation
-                  </a>
-                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
+                <PlaygroundLinksInline
+                  links={footerLinks}
+                  className="mt-5 max-w-md text-center text-xs text-neutral-500 dark:text-neutral-400"
+                >
                   <button
                     type="button"
                     className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
@@ -1422,25 +1425,7 @@ export function App() {
                   >
                     Modellübersicht
                   </button>
-                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
-                  <a
-                    className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                    href="https://www.mittwald.de/impressum"
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Impressum
-                  </a>
-                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
-                  <a
-                    className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                    href={GITHUB_NEW_BUG_ISSUE_URL}
-                    target="_blank"
-                    rel="noreferrer"
-                  >
-                    Bug melden
-                  </a>
-                </p>
+                </PlaygroundLinksInline>
               </div>
             ) : (
               <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8">
@@ -1449,6 +1434,14 @@ export function App() {
                     key={i}
                     message={m}
                     streaming={busy && m.role === "assistant" && i === messages.length - 1}
+                    webSearchPending={
+                      webSearchBusy &&
+                      m.role === "assistant" &&
+                      i === messages.length - 1 &&
+                      typeof m.content === "string" &&
+                      m.content === ""
+                    }
+                    webSearchProviderLabel={providerLabel(webSearchConfig)}
                     onImageOpen={openImageLightbox}
                   />
                 ))}
@@ -1458,6 +1451,21 @@ export function App() {
           </div>
 
           <div className="shrink-0 border-t border-transparent bg-gradient-to-t from-white via-white to-transparent px-4 pb-3 pt-2 dark:from-neutral-950 dark:via-neutral-950 dark:to-transparent">
+            {webSearchBusy ? (
+              <div
+                className="mx-auto mb-2 max-w-3xl rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-100"
+                role="status"
+                aria-live="polite"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <span
+                    className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-600 border-t-transparent dark:border-sky-300"
+                    aria-hidden
+                  />
+                  Websuche läuft ({providerLabel(webSearchConfig)}) …
+                </span>
+              </div>
+            ) : null}
             {contextTrimNotice && (
               <div
                 className="mx-auto mb-2 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
@@ -1549,7 +1557,7 @@ export function App() {
                       placeholder="Stelle irgendeine Frage"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      disabled={busy || speechBusy}
+                      disabled={busy || speechBusy || webSearchBusy}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
@@ -1605,59 +1613,16 @@ export function App() {
               </div>
             </div>
             <p className="mx-auto mt-2 max-w-3xl px-2 text-center text-[10px] leading-relaxed text-neutral-400 dark:text-neutral-500">
-              <a
-                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                href="https://www.mittwald.de/mstudio/ai-hosting"
-                target="_blank"
-                rel="noreferrer"
-              >
-                AI Hosting
-              </a>
-              {" · "}
-              <a
-                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                href="https://developer.mittwald.de/de/docs/v2/platform/aihosting/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Doku
-              </a>
-              {" · "}
-              <button
-                type="button"
-                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                onClick={() => setShowModelsOverview(true)}
-              >
-                Modellübersicht
-              </button>
-              {" · "}
-              <a
-                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                href="https://www.mittwald.de/impressum"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Impressum
-              </a>
-              {" · "}
-              <a
-                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                href={GITHUB_NEW_BUG_ISSUE_URL}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Bug melden
-              </a>
-              {" · "}
-              <a
-                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                href="https://developer.mittwald.de/de/docs/v2/platform/aihosting/access-and-usage/data-protection/"
-                target="_blank"
-                rel="noreferrer"
-              >
-                Datenschutz (mittwald)
-              </a>
-              <br />
+              <PlaygroundLinksFooter links={footerLinks}>
+                <button
+                  type="button"
+                  className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
+                  onClick={() => setShowModelsOverview(true)}
+                >
+                  Modellübersicht
+                </button>
+              </PlaygroundLinksFooter>
+              {footerLinks.length > 0 ? <br /> : null}
               <span className="mt-1 inline-block max-w-2xl text-[11px] text-neutral-500 dark:text-neutral-400">
                 Dies ist ein reiner Test-Playground: Du kannst die Modelle ausprobieren und dir einen ersten Eindruck
                 verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den produktiven Einsatz noch
@@ -1668,7 +1633,11 @@ export function App() {
         </div>
       </div>
 
-      <SettingsGlossaryOverlay open={showGlossary} onClose={() => setShowGlossary(false)} />
+      <SettingsGlossaryOverlay
+        open={showGlossary}
+        onClose={() => setShowGlossary(false)}
+        links={playgroundLinks}
+      />
       <ModelsOverviewOverlay open={showModelsOverview} onClose={() => setShowModelsOverview(false)} />
       <ImageLightbox
         open={imageLightbox !== null}

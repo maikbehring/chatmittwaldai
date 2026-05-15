@@ -97,6 +97,7 @@ Alle Variablen sind in [.env.example](./.env.example) dokumentiert. Wichtigste:
 | `MITTWALD_AI_API_KEY` | **Pflicht** — Key aus dem mStudio |
 | `PLAYGROUND_ALLOWED_MODELS` | Kommagetrennte Modell-IDs; nur diese erscheinen im UI. Für öffentliche Instanzen **unbedingt** setzen und bewusst kürzen. |
 | `PLAYGROUND_BRAND_TITLE` | Anzeigename (optional) |
+| `PLAYGROUND_LINK_*_URL` / `*_LABEL` | Impressum, Datenschutz, Doku, AI-Hosting, Bug-Link (siehe [.env.example](./.env.example)) |
 | `CORS_ORIGIN` | Erlaubte Browser-Origins (z. B. `https://playground.example.com`). In Produktion **nicht** `*`. |
 | `RATE_LIMIT_*` | Schutz vor Missbrauch (Chat, Modellliste, Transkription, Websuche) |
 | `PLAYGROUND_MAX_MESSAGES` | Max. Nachrichten pro Request (Standard: 60) |
@@ -128,7 +129,7 @@ Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
 2. **CORS** — nur die echte Playground-URL erlauben.
 3. **Rate-Limits** — an erwartete Last und Kosten anpassen (`RATE_LIMIT_MAX_CHAT`, `RATE_LIMIT_MAX_WEB_SEARCH`, Fenster in ms).
 4. **TLS** — HTTPS über Reverse-Proxy (nginx, Caddy, …).
-5. **Rechtliches** — Datenschutz, Impressum, Nutzungshinweise; UI-Hinweise ersetzen keine AGB. Siehe [Datenschutz AI-Hosting](https://developer.mittwald.de/de/docs/v2/platform/aihosting/access-and-usage/data-protection/).
+5. **Rechtliches** — eigene Seiten für Datenschutz/Impressum anlegen und per `PLAYGROUND_LINK_IMPRESSUM_URL`, `PLAYGROUND_LINK_PRIVACY_URL` usw. in `.env` verlinken; UI-Hinweise ersetzen keine AGB.
 6. **Logging** — keine Chat-Inhalte in App-Logs schreiben (der Playground speichert keine Chats serverseitig; Infrastruktur-Logs separat prüfen).
 
 ---

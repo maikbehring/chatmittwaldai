@@ -1,9 +1,11 @@
 import { useEffect } from "react";
-import { GITHUB_NEW_BUG_ISSUE_URL } from "./repoLinks";
+import { PlaygroundGlossaryLinks } from "./PlaygroundExternalLinks";
+import type { PlaygroundLink } from "./playgroundLinks";
 
 type Props = {
   open: boolean;
   onClose: () => void;
+  links: PlaygroundLink[];
 };
 
 const GLOSSARY: { term: string; simple: string }[] = [
@@ -104,7 +106,7 @@ const GLOSSARY: { term: string; simple: string }[] = [
   },
 ];
 
-export function SettingsGlossaryOverlay({ open, onClose }: Props) {
+export function SettingsGlossaryOverlay({ open, onClose, links }: Props) {
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -156,44 +158,13 @@ export function SettingsGlossaryOverlay({ open, onClose }: Props) {
         </div>
         <div className="overflow-y-auto px-4 py-3 text-sm leading-relaxed">
           <p className="mb-4 text-ink-muted">
-            Hier stehen die Fachbegriffe aus den Einstellungen in Alltagssprache. Tarife und
-            Überblick:{" "}
-            <a
-              className="text-accent underline"
-              href="https://www.mittwald.de/mstudio/ai-hosting"
-              target="_blank"
-              rel="noreferrer"
-            >
-              AI Hosting bei mittwald
-            </a>
-            . Technische Details in der{" "}
-            <a
-              className="text-accent underline"
-              href="https://developer.mittwald.de/de/docs/v2/platform/aihosting/"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Developer-Dokumentation
-            </a>
-            .{" "}
-            <a
-              className="text-accent underline"
-              href="https://www.mittwald.de/impressum"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Impressum (mittwald.de)
-            </a>
-            . Bugs und Wünsche am besten direkt im{" "}
-            <a
-              className="text-accent underline"
-              href={GITHUB_NEW_BUG_ISSUE_URL}
-              target="_blank"
-              rel="noreferrer"
-            >
-              GitHub-Repo melden
-            </a>
-            .
+            Hier stehen die Fachbegriffe aus den Einstellungen in Alltagssprache.
+            {links.length > 0 ? (
+              <>
+                {" "}
+                <PlaygroundGlossaryLinks links={links} />
+              </>
+            ) : null}
           </p>
           <p className="mb-4 rounded-lg border border-emerald-200/80 bg-emerald-50/80 px-3 py-2.5 text-xs leading-snug text-ink-muted dark:border-emerald-900/50 dark:bg-emerald-950/40">
             <span className="font-semibold text-ink">CO₂ bei KI einsparen:</span> Modell zur Aufgabe
