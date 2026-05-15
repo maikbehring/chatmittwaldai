@@ -33,6 +33,8 @@ export type ModelSettingsDockProps = {
   webSearchConfig: import("./webSearch").WebSearchConfig | null;
   webSearchDefaultEnabled: boolean;
   onWebSearchDefaultChange: (enabled: boolean) => void;
+  webSearchConsentGranted: boolean;
+  onRevokeWebSearchConsent: () => void;
 };
 
 function GearIcon({ className }: { className?: string }) {
@@ -90,6 +92,8 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
     webSearchConfig,
     webSearchDefaultEnabled,
     onWebSearchDefaultChange,
+    webSearchConsentGranted,
+    onRevokeWebSearchConsent,
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -293,12 +297,27 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
                   type="checkbox"
                   checked={webSearchDefaultEnabled}
                   onChange={(e) => onWebSearchDefaultChange(e.target.checked)}
+                  disabled={!webSearchConsentGranted}
                   className="accent-neutral-800 dark:accent-neutral-200"
                 />
                 <span className="text-[11px] text-neutral-800 dark:text-neutral-100">
                   Neue Chats starten mit aktivierter Websuche
                 </span>
               </label>
+              {webSearchConsentGranted ? (
+                <button
+                  type="button"
+                  className="mt-2 w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-[11px] font-medium text-neutral-700 hover:bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                  onClick={() => {
+                    const ok = window.confirm(
+                      "Websuche-Einwilligung für diesen Browser zurückziehen?\n\nDie Websuche wird in allen Chats deaktiviert. Beim nächsten Aktivieren erscheint der Hinweis-Dialog erneut.",
+                    );
+                    if (ok) onRevokeWebSearchConsent();
+                  }}
+                >
+                  Einwilligung zurückziehen
+                </button>
+              ) : null}
             </div>
           ) : null}
 

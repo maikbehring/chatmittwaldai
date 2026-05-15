@@ -3,5 +3,6 @@ dist
 .env
 .env.local
 *.log
+PRIVAT-*.md
 .DS_Store
 client/dist

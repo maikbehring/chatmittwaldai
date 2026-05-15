@@ -64,7 +64,7 @@ export function WebSearchConsentDialog({ open, webSearchConfig, onConfirm, onCan
           </p>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
             Diese Bestätigung wird einmalig in diesem Browser gespeichert. Du kannst die Websuche jederzeit wieder
-            deaktivieren.
+            deaktivieren oder die Einwilligung unter Modell-Einstellungen (Zahnrad) → Websuche zurückziehen.
           </p>
         </div>
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

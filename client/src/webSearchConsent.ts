@@ -15,3 +15,11 @@ export function setWebSearchConsent(): void {
     /* private mode / quota */
   }
 }
+
+export function clearWebSearchConsent(): void {
+  try {
+    localStorage.removeItem(CONSENT_KEY);
+  } catch {
+    /* private mode */
+  }
+}

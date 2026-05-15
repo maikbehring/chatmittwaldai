@@ -200,8 +200,9 @@ Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
 - Der **API-Key** (mittwald, ggf. SerpAPI/Serper) liegt nur in der Server-Umgebung (`.env`), nicht im Frontend.
 - Anfragen gehen über euren **Proxy** an mittwald; Inhalte unterliegen auch der [mittwald-Dokumentation](https://developer.mittwald.de/de/docs/v2/platform/aihosting/).
 - Bei aktivierter **Websuche**: Kurz-Anfragen an Google (SerpAPI/Serper) bzw. Abfragen an DuckDuckGo; der **rohe Chat-Verlauf** wird serverseitig nur verdichtet, nicht 1:1 an den Suchdienst geschickt. Es gelten die Nutzungsbedingungen des jeweiligen Anbieters.
-- Die **Einwilligung zur Websuche** wird nur lokal im Browser gespeichert; ersetzt keine Datenschutzerklärung — für öffentliche Instanzen eigene Seiten verlinken (`PLAYGROUND_LINK_*`).
+- Die **Einwilligung zur Websuche** wird nur lokal im Browser gespeichert; **zurückziehen** unter Modell-Einstellungen (Zahnrad) → Websuche → „Einwilligung zurückziehen“. Ersetzt keine Datenschutzerklärung — für öffentliche Instanzen eigene Seiten verlinken (`PLAYGROUND_LINK_*`).
 - CO₂- und Token-Werte sind **Schätzungen** zur Orientierung.
+- Was beim Betrieb **noch fehlen** kann (rechtlich-organisatorisch, Infrastruktur, optionale App-Ergänzungen): [docs/Datenschutz-und-Betrieb-offene-Massnahmen.md](./docs/Datenschutz-und-Betrieb-offene-Massnahmen.md).
 
 ---
 
@@ -231,7 +232,7 @@ Vision: Bilder nur als `data:image/…` Base64 im Request.
 | Mikrofon funktioniert nicht | Browser-Berechtigung; HTTPS in Produktion (localhost ist Ausnahme) |
 | CORS-Fehler in Produktion | `CORS_ORIGIN` auf die öffentliche Frontend-URL setzen |
 | Websuche liefert keine Treffer / Fehler | Rate-Limit prüfen; bei SerpAPI/Serper Key und `WEB_SEARCH_PROVIDER`; DuckDuckGo kann blockieren — SerpAPI nutzen |
-| Websuche lässt sich nicht aktivieren | Einwilligungs-Dialog bestätigen; ggf. localStorage-Eintrag `mittwald-ai-playground-web-search-consent-v1` löschen und erneut versuchen |
+| Websuche lässt sich nicht aktivieren | Einwilligungs-Dialog bestätigen; ggf. unter Modell-Einstellungen erneut einwilligen oder localStorage-Eintrag `mittwald-ai-playground-web-search-consent-v1` löschen |
 | Falsches „heute“ bei Terminen | Server neu starten; Datum wird als Systemhinweis (Europe/Berlin) mitgeschickt — Modell sollte Websuche-Treffer nutzen |
 
 ---

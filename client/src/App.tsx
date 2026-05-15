@@ -24,7 +24,11 @@ import { CO2_FOOTPRINT_TOOLTIP, estimateInferenceCo2Grams } from "./inferenceFoo
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 import { WebSearchGlobeToggle, WebSearchModeChip } from "./WebSearchComposerControl";
 import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
-import { hasWebSearchConsent, setWebSearchConsent } from "./webSearchConsent";
+import {
+  clearWebSearchConsent,
+  hasWebSearchConsent,
+  setWebSearchConsent,
+} from "./webSearchConsent";
 import {
   PlaygroundLinksFooter,
   PlaygroundLinksInline,
@@ -544,6 +548,9 @@ export function App() {
   );
   const [webSearchBusy, setWebSearchBusy] = useState(false);
   const [webSearchConsentOpen, setWebSearchConsentOpen] = useState(false);
+  const [webSearchConsentGranted, setWebSearchConsentGranted] = useState(() =>
+    hasWebSearchConsent(),
+  );
   const [pendingWebSearchEnable, setPendingWebSearchEnable] = useState<
     "thread" | "default" | null
   >(null);
@@ -592,6 +599,30 @@ export function App() {
     el.style.height = `${Math.max(next, 44)}px`;
     el.style.overflowY = el.scrollHeight > INPUT_MAX_HEIGHT_PX ? "auto" : "hidden";
   }, []);
+
+  /** Clipboard-Bild wie in ChatGPT (Capture: greift vor Textfeld, verhindert Müll-Einfügen bei Screenshots). */
+  const handleComposerPasteCapture = useCallback(
+    (e: React.ClipboardEvent<HTMLDivElement>) => {
+      if (busy || speechBusy || webSearchBusy || voiceRecording.active) {
+        return;
+      }
+      const items = e.clipboardData?.items;
+      if (!items?.length) return;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind !== "file" || !item.type.startsWith("image/")) continue;
+        const file = item.getAsFile();
+        if (!file || file.size === 0) continue;
+        e.preventDefault();
+        e.stopPropagation();
+        setImageFile(file);
+        window.requestAnimationFrame(() => adjustInputHeight());
+        inputRef.current?.focus();
+        return;
+      }
+    },
+    [adjustInputHeight, busy, speechBusy, webSearchBusy, voiceRecording.active],
+  );
   const modelRef = useRef(model);
   modelRef.current = model;
 
@@ -631,11 +662,21 @@ export function App() {
 
   const confirmWebSearchConsent = useCallback(() => {
     setWebSearchConsent();
+    setWebSearchConsentGranted(true);
     setWebSearchConsentOpen(false);
     const target = pendingWebSearchEnable;
     setPendingWebSearchEnable(null);
     if (target) applyWebSearchEnable(target);
   }, [pendingWebSearchEnable, applyWebSearchEnable]);
+
+  const revokeWebSearchConsent = useCallback(() => {
+    clearWebSearchConsent();
+    setWebSearchConsentGranted(false);
+    setWebSearchDefaultEnabled(false);
+    setThreads((prev) => prev.map((t) => ({ ...t, webSearchEnabled: false })));
+    setWebSearchConsentOpen(false);
+    setPendingWebSearchEnable(null);
+  }, []);
 
   const cancelWebSearchConsent = useCallback(() => {
     setWebSearchConsentOpen(false);
@@ -898,25 +939,23 @@ export function App() {
     setInput("");
     setImageFile(null);
     const fresh = createEmptyThread(webSearchDefaultEnabled);
-    setThreads((prev) => {
-      const withCurrent = prev.map((t) =>
-        t.id === activeThreadId
-          ? {
-              ...t,
-              messages,
-              title:
-                messages.length > 0
-                  ? deriveThreadTitle(messages as ChatMessage[])
-                  : t.title,
-              updatedAt: Date.now(),
-            }
-          : t,
-      );
-      return sortThreadsByRecent([fresh, ...withCurrent]);
-    });
+    const withCurrent = threads.map((t) =>
+      t.id === activeThreadId
+        ? {
+            ...t,
+            messages,
+            title:
+              messages.length > 0
+                ? deriveThreadTitle(messages as ChatMessage[])
+                : t.title,
+            updatedAt: Date.now(),
+          }
+        : t,
+    );
+    setThreads(sortThreadsByRecent([fresh, ...withCurrent]));
     setActiveThreadId(fresh.id);
     setMessages([]);
-  }, [activeThreadId, messages, stop]);
+  }, [activeThreadId, messages, stop, threads, webSearchDefaultEnabled]);
 
   const selectThread = useCallback(
     (id: string) => {
@@ -924,10 +963,11 @@ export function App() {
       stop();
       setAppError(null);
       setContextTrimNotice(null);
-      let nextMessages: ChatMessage[] = [];
-      setThreads((prev) => {
-        const updated = sortThreadsByRecent(
-          prev.map((t) =>
+
+      /** Gleiche Merge-Logik wie im Persist-Effekt — vor setState berechnen (React batched Updates). */
+      const mergeActiveIntoList = (list: ChatThread[]) =>
+        sortThreadsByRecent(
+          list.map((t) =>
             t.id === activeThreadId
               ? {
                   ...t,
@@ -941,53 +981,61 @@ export function App() {
               : t,
           ),
         );
-        nextMessages = (updated.find((t) => t.id === id)?.messages ?? []) as ChatMessage[];
-        return updated;
-      });
+
+      const updated = mergeActiveIntoList(threads);
+      const nextMessages = (updated.find((t) => t.id === id)?.messages ?? []) as ChatMessage[];
+
+      setThreads(updated);
       setActiveThreadId(id);
       setMessages(nextMessages);
     },
-    [activeThreadId, messages, stop],
+    [activeThreadId, messages, stop, threads],
   );
 
   const deleteThread = useCallback(
     (id: string) => {
       if (busy) return;
       stop();
+
+      const mergeActiveIntoList = (list: ChatThread[]) =>
+        sortThreadsByRecent(
+          list.map((t) =>
+            t.id === activeThreadId
+              ? {
+                  ...t,
+                  messages,
+                  title:
+                    messages.length > 0
+                      ? deriveThreadTitle(messages as ChatMessage[])
+                      : t.title,
+                  updatedAt: Date.now(),
+                }
+              : t,
+          ),
+        );
+
+      const withCurrent = mergeActiveIntoList(threads);
+      let filtered = withCurrent.filter((t) => t.id !== id);
+      if (filtered.length === 0) filtered = [createEmptyThread()];
+      const sorted = sortThreadsByRecent(filtered);
+
       let nextActive = activeThreadId;
       let nextMessages: ChatMessage[] = [];
-      setThreads((prev) => {
-        const withCurrent = prev.map((t) =>
-          t.id === activeThreadId
-            ? {
-                ...t,
-                messages,
-                title:
-                  messages.length > 0
-                    ? deriveThreadTitle(messages as ChatMessage[])
-                    : t.title,
-                updatedAt: Date.now(),
-              }
-            : t,
-        );
-        let filtered = withCurrent.filter((t) => t.id !== id);
-        if (filtered.length === 0) filtered = [createEmptyThread()];
-        const sorted = sortThreadsByRecent(filtered);
-        if (id === activeThreadId || !sorted.some((t) => t.id === activeThreadId)) {
-          nextActive = sorted[0].id;
-          nextMessages = sorted[0].messages as ChatMessage[];
-        } else {
-          nextMessages = (sorted.find((t) => t.id === activeThreadId)?.messages ??
-            []) as ChatMessage[];
-        }
-        return sorted;
-      });
+      if (id === activeThreadId || !sorted.some((t) => t.id === activeThreadId)) {
+        nextActive = sorted[0].id;
+        nextMessages = sorted[0].messages as ChatMessage[];
+      } else {
+        nextMessages = (sorted.find((t) => t.id === activeThreadId)?.messages ??
+          []) as ChatMessage[];
+      }
+
+      setThreads(sorted);
       setActiveThreadId(nextActive);
       setMessages(nextMessages);
       setAppError(null);
       setContextTrimNotice(null);
     },
-    [activeThreadId, busy, messages, stop],
+    [activeThreadId, busy, messages, stop, threads],
   );
 
   const send = useCallback(async (options?: { force?: boolean }) => {
@@ -1587,6 +1635,8 @@ export function App() {
                   if (!enabled) setWebSearchDefaultEnabled(false);
                   else requestEnableWebSearch("default");
                 }}
+                webSearchConsentGranted={webSearchConsentGranted}
+                onRevokeWebSearchConsent={revokeWebSearchConsent}
               />
               <div className="min-w-0 flex-1">
                 <WebSearchModeChip
@@ -1600,6 +1650,7 @@ export function App() {
                   className={`flex gap-2 rounded-[28px] border border-neutral-200 bg-white py-2 pl-2 pr-2 shadow-[0_2px_12px_rgba(0,0,0,0.08)] dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
                     voiceRecording.active ? "items-center" : "items-end"
                   } ${activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-800/80" : ""}`}
+                  onPasteCapture={handleComposerPasteCapture}
                 >
                   <label
                     className={`flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 ${
@@ -1637,7 +1688,7 @@ export function App() {
                       ref={inputRef}
                       className="min-h-[44px] max-h-52 flex-1 resize-none overflow-hidden bg-transparent py-2.5 text-[15px] leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-neutral-100 dark:placeholder:text-neutral-500"
                       rows={1}
-                      placeholder="Stelle irgendeine Frage"
+                      placeholder="Stelle irgendeine Frage (Bild: einfügen oder +)"
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       disabled={busy || speechBusy || webSearchBusy}
