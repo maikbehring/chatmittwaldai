@@ -23,3 +23,31 @@ html.dark {
 body {
   @apply bg-surface text-ink min-h-screen;
 }
+
+@keyframes image-lightbox-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes image-lightbox-zoom-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.image-lightbox-backdrop {
+  animation: image-lightbox-fade-in 0.2s ease-out;
+}
+
+.image-lightbox-img {
+  animation: image-lightbox-zoom-in 0.22s ease-out;
+}

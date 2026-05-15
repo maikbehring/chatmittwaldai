@@ -12,7 +12,9 @@ import {
 import { ModelSettingsDock } from "./ModelSettingsDock";
 import { SettingsGlossaryOverlay } from "./SettingsGlossaryOverlay";
 import { ModelsOverviewOverlay } from "./ModelsOverviewOverlay";
+import { ChatImageAttachment, ChatImagePreviewThumb } from "./ChatImageAttachment";
 import { ChatMarkdown } from "./ChatMarkdown";
+import { ImageLightbox } from "./ImageLightbox";
 import { createRafStreamBatcher } from "./streamDeltaBatch";
 import { estimateInferenceCo2Grams } from "./inferenceFootprint";
 import { GITHUB_NEW_BUG_ISSUE_URL } from "./repoLinks";
@@ -334,7 +336,11 @@ function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
   );
 }
 
-function renderMessageContent(content: string | ContentPart[], streaming: boolean) {
+function renderMessageContent(
+  content: string | ContentPart[],
+  streaming: boolean,
+  onImageOpen: (src: string, alt: string) => void,
+) {
   if (typeof content === "string") {
     if (streaming) {
       return (
@@ -360,11 +366,11 @@ function renderMessageContent(content: string | ContentPart[], streaming: boolea
             <ChatMarkdown key={j}>{part.text}</ChatMarkdown>
           )
         ) : (
-          <img
+          <ChatImageAttachment
             key={j}
             src={part.image_url.url}
             alt="Anhang"
-            className="max-h-56 max-w-full rounded-xl border border-neutral-200 dark:border-neutral-700"
+            onOpen={onImageOpen}
           />
         ),
       )}
@@ -375,15 +381,17 @@ function renderMessageContent(content: string | ContentPart[], streaming: boolea
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   streaming,
+  onImageOpen,
 }: {
   message: ChatMessage;
   streaming: boolean;
+  onImageOpen: (src: string, alt: string) => void;
 }) {
   if (message.role === "user") {
     return (
       <div className="flex justify-end">
         <div className="max-w-[min(85%,28rem)] rounded-[1.25rem] bg-[#f4f4f4] px-4 py-3 text-[15px] leading-relaxed text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100">
-          {renderMessageContent(message.content, false)}
+          {renderMessageContent(message.content, false, onImageOpen)}
         </div>
       </div>
     );
@@ -392,7 +400,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
     <div className="flex justify-start">
       <div className="flex max-w-full flex-col items-start">
         <div className="max-w-full text-[15px] leading-relaxed text-neutral-900 dark:text-neutral-100">
-          {renderMessageContent(message.content, streaming)}
+          {renderMessageContent(message.content, streaming, onImageOpen)}
         </div>
         {message.usage ? <AssistantTokenFooter stats={message.usage} /> : null}
       </div>
@@ -472,6 +480,11 @@ export function App() {
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
+  const [imageLightbox, setImageLightbox] = useState<{ src: string; alt: string } | null>(null);
+  const openImageLightbox = useCallback((src: string, alt: string) => {
+    setImageLightbox({ src, alt });
+  }, []);
+  const closeImageLightbox = useCallback(() => setImageLightbox(null), []);
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
@@ -1022,6 +1035,7 @@ export function App() {
                     key={i}
                     message={m}
                     streaming={busy && m.role === "assistant" && i === messages.length - 1}
+                    onImageOpen={openImageLightbox}
                   />
                 ))}
                 <div ref={bottomRef} />
@@ -1040,7 +1054,7 @@ export function App() {
             )}
             {imagePreview && (
               <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-                <img src={imagePreview} alt="" className="h-9 w-9 rounded-lg object-cover ring-1 ring-neutral-200 dark:ring-neutral-700" />
+                <ChatImagePreviewThumb src={imagePreview} onOpen={openImageLightbox} />
                 <button type="button" className="underline" onClick={() => setImageFile(null)} disabled={busy}>
                   Bild entfernen
                 </button>
@@ -1202,6 +1216,12 @@ export function App() {
 
       <SettingsGlossaryOverlay open={showGlossary} onClose={() => setShowGlossary(false)} />
       <ModelsOverviewOverlay open={showModelsOverview} onClose={() => setShowModelsOverview(false)} />
+      <ImageLightbox
+        open={imageLightbox !== null}
+        src={imageLightbox?.src ?? ""}
+        alt={imageLightbox?.alt ?? ""}
+        onClose={closeImageLightbox}
+      />
     </div>
   );
 }
