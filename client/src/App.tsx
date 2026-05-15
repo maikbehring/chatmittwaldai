@@ -944,10 +944,13 @@ export function App() {
           outputTokensPerSec = Math.round((roughOutTok / genSec) * 10) / 10;
         }
 
-        const totalTokensForCo2 = hasApiCounts
-          ? (usageSnap?.promptTokens ?? 0) + (usageSnap?.completionTokens ?? 0)
-          : roughOutTok;
-        const co2Grams = estimateInferenceCo2Grams(totalTokensForCo2, model);
+        const co2Grams = hasApiCounts
+          ? estimateInferenceCo2Grams(
+              usageSnap?.promptTokens ?? 0,
+              usageSnap?.completionTokens ?? 0,
+              model,
+            )
+          : estimateInferenceCo2Grams(0, roughOutTok, model);
 
         copy[copy.length - 1] = {
           ...last,
