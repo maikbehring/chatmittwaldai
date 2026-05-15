@@ -9,6 +9,7 @@ type Props = {
   disabled?: boolean;
   language?: string;
   maxAudioBytes?: number;
+  className?: string;
   onTranscript: (text: string) => void;
   onError: (message: string) => void;
   onBusyChange?: (busy: boolean) => void;
@@ -56,6 +57,7 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
     disabled = false,
     language = "de",
     maxAudioBytes = 25 * 1024 * 1024,
+    className,
     onTranscript,
     onError,
     onBusyChange,
@@ -228,11 +230,7 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
       title={title}
       aria-label={title}
       aria-pressed={recording}
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border transition disabled:cursor-not-allowed disabled:opacity-35 ${
-        recording
-          ? "border-red-300 bg-red-50 text-red-700 hover:bg-red-100 dark:border-red-800 dark:bg-red-950/50 dark:text-red-300 dark:hover:bg-red-950"
-          : "border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-      }`}
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white text-neutral-700 transition hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-35 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800 ${className ?? ""}`}
     >
       {transcribing ? (
         <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-neutral-700 dark:border-neutral-600 dark:border-t-neutral-200" />

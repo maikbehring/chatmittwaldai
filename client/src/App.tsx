@@ -16,6 +16,7 @@ import { ChatImageAttachment, ChatImagePreviewThumb } from "./ChatImageAttachmen
 import { SpeechInputButton, type SpeechInputHandle } from "./SpeechInputButton";
 import { SpeechTranscribingIndicator } from "./SpeechTranscribingIndicator";
 import { SpeechWaveform } from "./SpeechWaveform";
+import { VoiceRecordingControls } from "./VoiceRecordingControls";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ImageLightbox } from "./ImageLightbox";
 import { createRafStreamBatcher } from "./streamDeltaBatch";
@@ -1278,10 +1279,8 @@ export function App() {
               />
               <div className="min-w-0 flex-1">
                 <div
-                  className={`flex items-end gap-2 rounded-[28px] border border-neutral-200 bg-white py-2 pl-2 pr-2 shadow-[0_2px_12px_rgba(0,0,0,0.08)] dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
-                    voiceRecording.active
-                      ? "voice-input-recording border-red-200/80 dark:border-red-900/50"
-                      : ""
+                  className={`flex gap-2 rounded-[28px] border border-neutral-200 bg-white py-2 pl-2 pr-2 shadow-[0_2px_12px_rgba(0,0,0,0.08)] dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
+                    voiceRecording.active ? "items-center" : "items-end"
                   }`}
                 >
                   <label
@@ -1305,12 +1304,7 @@ export function App() {
                     />
                   </label>
                   {voiceRecording.active ? (
-                    <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
-                      <SpeechWaveform stream={voiceRecording.stream} />
-                      <span className="px-1 text-center text-[11px] font-medium text-red-600/90 dark:text-red-400/90">
-                        Zuhören… Enter sendet bei Text · sonst Aufnahme beenden
-                      </span>
-                    </div>
+                    <SpeechWaveform stream={voiceRecording.stream} />
                   ) : speechTranscribing ? (
                     <SpeechTranscribingIndicator />
                   ) : (
@@ -1341,9 +1335,18 @@ export function App() {
                         onError={setError}
                         onBusyChange={setSpeechBusy}
                         onRecordingChange={handleVoiceRecordingChange}
+                        className={voiceRecording.active ? "sr-only" : undefined}
                       />
                     ) : null}
-                    {busy ? (
+                    {voiceRecording.active ? (
+                      <VoiceRecordingControls
+                        disabled={busy}
+                        onCancel={() =>
+                          speechInputRef.current?.stopRecording({ skipTranscribe: true })
+                        }
+                        onConfirm={() => speechInputRef.current?.stopRecording()}
+                      />
+                    ) : busy ? (
                       <button
                         type="button"
                         onClick={stop}

@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 
-const BAR_COUNT = 32;
+const BAR_COUNT = 28;
+const DOT_COUNT = 24;
 
 type Props = {
   stream: MediaStream | null;
   className?: string;
 };
 
-/** Reagiert auf Mikrofon-Pegel (Web Audio); Fallback: dezente Idle-Animation. */
+/** ChatGPT-ähnliche Wellenform: Punkte links, Pegel-Balken rechts. */
 export function SpeechWaveform({ stream, className = "" }: Props) {
   const [levels, setLevels] = useState<number[]>(() => Array(BAR_COUNT).fill(0.15));
   const rafRef = useRef<number>(0);
@@ -63,21 +64,31 @@ export function SpeechWaveform({ stream, className = "" }: Props) {
 
   return (
     <div
-      className={`flex min-h-[44px] flex-1 items-center justify-center gap-[3px] px-1 ${className}`}
+      className={`flex min-h-[44px] flex-1 items-center gap-3 overflow-hidden px-1 ${className}`}
       role="img"
       aria-label="Sprache wird aufgenommen"
     >
-      {levels.map((level, i) => (
-        <span
-          key={i}
-          className={`voice-wave-bar w-[3px] shrink-0 rounded-full bg-neutral-800 dark:bg-neutral-200 ${stream ? "" : "voice-wave-bar-idle"}`}
-          style={{
-            height: `${Math.round(8 + level * 28)}px`,
-            opacity: 0.35 + level * 0.65,
-            animationDelay: stream ? undefined : `${(i % 8) * 0.07}s`,
-          }}
-        />
-      ))}
+      <div className="flex shrink-0 items-center gap-[5px]" aria-hidden>
+        {Array.from({ length: DOT_COUNT }, (_, i) => (
+          <span
+            key={`dot-${i}`}
+            className="h-1 w-1 shrink-0 rounded-full bg-neutral-300 dark:bg-neutral-600"
+          />
+        ))}
+      </div>
+      <div className="flex min-w-0 flex-1 items-center justify-center gap-[3px]">
+        {levels.map((level, i) => (
+          <span
+            key={i}
+            className={`voice-wave-bar w-[3px] shrink-0 rounded-full bg-neutral-700 dark:bg-neutral-300 ${stream ? "" : "voice-wave-bar-idle"}`}
+            style={{
+              height: `${Math.round(6 + level * 22)}px`,
+              opacity: 0.4 + level * 0.6,
+              animationDelay: stream ? undefined : `${(i % 8) * 0.07}s`,
+            }}
+          />
+        ))}
+      </div>
     </div>
   );
 }
