@@ -13,11 +13,13 @@ import { ModelSettingsDock } from "./ModelSettingsDock";
 import { SettingsGlossaryOverlay } from "./SettingsGlossaryOverlay";
 import { ModelsOverviewOverlay } from "./ModelsOverviewOverlay";
 import { ChatImageAttachment, ChatImagePreviewThumb } from "./ChatImageAttachment";
-import { SpeechInputButton } from "./SpeechInputButton";
+import { SpeechInputButton, type SpeechInputHandle } from "./SpeechInputButton";
+import { SpeechTranscribingIndicator } from "./SpeechTranscribingIndicator";
+import { SpeechWaveform } from "./SpeechWaveform";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ImageLightbox } from "./ImageLightbox";
 import { createRafStreamBatcher } from "./streamDeltaBatch";
-import { estimateInferenceCo2Grams } from "./inferenceFootprint";
+import { CO2_FOOTPRINT_TOOLTIP, estimateInferenceCo2Grams } from "./inferenceFootprint";
 import { GITHUB_NEW_BUG_ISSUE_URL } from "./repoLinks";
 
 const STORAGE_KEY = "mittwald-ai-playground-state-v2";
@@ -318,6 +320,36 @@ function BetaBadge() {
   );
 }
 
+function UsageStatChip({
+  label,
+  value,
+  title,
+  accent,
+}: {
+  label: string;
+  value: string;
+  title?: string;
+  accent?: boolean;
+}) {
+  return (
+    <div
+      className={`inline-flex min-w-[5.25rem] flex-col rounded-lg border px-2.5 py-1.5 ${
+        accent
+          ? "border-emerald-200/90 bg-emerald-50/90 dark:border-emerald-900/50 dark:bg-emerald-950/40"
+          : "border-neutral-200/90 bg-neutral-50/90 dark:border-neutral-700/80 dark:bg-neutral-900/55"
+      }`}
+      title={title}
+    >
+      <span className="text-[10px] font-medium leading-none text-neutral-500 dark:text-neutral-400">
+        {label}
+      </span>
+      <span className="mt-1 text-[12px] font-semibold leading-tight tabular-nums text-neutral-800 dark:text-neutral-100">
+        {value}
+      </span>
+    </div>
+  );
+}
+
 function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
   const fmt = (n: number | null) => (n == null ? "—" : n.toLocaleString("de-DE"));
   const tps =
@@ -328,39 +360,47 @@ function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
     stats.generationSeconds == null
       ? "—"
       : `${stats.generationSeconds.toLocaleString("de-DE", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} s`;
+
+  const prompt = stats.promptTokens ?? 0;
+  const completion = stats.completionTokens ?? 0;
+  const total =
+    stats.promptTokens != null || stats.completionTokens != null
+      ? prompt + completion
+      : null;
+
   const co2Fmt =
     stats.co2Grams == null
       ? null
       : stats.co2Grams.toLocaleString("de-DE", {
           minimumFractionDigits: 2,
-          maximumFractionDigits: stats.co2Grams < 1 ? 4 : 3,
+          maximumFractionDigits: stats.co2Grams < 1 ? 3 : 2,
         });
+
   return (
-    <p className="mt-2 max-w-full text-[11px] leading-relaxed text-neutral-500 dark:text-neutral-500">
-      <span>Eingabe: {fmt(stats.promptTokens)} Token</span>
-      <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
-      <span>Ausgabe: {fmt(stats.completionTokens)} Token</span>
-      <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
-      <span>{tps}</span>
-      <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
-      <span>Generierung: {gen}</span>
-      {co2Fmt != null ? (
-        <>
-          <span className="mx-1.5 text-neutral-300 dark:text-neutral-600">·</span>
-          <span
-            className="cursor-help underline decoration-dotted decoration-neutral-400 underline-offset-2 dark:decoration-neutral-600"
-            title="Schätzung: 450 W je RTX 6000 Pro (96 GB) unter Last × PUE 1,35 (RZ-Gesamtstrom inkl. Kühlung u. a.); Qwen 122B mit 2 GPUs, sonst 1 GPU. Ohne CPU/RAM/Netzwerk neben der GPU. Strommix Deutschland ca. 363 g CO₂eq/kWh (UBA-Jahreswert)."
-          >
-            ≈ {co2Fmt} g CO₂eq
-          </span>
-        </>
-      ) : null}
+    <div className="mt-3 max-w-full space-y-1.5">
+      <div className="flex flex-wrap gap-1.5">
+        <UsageStatChip label="Eingabe" value={`${fmt(stats.promptTokens)} Token`} />
+        <UsageStatChip label="Ausgabe" value={`${fmt(stats.completionTokens)} Token`} />
+        {total != null && total > 0 ? (
+          <UsageStatChip label="Gesamt" value={`${fmt(total)} Token`} />
+        ) : null}
+        <UsageStatChip label="Geschwindigkeit" value={tps} />
+        <UsageStatChip label="Generierung" value={gen} />
+        {co2Fmt != null ? (
+          <UsageStatChip
+            label="CO₂eq (geschätzt)"
+            value={`≈ ${co2Fmt} g`}
+            title={CO2_FOOTPRINT_TOOLTIP}
+            accent
+          />
+        ) : null}
+      </div>
       {stats.source === "heuristic" ? (
-        <span className="ml-1.5 text-neutral-400 dark:text-neutral-600">
-          (Ausgabe-Rohrate grob aus Textlänge, API ohne Nutzungsdaten)
-        </span>
+        <p className="text-[10px] leading-snug text-neutral-400 dark:text-neutral-500">
+          Token- und CO₂-Werte teilweise geschätzt (API ohne vollständige Nutzungsdaten).
+        </p>
       ) : null}
-    </p>
+    </div>
   );
 }
 
@@ -465,6 +505,10 @@ export function App() {
   const [maxMessages, setMaxMessages] = useState(DEFAULT_MAX_MESSAGES);
   const [contextTrimNotice, setContextTrimNotice] = useState<string | null>(null);
   const [speechBusy, setSpeechBusy] = useState(false);
+  const [voiceRecording, setVoiceRecording] = useState<{
+    active: boolean;
+    stream: MediaStream | null;
+  }>({ active: false, stream: null });
   const [speechToText, setSpeechToText] = useState({
     enabled: true,
     model: "whisper-large-v3-turbo",
@@ -526,6 +570,11 @@ export function App() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  const speechInputRef = useRef<SpeechInputHandle | null>(null);
+  const inputValueRef = useRef(input);
+  const imageFileRef = useRef(imageFile);
+  inputValueRef.current = input;
+  imageFileRef.current = imageFile;
 
   const INPUT_MAX_HEIGHT_PX = 208; // entspricht max-h-52
 
@@ -708,10 +757,18 @@ export function App() {
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
 
+  const speechTranscribing = speechBusy && !voiceRecording.active;
+
   const canSend = useMemo(() => {
     const t = input.trim();
-    return (t.length > 0 || imageFile !== null) && !busy && !speechBusy;
-  }, [input, imageFile, busy, speechBusy]);
+    return (
+      (t.length > 0 || imageFile !== null) && !busy && !speechBusy && !voiceRecording.active
+    );
+  }, [input, imageFile, busy, speechBusy, voiceRecording.active]);
+
+  const handleVoiceRecordingChange = useCallback((active: boolean, stream: MediaStream | null) => {
+    setVoiceRecording({ active, stream });
+  }, []);
 
   const handleSpeechTranscript = useCallback(
     (text: string) => {
@@ -734,8 +791,11 @@ export function App() {
     setContextTrimNotice(null);
   }, [stop]);
 
-  const send = useCallback(async () => {
-    if (!canSend) return;
+  const send = useCallback(async (options?: { force?: boolean }) => {
+    const textNow = inputValueRef.current.trim();
+    const hasContent = textNow.length > 0 || imageFileRef.current !== null;
+    if (!options?.force && !canSend) return;
+    if (options?.force && (!hasContent || busy || speechBusy)) return;
     setError(null);
     const text = input.trim();
     setInput("");
@@ -883,7 +943,10 @@ export function App() {
           outputTokensPerSec = Math.round((roughOutTok / genSec) * 10) / 10;
         }
 
-        const co2Grams = estimateInferenceCo2Grams(genSec, model);
+        const totalTokensForCo2 = hasApiCounts
+          ? (usageSnap?.promptTokens ?? 0) + (usageSnap?.completionTokens ?? 0)
+          : roughOutTok;
+        const co2Grams = estimateInferenceCo2Grams(totalTokensForCo2, model);
 
         copy[copy.length - 1] = {
           ...last,
@@ -930,7 +993,30 @@ export function App() {
     gptOssReasoning,
     qwenVisionOcr,
     maxMessages,
+    busy,
+    speechBusy,
   ]);
+
+  useEffect(() => {
+    if (!voiceRecording.active) return;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || e.shiftKey) return;
+      const target = e.target;
+      if (target instanceof HTMLElement && target.closest("[role='dialog']")) return;
+
+      e.preventDefault();
+      const hasContent =
+        inputValueRef.current.trim().length > 0 || imageFileRef.current !== null;
+      speechInputRef.current?.stopRecording({ skipTranscribe: hasContent });
+      if (hasContent) {
+        void send({ force: true });
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [voiceRecording.active, send]);
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100">
@@ -1191,8 +1277,20 @@ export function App() {
                 setSystemPrompt={setSystemPrompt}
               />
               <div className="min-w-0 flex-1">
-                <div className="flex items-end gap-2 rounded-[28px] border border-neutral-200 bg-white py-2 pl-2 pr-2 shadow-[0_2px_12px_rgba(0,0,0,0.08)] dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)]">
-                  <label className="flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800">
+                <div
+                  className={`flex items-end gap-2 rounded-[28px] border border-neutral-200 bg-white py-2 pl-2 pr-2 shadow-[0_2px_12px_rgba(0,0,0,0.08)] dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
+                    voiceRecording.active
+                      ? "voice-input-recording border-red-200/80 dark:border-red-900/50"
+                      : ""
+                  }`}
+                >
+                  <label
+                    className={`flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 ${
+                      voiceRecording.active || speechTranscribing
+                        ? "pointer-events-none opacity-40"
+                        : ""
+                    }`}
+                  >
                     <span className="text-xl font-light leading-none">+</span>
                     <input
                       type="file"
@@ -1206,30 +1304,43 @@ export function App() {
                       }}
                     />
                   </label>
-                  <textarea
-                    ref={inputRef}
-                    className="min-h-[44px] max-h-52 flex-1 resize-none overflow-hidden bg-transparent py-2.5 text-[15px] leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-neutral-100 dark:placeholder:text-neutral-500"
-                    rows={1}
-                    placeholder="Stelle irgendeine Frage"
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
-                    disabled={busy || speechBusy}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && !e.shiftKey) {
-                        e.preventDefault();
-                        void send();
-                      }
-                    }}
-                  />
+                  {voiceRecording.active ? (
+                    <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+                      <SpeechWaveform stream={voiceRecording.stream} />
+                      <span className="px-1 text-center text-[11px] font-medium text-red-600/90 dark:text-red-400/90">
+                        Zuhören… Enter sendet bei Text · sonst Aufnahme beenden
+                      </span>
+                    </div>
+                  ) : speechTranscribing ? (
+                    <SpeechTranscribingIndicator />
+                  ) : (
+                    <textarea
+                      ref={inputRef}
+                      className="min-h-[44px] max-h-52 flex-1 resize-none overflow-hidden bg-transparent py-2.5 text-[15px] leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                      rows={1}
+                      placeholder="Stelle irgendeine Frage"
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
+                      disabled={busy || speechBusy}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && !e.shiftKey) {
+                          e.preventDefault();
+                          void send();
+                        }
+                      }}
+                    />
+                  )}
                   <div className="flex shrink-0 items-center gap-1 pb-0.5">
                     {speechToText?.enabled ? (
                       <SpeechInputButton
+                        ref={speechInputRef}
                         disabled={busy}
                         language={speechToText.language}
                         maxAudioBytes={speechToText.maxAudioBytes}
                         onTranscript={handleSpeechTranscript}
                         onError={setError}
                         onBusyChange={setSpeechBusy}
+                        onRecordingChange={handleVoiceRecordingChange}
                       />
                     ) : null}
                     {busy ? (
@@ -1258,7 +1369,7 @@ export function App() {
               <button
                 type="button"
                 onClick={clearChat}
-                disabled={busy || speechBusy || messages.length === 0}
+                disabled={busy || speechBusy || voiceRecording.active || messages.length === 0}
                 className="mb-1 shrink-0 self-end rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[11px] font-medium text-neutral-700 shadow-sm outline-none hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
                 title="Clear conversation"
               >

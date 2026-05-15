@@ -1,38 +1,37 @@
-import { MODEL_QWEN_35 } from "./modelPresets";
+import {
+  MODEL_DEVSTRAL,
+  MODEL_GPT_OSS,
+  MODEL_MINISTRAL,
+  MODEL_QWEN_35,
+  MODEL_QWEN_36,
+} from "./modelPresets";
 
-/**
- * Treibhausgasintensität des deutschen Strommixes (Verbraucherstrom),
- * grob nach UBA-Veröffentlichungen (z. B. ~363 g/kWh für 2024).
- * Nur für grobe Orientierung — jährlicher Mittelwert, keine Standort-Garantie.
- */
-export const DE_GRID_CO2_GRAMS_PER_KWH = 363;
+/** Geschätzter CO₂-Ausstoß in kg pro 1 Mio. Token (Eingabe + Ausgabe). */
+export const CO2_KG_PER_MILLION_TOKENS: Record<string, number> = {
+  [MODEL_QWEN_36]: 0.36,
+  [MODEL_GPT_OSS]: 0.39,
+  [MODEL_MINISTRAL]: 0.72,
+  [MODEL_QWEN_35]: 1.08,
+  [MODEL_DEVSTRAL]: 1.17,
+};
 
-/**
- * Power Usage Effectiveness: gemessener Wert eures RZ (Gesamtstrom der Anlage / IT-Ausrüstung).
- * Für den Footprint wird die GPU-bezogene Nutzenergie mit PUE multipliziert (Kühlung, USV-Verluste,
- * Verteilung usw. anteilig am IT-Verbrauch).
- */
-export const DATACENTER_PUE = 1.35;
+/** Fallback für nicht gelistete Modelle (Mittelwert der Playground-Modelle). */
+export const DEFAULT_CO2_KG_PER_MILLION_TOKENS = 0.72;
 
-/**
- * Annahme: mittlere elektrische Leistung einer RTX 6000 Pro (96 GB)
- * während der Texterzeugung (Inferenz). Ohne CPU/RAM/Netzwerk — nur GPU-Karte.
- */
-export const RTX6000_PRO_INFERENCE_WATTS = 450;
-
-/** Qwen 122B läuft auf zwei GPUs; alle anderen konfigurierten Modelle auf einer. */
-export function getInferenceGpuCount(modelId: string): number {
-  return modelId === MODEL_QWEN_35 ? 2 : 1;
+export function getCo2KgPerMillionTokens(modelId: string): number {
+  return CO2_KG_PER_MILLION_TOKENS[modelId] ?? DEFAULT_CO2_KG_PER_MILLION_TOKENS;
 }
 
 /**
- * Geschätztes CO₂-Äquivalent (Gramm) aus Generierungsdauer und Modell.
- * IT-Leistung [W] = GPUs × W_GPU; Facility-Leistung ≈ IT × PUE.
- * Energie [kWh] = (IT_W × PUE × s) / (1000 × 3600)
+ * CO₂-Äquivalent in Gramm aus Gesamt-Tokenzahl und modellspezifischem kg/Mio.-Faktor.
  */
-export function estimateInferenceCo2Grams(generationSeconds: number, modelId: string): number {
-  const itWatts = getInferenceGpuCount(modelId) * RTX6000_PRO_INFERENCE_WATTS;
-  const facilityWatts = itWatts * DATACENTER_PUE;
-  const kWh = (facilityWatts * generationSeconds) / (1000 * 3600);
-  return kWh * DE_GRID_CO2_GRAMS_PER_KWH;
+export function estimateInferenceCo2Grams(totalTokens: number, modelId: string): number {
+  if (totalTokens <= 0) return 0;
+  const kgPerMio = getCo2KgPerMillionTokens(modelId);
+  return (totalTokens / 1_000_000) * kgPerMio * 1000;
 }
+
+export const CO2_FOOTPRINT_TOOLTIP =
+  "Schätzung aus Tokenzahl × modellspezifischem Faktor (kg CO₂eq pro 1 Mio. Token, Eingabe+Ausgabe): " +
+  "Qwen3.6 ~0,36, gpt-oss ~0,39, Ministral ~0,72, Qwen3.5 ~1,08, Devstral ~1,17. " +
+  "Ohne API-Nutzungsdaten nur Ausgabe-Token grob geschätzt.";

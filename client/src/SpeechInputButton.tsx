@@ -1,5 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { blobToBase64, blobToWav16 } from "./blobToWav";
+
+export type SpeechInputHandle = {
+  stopRecording: (options?: { skipTranscribe?: boolean }) => void;
+};
 
 type Props = {
   disabled?: boolean;
@@ -8,6 +12,7 @@ type Props = {
   onTranscript: (text: string) => void;
   onError: (message: string) => void;
   onBusyChange?: (busy: boolean) => void;
+  onRecordingChange?: (recording: boolean, stream: MediaStream | null) => void;
 };
 
 function MicIcon({ className }: { className?: string }) {
@@ -46,19 +51,24 @@ function pickRecorderMime(): string | undefined {
   return undefined;
 }
 
-export function SpeechInputButton({
-  disabled = false,
-  language = "de",
-  maxAudioBytes = 25 * 1024 * 1024,
-  onTranscript,
-  onError,
-  onBusyChange,
-}: Props) {
+export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function SpeechInputButton(
+  {
+    disabled = false,
+    language = "de",
+    maxAudioBytes = 25 * 1024 * 1024,
+    onTranscript,
+    onError,
+    onBusyChange,
+    onRecordingChange,
+  },
+  ref,
+) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const skipTranscribeRef = useRef(false);
 
   const setBusy = useCallback(
     (busy: boolean) => {
@@ -118,12 +128,30 @@ export function SpeechInputButton({
     [language, maxAudioBytes, onError, onTranscript, setBusy],
   );
 
-  const stopRecording = useCallback(() => {
-    const rec = recorderRef.current;
-    if (!rec || rec.state === "inactive") return;
-    rec.stop();
-    setRecording(false);
-  }, []);
+  const notifyRecording = useCallback(
+    (active: boolean, stream: MediaStream | null) => {
+      onRecordingChange?.(active, stream);
+    },
+    [onRecordingChange],
+  );
+
+  const stopRecording = useCallback(
+    (options?: { skipTranscribe?: boolean }) => {
+      const rec = recorderRef.current;
+      if (!rec || rec.state === "inactive") {
+        setRecording(false);
+        notifyRecording(false, null);
+        return;
+      }
+      skipTranscribeRef.current = Boolean(options?.skipTranscribe);
+      rec.stop();
+      setRecording(false);
+      notifyRecording(false, null);
+    },
+    [notifyRecording],
+  );
+
+  useImperativeHandle(ref, () => ({ stopRecording }), [stopRecording]);
 
   const startRecording = useCallback(async () => {
     if (disabled || transcribing || recording) return;
@@ -143,6 +171,11 @@ export function SpeechInputButton({
       };
       rec.onstop = () => {
         stopStream();
+        if (skipTranscribeRef.current) {
+          skipTranscribeRef.current = false;
+          chunksRef.current = [];
+          return;
+        }
         const blob = new Blob(chunksRef.current, {
           type: rec.mimeType || mime || "audio/webm",
         });
@@ -156,12 +189,15 @@ export function SpeechInputButton({
       rec.onerror = () => {
         stopStream();
         setRecording(false);
+        notifyRecording(false, null);
         onError("Aufnahme fehlgeschlagen.");
       };
       rec.start(250);
       setRecording(true);
+      notifyRecording(true, stream);
     } catch (e) {
       stopStream();
+      notifyRecording(false, null);
       const msg =
         e instanceof DOMException && e.name === "NotAllowedError"
           ? "Mikrofon-Zugriff verweigert. Bitte in den Browser-Einstellungen erlauben."
@@ -170,7 +206,7 @@ export function SpeechInputButton({
             : "Mikrofon konnte nicht gestartet werden.";
       onError(msg);
     }
-  }, [disabled, onError, recording, stopStream, transcribeBlob, transcribing]);
+  }, [disabled, notifyRecording, onError, recording, stopStream, transcribeBlob, transcribing]);
 
   const handleClick = () => {
     if (recording) stopRecording();
@@ -207,4 +243,4 @@ export function SpeechInputButton({
       )}
     </button>
   );
-}
+});
