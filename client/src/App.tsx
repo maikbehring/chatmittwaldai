@@ -22,6 +22,9 @@ import { ImageLightbox } from "./ImageLightbox";
 import { createRafStreamBatcher } from "./streamDeltaBatch";
 import { CO2_FOOTPRINT_TOOLTIP, estimateInferenceCo2Grams } from "./inferenceFootprint";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
+import { WebSearchGlobeToggle, WebSearchModeChip } from "./WebSearchComposerControl";
+import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
+import { hasWebSearchConsent, setWebSearchConsent } from "./webSearchConsent";
 import {
   PlaygroundLinksFooter,
   PlaygroundLinksInline,
@@ -40,8 +43,6 @@ import {
   fetchWebSearch,
   formatWebSearchContext,
   providerLabel,
-  webSearchDataTransferHint,
-  webSearchDataTransferHintShort,
   type WebSearchConfig,
   type WebSearchResponse,
 } from "./webSearch";
@@ -115,7 +116,16 @@ function trimMessagesForApi(
   };
 }
 
-const boot = loadPlaygroundState();
+function stripWebSearchWithoutConsent(state: ReturnType<typeof loadPlaygroundState>) {
+  if (hasWebSearchConsent()) return state;
+  return {
+    ...state,
+    settings: { ...state.settings, webSearchDefaultEnabled: false },
+    threads: state.threads.map((t) => ({ ...t, webSearchEnabled: false })),
+  };
+}
+
+const boot = stripWebSearchWithoutConsent(loadPlaygroundState());
 const bootThread =
   boot.threads.find((t) => t.id === boot.activeThreadId) ?? boot.threads[0];
 
@@ -516,6 +526,10 @@ export function App() {
     () => Boolean(initial.webSearchDefaultEnabled),
   );
   const [webSearchBusy, setWebSearchBusy] = useState(false);
+  const [webSearchConsentOpen, setWebSearchConsentOpen] = useState(false);
+  const [pendingWebSearchEnable, setPendingWebSearchEnable] = useState<
+    "thread" | "default" | null
+  >(null);
   const [threads, setThreads] = useState<ChatThread[]>(() => boot.threads);
   const [activeThreadId, setActiveThreadId] = useState(() => boot.activeThreadId);
   const [messages, setMessages] = useState<ChatMessage[]>(
@@ -572,6 +586,47 @@ export function App() {
     },
     [activeThreadId],
   );
+
+  const applyWebSearchEnable = useCallback(
+    (target: "thread" | "default") => {
+      if (target === "thread") setActiveThreadWebSearch(true);
+      else setWebSearchDefaultEnabled(true);
+    },
+    [setActiveThreadWebSearch],
+  );
+
+  const requestEnableWebSearch = useCallback(
+    (target: "thread" | "default") => {
+      if (hasWebSearchConsent()) {
+        applyWebSearchEnable(target);
+        return;
+      }
+      setPendingWebSearchEnable(target);
+      setWebSearchConsentOpen(true);
+    },
+    [applyWebSearchEnable],
+  );
+
+  const confirmWebSearchConsent = useCallback(() => {
+    setWebSearchConsent();
+    setWebSearchConsentOpen(false);
+    const target = pendingWebSearchEnable;
+    setPendingWebSearchEnable(null);
+    if (target) applyWebSearchEnable(target);
+  }, [pendingWebSearchEnable, applyWebSearchEnable]);
+
+  const cancelWebSearchConsent = useCallback(() => {
+    setWebSearchConsentOpen(false);
+    setPendingWebSearchEnable(null);
+  }, []);
+
+  const toggleThreadWebSearch = useCallback(() => {
+    if (activeThreadWebSearch) {
+      setActiveThreadWebSearch(false);
+      return;
+    }
+    requestEnableWebSearch("thread");
+  }, [activeThreadWebSearch, setActiveThreadWebSearch, requestEnableWebSearch]);
 
   const applyPreset = useCallback((modelId: string) => {
     applyPresetToState(modelId, {
@@ -930,12 +985,19 @@ export function App() {
     abortRef.current = ctrl;
 
     let webSearchPayload: WebSearchResponse | undefined;
-    const useWebSearch =
+    const wantsWebSearch =
       activeThreadWebSearch &&
       typeof userContent === "string" &&
       text.length > 0 &&
       !file &&
       webSearchConfig?.enabled !== false;
+
+    if (wantsWebSearch && !hasWebSearchConsent()) {
+      requestEnableWebSearch("thread");
+      return;
+    }
+
+    const useWebSearch = wantsWebSearch && hasWebSearchConsent();
 
     setInput("");
     setImageFile(null);
@@ -1168,6 +1230,7 @@ export function App() {
     speechBusy,
     activeThreadWebSearch,
     webSearchConfig,
+    requestEnableWebSearch,
   ]);
 
   useEffect(() => {
@@ -1348,47 +1411,6 @@ export function App() {
             {sidebarCollapsed ? <BetaBadge /> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            {webSearchConfig?.enabled !== false ? (
-              <button
-                type="button"
-                onClick={() => setActiveThreadWebSearch(!activeThreadWebSearch)}
-                disabled={busy || webSearchBusy}
-                aria-pressed={activeThreadWebSearch}
-                aria-describedby={activeThreadWebSearch ? "web-search-privacy-hint" : undefined}
-                title={
-                  activeThreadWebSearch
-                    ? `${webSearchDataTransferHint(webSearchConfig)} Klicken zum Deaktivieren.`
-                    : `Websuche für diesen Chat aktivieren (${providerLabel(webSearchConfig)}). ${webSearchDataTransferHint(webSearchConfig)}`
-                }
-                className={`max-w-[11rem] shrink-0 rounded-lg px-2 py-1.5 text-left text-xs font-medium transition sm:max-w-[12rem] ${
-                  activeThreadWebSearch
-                    ? "flex flex-col gap-0.5 bg-sky-100 text-sky-900 ring-1 ring-sky-300/80 dark:bg-sky-950/60 dark:text-sky-100 dark:ring-sky-700"
-                    : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
-                }`}
-              >
-                <span className="leading-tight">
-                  {webSearchBusy ? (
-                    <>
-                      Suche
-                      <span className="font-normal opacity-75"> · {providerLabel(webSearchConfig)}</span>…
-                    </>
-                  ) : (
-                    <>
-                      Websuche
-                      <span className="font-normal opacity-75"> · {providerLabel(webSearchConfig)}</span>
-                    </>
-                  )}
-                </span>
-                {activeThreadWebSearch && !webSearchBusy ? (
-                  <span
-                    id="web-search-privacy-hint"
-                    className="text-[10px] font-normal leading-tight text-sky-800/85 dark:text-sky-200/85"
-                  >
-                    {webSearchDataTransferHintShort(webSearchConfig)}
-                  </span>
-                ) : null}
-              </button>
-            ) : null}
             <label htmlFor="theme-select" className="sr-only sm:not-sr-only text-xs text-neutral-500 dark:text-neutral-400">
               Design
             </label>
@@ -1451,21 +1473,6 @@ export function App() {
           </div>
 
           <div className="shrink-0 border-t border-transparent bg-gradient-to-t from-white via-white to-transparent px-4 pb-3 pt-2 dark:from-neutral-950 dark:via-neutral-950 dark:to-transparent">
-            {webSearchBusy ? (
-              <div
-                className="mx-auto mb-2 max-w-3xl rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-950 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-100"
-                role="status"
-                aria-live="polite"
-              >
-                <span className="inline-flex items-center gap-2">
-                  <span
-                    className="inline-block h-3.5 w-3.5 animate-spin rounded-full border-2 border-sky-600 border-t-transparent dark:border-sky-300"
-                    aria-hidden
-                  />
-                  Websuche läuft ({providerLabel(webSearchConfig)}) …
-                </span>
-              </div>
-            ) : null}
             {contextTrimNotice && (
               <div
                 className="mx-auto mb-2 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
@@ -1517,13 +1524,23 @@ export function App() {
                 setSystemPrompt={setSystemPrompt}
                 webSearchConfig={webSearchConfig}
                 webSearchDefaultEnabled={webSearchDefaultEnabled}
-                setWebSearchDefaultEnabled={setWebSearchDefaultEnabled}
+                onWebSearchDefaultChange={(enabled) => {
+                  if (!enabled) setWebSearchDefaultEnabled(false);
+                  else requestEnableWebSearch("default");
+                }}
               />
               <div className="min-w-0 flex-1">
+                <WebSearchModeChip
+                  config={webSearchConfig}
+                  active={activeThreadWebSearch}
+                  searching={webSearchBusy}
+                  disabled={busy || voiceRecording.active || speechTranscribing}
+                  onDeactivate={() => setActiveThreadWebSearch(false)}
+                />
                 <div
                   className={`flex gap-2 rounded-[28px] border border-neutral-200 bg-white py-2 pl-2 pr-2 shadow-[0_2px_12px_rgba(0,0,0,0.08)] dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
                     voiceRecording.active ? "items-center" : "items-end"
-                  }`}
+                  } ${activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-800/80" : ""}`}
                 >
                   <label
                     className={`flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 ${
@@ -1545,6 +1562,13 @@ export function App() {
                       }}
                     />
                   </label>
+                  <WebSearchGlobeToggle
+                    config={webSearchConfig}
+                    active={activeThreadWebSearch}
+                    searching={webSearchBusy}
+                    disabled={busy || voiceRecording.active || speechTranscribing}
+                    onToggle={toggleThreadWebSearch}
+                  />
                   {voiceRecording.active ? (
                     <SpeechWaveform stream={voiceRecording.stream} />
                   ) : speechTranscribing ? (
@@ -1633,6 +1657,12 @@ export function App() {
         </div>
       </div>
 
+      <WebSearchConsentDialog
+        open={webSearchConsentOpen}
+        webSearchConfig={webSearchConfig}
+        onConfirm={confirmWebSearchConsent}
+        onCancel={cancelWebSearchConsent}
+      />
       <SettingsGlossaryOverlay
         open={showGlossary}
         onClose={() => setShowGlossary(false)}

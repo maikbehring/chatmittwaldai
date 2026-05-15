@@ -32,7 +32,7 @@ export type ModelSettingsDockProps = {
   setSystemPrompt: (v: string) => void;
   webSearchConfig: import("./webSearch").WebSearchConfig | null;
   webSearchDefaultEnabled: boolean;
-  setWebSearchDefaultEnabled: (v: boolean) => void;
+  onWebSearchDefaultChange: (enabled: boolean) => void;
 };
 
 function GearIcon({ className }: { className?: string }) {
@@ -89,7 +89,7 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
     setSystemPrompt,
     webSearchConfig,
     webSearchDefaultEnabled,
-    setWebSearchDefaultEnabled,
+    onWebSearchDefaultChange,
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -292,7 +292,7 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
                 <input
                   type="checkbox"
                   checked={webSearchDefaultEnabled}
-                  onChange={(e) => setWebSearchDefaultEnabled(e.target.checked)}
+                  onChange={(e) => onWebSearchDefaultChange(e.target.checked)}
                   className="accent-neutral-800 dark:accent-neutral-200"
                 />
                 <span className="text-[11px] text-neutral-800 dark:text-neutral-100">
