@@ -24,8 +24,10 @@ Repository: [github.com/maikbehring/chatmittwaldai](https://github.com/maikbehri
 
 ## Funktionen (Überblick)
 
+- **Mehrere Chats** in der Sidebar (Verlauf pro Thread im Browser, „Neuer Chat“)
 - Chat mit Streaming-Antworten (Markdown, Code)
 - Modellauswahl inkl. Modellübersicht und Einstellungen (Temperatur, System-Prompt, …)
+- **Websuche** (optional, pro Chat): Suchergebnisse werden dem Modell als Kontext mitgegeben — Standard **DuckDuckGo** ohne API-Key; optional **Serper** (Google) per Server-Konfiguration
 - **Bilder** im Chat (Vision-Modelle) mit Lightbox
 - **Spracheingabe** (Whisper über mittwald, z. B. `whisper-large-v3-turbo`)
 - Geschätzte **Token-Statistik** und **CO₂-Hinweis** pro Antwort (Orientierungswerte, keine Bilanzierung)
@@ -96,9 +98,20 @@ Alle Variablen sind in [.env.example](./.env.example) dokumentiert. Wichtigste:
 | `PLAYGROUND_ALLOWED_MODELS` | Kommagetrennte Modell-IDs; nur diese erscheinen im UI. Für öffentliche Instanzen **unbedingt** setzen und bewusst kürzen. |
 | `PLAYGROUND_BRAND_TITLE` | Anzeigename (optional) |
 | `CORS_ORIGIN` | Erlaubte Browser-Origins (z. B. `https://playground.example.com`). In Produktion **nicht** `*`. |
-| `RATE_LIMIT_*` | Schutz vor Missbrauch (Chat, Modellliste, Transkription) |
+| `RATE_LIMIT_*` | Schutz vor Missbrauch (Chat, Modellliste, Transkription, Websuche) |
 | `PLAYGROUND_MAX_MESSAGES` | Max. Nachrichten pro Request (Standard: 60) |
 | `PLAYGROUND_WHISPER_*` | Spracheingabe (Modell, Sprache, max. Audio-Größe) |
+| `WEB_SEARCH_PROVIDER` | `duckduckgo` (Standard, kostenlos) oder `serper` (Google, API-Key nötig) |
+| `WEB_SEARCH_SERPER_API_KEY` | Nur bei `WEB_SEARCH_PROVIDER=serper` — Key von [serper.dev](https://serper.dev/) |
+| `WEB_SEARCH_MAX_RESULTS` | Treffer pro Anfrage (Standard: 5) |
+| `RATE_LIMIT_MAX_WEB_SEARCH` | Rate-Limit für `POST /api/web/search` (Standard: 30 pro Fenster) |
+
+### Websuche (Betrieb & UI)
+
+- **Standard:** DuckDuckGo HTML-Suche über den Proxy — **kein** zusätzlicher API-Key.
+- **Optional:** `WEB_SEARCH_PROVIDER=serper` und `WEB_SEARCH_SERPER_API_KEY` für Google-Ergebnisse via Serper.
+- Im UI: Button **„Websuche“** im Header schaltet die Suche **pro Chat** ein/aus; in den Modell-Einstellungen kann festgelegt werden, dass **neue Chats** mit aktivierter Websuche starten.
+- Beim Senden einer Textnachricht mit aktiver Websuche ruft der Client `POST /api/web/search` auf; Treffer landen als zusätzliche System-Nachricht im Request an mittwald (nicht dauerhaft serverseitig gespeichert).
 
 **Modell-IDs** müssen exakt zu `GET /v1/models` passen. Im Code sind u. a. Presets für `gpt-oss-120b`, Qwen3.5/3.6, Ministral und Devstral verdrahtet — fehlen sie in `PLAYGROUND_ALLOWED_MODELS`, erscheinen sie nicht im Dropdown.
 
@@ -110,7 +123,7 @@ Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
 
 1. **Allowlist** — `PLAYGROUND_ALLOWED_MODELS` auf die Modelle begrenzen, die ihr anbieten wollt.
 2. **CORS** — nur die echte Playground-URL erlauben.
-3. **Rate-Limits** — an erwartete Last und Kosten anpassen (`RATE_LIMIT_MAX_CHAT`, Fenster in ms).
+3. **Rate-Limits** — an erwartete Last und Kosten anpassen (`RATE_LIMIT_MAX_CHAT`, `RATE_LIMIT_MAX_WEB_SEARCH`, Fenster in ms).
 4. **TLS** — HTTPS über Reverse-Proxy (nginx, Caddy, …).
 5. **Rechtliches** — Datenschutz, Impressum, Nutzungshinweise; UI-Hinweise ersetzen keine AGB. Siehe [Datenschutz AI-Hosting](https://developer.mittwald.de/de/docs/v2/platform/aihosting/access-and-usage/data-protection/).
 6. **Logging** — keine Chat-Inhalte in App-Logs schreiben (der Playground speichert keine Chats serverseitig; Infrastruktur-Logs separat prüfen).
@@ -119,9 +132,10 @@ Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
 
 ## Datenschutz & Sicherheit (Kurz)
 
-- Chats liegen **nur im localStorage** des jeweiligen Browsers.
+- Chats liegen **nur im localStorage** des jeweiligen Browsers (inkl. mehrerer Threads und Websuche-Einstellung pro Chat).
 - Der **API-Key** liegt nur in der Server-Umgebung (`.env`), nicht im Frontend.
 - Anfragen gehen über euren **Proxy** an mittwald; Inhalte unterliegen auch der [mittwald-Dokumentation](https://developer.mittwald.de/de/docs/v2/platform/aihosting/).
+- Bei aktivierter **Websuche** sendet der Proxy Suchanfragen an **DuckDuckGo** oder (optional) **Serper** — dabei gelten deren Nutzungsbedingungen; Suchbegriffe verlassen euren Server in Richtung des gewählten Anbieters.
 - CO₂- und Token-Werte sind **Schätzungen** zur Orientierung.
 
 ---
@@ -131,10 +145,11 @@ Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
 | Endpoint | Beschreibung |
 |----------|----------------|
 | `GET /api/health` | Liveness |
-| `GET /api/config` | UI-Konfiguration (Titel, Limits, Whisper, …) |
+| `GET /api/config` | UI-Konfiguration (Titel, Limits, Whisper, Websuche, …) |
 | `GET /api/models` | Modellliste (gefiltert) |
 | `POST /api/chat/completions` | Chat (Streaming); nur erlaubte JSON-Felder |
 | `POST /api/audio/transcriptions` | Sprache → Text (Whisper) |
+| `POST /api/web/search` | Websuche (`{ "query": "…" }`) — DuckDuckGo oder Serper |
 
 Vision: Bilder nur als `data:image/…` Base64 im Request.
 
@@ -150,6 +165,7 @@ Vision: Bilder nur als `data:image/…` Base64 im Request.
 | `Vite: command not found` | Im Projektroot `npm install` ausführen, nicht nur im `client/`-Ordner |
 | Mikrofon funktioniert nicht | Browser-Berechtigung; HTTPS in Produktion (localhost ist Ausnahme) |
 | CORS-Fehler in Produktion | `CORS_ORIGIN` auf die öffentliche Frontend-URL setzen |
+| Websuche liefert keine Treffer / Fehler | Rate-Limit prüfen; bei Serper Key und `WEB_SEARCH_PROVIDER=serper`; DuckDuckGo kann IP-Limits haben — ggf. Serper nutzen |
 
 ---
 

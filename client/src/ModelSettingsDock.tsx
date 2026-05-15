@@ -30,6 +30,9 @@ export type ModelSettingsDockProps = {
   setQwenVisionOcr: (v: boolean) => void;
   systemPrompt: string;
   setSystemPrompt: (v: string) => void;
+  webSearchConfig: import("./webSearch").WebSearchConfig | null;
+  webSearchDefaultEnabled: boolean;
+  setWebSearchDefaultEnabled: (v: boolean) => void;
 };
 
 function GearIcon({ className }: { className?: string }) {
@@ -84,6 +87,9 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
     setQwenVisionOcr,
     systemPrompt,
     setSystemPrompt,
+    webSearchConfig,
+    webSearchDefaultEnabled,
+    setWebSearchDefaultEnabled,
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -266,6 +272,32 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
               />
               <span className="text-neutral-800 dark:text-neutral-100">OCR-Modus bei Qwen-Bildern</span>
             </label>
+          ) : null}
+
+          {webSearchConfig && webSearchConfig.enabled !== false ? (
+            <div className="mb-3 rounded-md border border-neutral-200 bg-neutral-50/80 p-2 dark:border-neutral-700 dark:bg-neutral-900/50">
+              <p className="mb-1.5 text-[11px] font-medium text-neutral-700 dark:text-neutral-200">
+                Websuche (Server)
+              </p>
+              <p className="mb-2 text-[10px] leading-snug text-neutral-500 dark:text-neutral-400">
+                Standard: {webSearchConfig.providers.duckduckgo?.label ?? "DuckDuckGo"} (kostenlos, ohne
+                API-Key). Pro Chat im Header mit „Websuche“ ein-/ausschalten.
+                {webSearchConfig.provider === "serper"
+                  ? ` Aktiv: Serper (Google).`
+                  : ""}
+              </p>
+              <label className="flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={webSearchDefaultEnabled}
+                  onChange={(e) => setWebSearchDefaultEnabled(e.target.checked)}
+                  className="accent-neutral-800 dark:accent-neutral-200"
+                />
+                <span className="text-[11px] text-neutral-800 dark:text-neutral-100">
+                  Neue Chats starten mit aktivierter Websuche
+                </span>
+              </label>
+            </div>
           ) : null}
 
           <label className="mb-2 block">

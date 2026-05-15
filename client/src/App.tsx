@@ -22,9 +22,22 @@ import { ImageLightbox } from "./ImageLightbox";
 import { createRafStreamBatcher } from "./streamDeltaBatch";
 import { CO2_FOOTPRINT_TOOLTIP, estimateInferenceCo2Grams } from "./inferenceFootprint";
 import { GITHUB_NEW_BUG_ISSUE_URL } from "./repoLinks";
+import {
+  createEmptyThread,
+  deriveThreadTitle,
+  loadPlaygroundState,
+  savePlaygroundState,
+  sortThreadsByRecent,
+  type ChatThread,
+} from "./chatStorage";
+import {
+  fetchWebSearch,
+  formatWebSearchContext,
+  providerLabel,
+  type WebSearchConfig,
+  type WebSearchResponse,
+} from "./webSearch";
 
-const STORAGE_KEY = "mittwald-ai-playground-state-v2";
-const LEGACY_STORAGE_KEY = "mittwald-ai-playground-state-v1";
 const THEME_STORAGE_KEY = "mittwald-ai-playground-theme";
 
 type ThemePreference = "light" | "dark" | "system";
@@ -62,30 +75,7 @@ export type ChatMessage = {
   role: Exclude<Role, "system">;
   content: string | ContentPart[];
   usage?: TokenMeter;
-};
-
-type Persisted = {
-  v: 2;
-  model: string;
-  temperature: number;
-  topP: number | null;
-  topK: number | null;
-  presencePenalty: number | null;
-  extraBody: Record<string, unknown> | null;
-  gptOssReasoning: GptOssReasoning;
-  maxTokens: number | null;
-  systemPrompt: string;
-  messages: ChatMessage[];
-  qwenVisionOcr: boolean;
-};
-
-type LegacyPersistedV1 = {
-  v: 1;
-  model?: string;
-  temperature?: number;
-  maxTokens?: number | null;
-  systemPrompt?: string;
-  messages?: ChatMessage[];
+  webSearch?: WebSearchResponse;
 };
 
 const DEFAULT_MODEL = MODEL_MINISTRAL;
@@ -117,55 +107,9 @@ function trimMessagesForApi(
   };
 }
 
-function readJsonKey(key: string): unknown {
-  try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    return JSON.parse(raw);
-  } catch {
-    return null;
-  }
-}
-
-function loadPersisted(): Partial<Persisted> {
-  const cur = readJsonKey(STORAGE_KEY) as Partial<Persisted> | null;
-  if (cur && cur.v === 2) return cur;
-
-  const legacy = readJsonKey(LEGACY_STORAGE_KEY) as LegacyPersistedV1 | null;
-  if (legacy && legacy.v === 1) {
-    const model = legacy.model ?? DEFAULT_MODEL;
-    const p = getInferencePreset(model);
-    return {
-      v: 2,
-      model,
-      messages: legacy.messages ?? [],
-      systemPrompt: legacy.systemPrompt ?? "",
-      temperature:
-        typeof legacy.temperature === "number" ? legacy.temperature : p.temperature,
-      maxTokens:
-        legacy.maxTokens === null || typeof legacy.maxTokens === "number"
-          ? legacy.maxTokens
-          : p.maxTokens,
-      topP: typeof p.topP === "number" ? p.topP : null,
-      topK: typeof p.topK === "number" ? p.topK : null,
-      presencePenalty: typeof p.presencePenalty === "number" ? p.presencePenalty : null,
-      extraBody: p.extraBody,
-      gptOssReasoning: "medium",
-      qwenVisionOcr: false,
-    };
-  }
-
-  return {};
-}
-
-function savePersisted(state: Persisted) {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-  try {
-    localStorage.removeItem(LEGACY_STORAGE_KEY);
-  } catch {
-    /* ignore */
-  }
-}
+const boot = loadPlaygroundState();
+const bootThread =
+  boot.threads.find((t) => t.id === boot.activeThreadId) ?? boot.threads[0];
 
 async function encodeImageFile(file: File, maxEdge = 1024, quality = 0.85): Promise<string> {
   const bitmap = await createImageBitmap(file);
@@ -441,8 +385,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
 }) {
   if (message.role === "user") {
     return (
-      <div className="flex justify-end">
-        <div className="max-w-[min(85%,28rem)] rounded-[1.25rem] bg-[#f4f4f4] px-4 py-3 text-[15px] leading-relaxed text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100">
+      <div className="flex max-w-[min(85%,28rem)] flex-col items-end gap-1">
+        {message.webSearch && message.webSearch.results.length > 0 ? (
+          <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+            Websuche ({message.webSearch.provider}) · {message.webSearch.results.length} Treffer
+          </p>
+        ) : null}
+        <div className="rounded-[1.25rem] bg-[#f4f4f4] px-4 py-3 text-[15px] leading-relaxed text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100">
           {renderMessageContent(message.content, false, onImageOpen)}
         </div>
       </div>
@@ -481,7 +430,7 @@ function applyPresetToState(
 }
 
 export function App() {
-  const initial = useMemo(() => loadPersisted(), []);
+  const initial = boot.settings;
   const initialModel = initial.model ?? DEFAULT_MODEL;
   const initialPreset = getInferencePreset(initialModel);
 
@@ -534,7 +483,16 @@ export function App() {
     return initialPreset.maxTokens;
   });
   const [systemPrompt, setSystemPrompt] = useState(() => initial.systemPrompt ?? "");
-  const [messages, setMessages] = useState<ChatMessage[]>(() => initial.messages ?? []);
+  const [webSearchConfig, setWebSearchConfig] = useState<WebSearchConfig | null>(null);
+  const [webSearchDefaultEnabled, setWebSearchDefaultEnabled] = useState(
+    () => Boolean(initial.webSearchDefaultEnabled),
+  );
+  const [webSearchBusy, setWebSearchBusy] = useState(false);
+  const [threads, setThreads] = useState<ChatThread[]>(() => boot.threads);
+  const [activeThreadId, setActiveThreadId] = useState(() => boot.activeThreadId);
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    () => (bootThread?.messages ?? []) as ChatMessage[],
+  );
   const [input, setInput] = useState("");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
@@ -572,6 +530,20 @@ export function App() {
   }, []);
   const modelRef = useRef(model);
   modelRef.current = model;
+
+  const activeThreadWebSearch = useMemo(
+    () => threads.find((t) => t.id === activeThreadId)?.webSearchEnabled ?? false,
+    [threads, activeThreadId],
+  );
+
+  const setActiveThreadWebSearch = useCallback(
+    (enabled: boolean) => {
+      setThreads((prev) =>
+        prev.map((t) => (t.id === activeThreadId ? { ...t, webSearchEnabled: enabled } : t)),
+      );
+    },
+    [activeThreadId],
+  );
 
   const applyPreset = useCallback((modelId: string) => {
     applyPresetToState(modelId, {
@@ -645,22 +617,44 @@ export function App() {
 
   useEffect(() => {
     if (busy) return;
-    const state: Persisted = {
-      v: 2,
-      model,
-      temperature,
-      topP,
-      topK,
-      presencePenalty,
-      extraBody,
-      gptOssReasoning,
-      maxTokens,
-      systemPrompt,
-      messages,
-      qwenVisionOcr,
-    };
-    savePersisted(state);
+    setThreads((prev) => {
+      const next = sortThreadsByRecent(
+        prev.map((t) =>
+          t.id === activeThreadId
+            ? {
+                ...t,
+                messages,
+                title:
+                  messages.length > 0
+                    ? deriveThreadTitle(messages as ChatMessage[])
+                    : "Neuer Chat",
+                updatedAt: Date.now(),
+              }
+            : t,
+        ),
+      );
+      savePlaygroundState({
+        v: 3,
+        activeThreadId,
+        threads: next,
+        model,
+        temperature,
+        topP,
+        topK,
+        presencePenalty,
+        extraBody,
+        gptOssReasoning,
+        maxTokens,
+        systemPrompt,
+        qwenVisionOcr,
+        webSearchDefaultEnabled,
+      });
+      return next;
+    });
   }, [
+    messages,
+    activeThreadId,
+    busy,
     model,
     temperature,
     topP,
@@ -670,9 +664,8 @@ export function App() {
     gptOssReasoning,
     maxTokens,
     systemPrompt,
-    messages,
     qwenVisionOcr,
-    busy,
+    webSearchDefaultEnabled,
   ]);
 
   useEffect(() => {
@@ -705,6 +698,8 @@ export function App() {
               maxAudioBytes: c.speechToText.maxAudioBytes ?? 25 * 1024 * 1024,
             });
           }
+          const cWeb = (c as { webSearch?: WebSearchConfig }).webSearch;
+          if (cWeb?.enabled) setWebSearchConfig(cWeb);
         }
         if (!modRes.ok) {
           const t = await modRes.text();
@@ -746,9 +741,13 @@ export function App() {
   const canSend = useMemo(() => {
     const t = input.trim();
     return (
-      (t.length > 0 || imageFile !== null) && !busy && !speechBusy && !voiceRecording.active
+      (t.length > 0 || imageFile !== null) &&
+      !busy &&
+      !webSearchBusy &&
+      !voiceRecording.active &&
+      !speechTranscribing
     );
-  }, [input, imageFile, busy, speechBusy, voiceRecording.active]);
+  }, [input, imageFile, busy, webSearchBusy, voiceRecording.active, speechTranscribing]);
 
   const handleVoiceRecordingChange = useCallback((active: boolean, stream: MediaStream | null) => {
     setVoiceRecording({ active, stream });
@@ -756,8 +755,15 @@ export function App() {
 
   const handleSpeechTranscript = useCallback(
     (text: string) => {
-      setInput((prev) => (prev.trim() ? `${prev.trimEnd()} ${text}` : text));
-      window.requestAnimationFrame(() => adjustInputHeight());
+      setInput((prev) => {
+        const next = prev.trim() ? `${prev.trimEnd()} ${text}` : text;
+        inputValueRef.current = next;
+        return next;
+      });
+      window.requestAnimationFrame(() => {
+        adjustInputHeight();
+        inputRef.current?.focus();
+      });
     },
     [adjustInputHeight],
   );
@@ -768,12 +774,104 @@ export function App() {
     setBusy(false);
   }, []);
 
-  const clearChat = useCallback(() => {
+  const newChat = useCallback(() => {
     stop();
-    setMessages([]);
     setError(null);
     setContextTrimNotice(null);
-  }, [stop]);
+    setInput("");
+    setImageFile(null);
+    const fresh = createEmptyThread(webSearchDefaultEnabled);
+    setThreads((prev) => {
+      const withCurrent = prev.map((t) =>
+        t.id === activeThreadId
+          ? {
+              ...t,
+              messages,
+              title:
+                messages.length > 0
+                  ? deriveThreadTitle(messages as ChatMessage[])
+                  : t.title,
+              updatedAt: Date.now(),
+            }
+          : t,
+      );
+      return sortThreadsByRecent([fresh, ...withCurrent]);
+    });
+    setActiveThreadId(fresh.id);
+    setMessages([]);
+  }, [activeThreadId, messages, stop]);
+
+  const selectThread = useCallback(
+    (id: string) => {
+      if (id === activeThreadId) return;
+      stop();
+      setError(null);
+      setContextTrimNotice(null);
+      let nextMessages: ChatMessage[] = [];
+      setThreads((prev) => {
+        const updated = sortThreadsByRecent(
+          prev.map((t) =>
+            t.id === activeThreadId
+              ? {
+                  ...t,
+                  messages,
+                  title:
+                    messages.length > 0
+                      ? deriveThreadTitle(messages as ChatMessage[])
+                      : t.title,
+                  updatedAt: Date.now(),
+                }
+              : t,
+          ),
+        );
+        nextMessages = (updated.find((t) => t.id === id)?.messages ?? []) as ChatMessage[];
+        return updated;
+      });
+      setActiveThreadId(id);
+      setMessages(nextMessages);
+    },
+    [activeThreadId, messages, stop],
+  );
+
+  const deleteThread = useCallback(
+    (id: string) => {
+      if (busy) return;
+      stop();
+      let nextActive = activeThreadId;
+      let nextMessages: ChatMessage[] = [];
+      setThreads((prev) => {
+        const withCurrent = prev.map((t) =>
+          t.id === activeThreadId
+            ? {
+                ...t,
+                messages,
+                title:
+                  messages.length > 0
+                    ? deriveThreadTitle(messages as ChatMessage[])
+                    : t.title,
+                updatedAt: Date.now(),
+              }
+            : t,
+        );
+        let filtered = withCurrent.filter((t) => t.id !== id);
+        if (filtered.length === 0) filtered = [createEmptyThread()];
+        const sorted = sortThreadsByRecent(filtered);
+        if (id === activeThreadId || !sorted.some((t) => t.id === activeThreadId)) {
+          nextActive = sorted[0].id;
+          nextMessages = sorted[0].messages as ChatMessage[];
+        } else {
+          nextMessages = (sorted.find((t) => t.id === activeThreadId)?.messages ??
+            []) as ChatMessage[];
+        }
+        return sorted;
+      });
+      setActiveThreadId(nextActive);
+      setMessages(nextMessages);
+      setError(null);
+      setContextTrimNotice(null);
+    },
+    [activeThreadId, busy, messages, stop],
+  );
 
   const send = useCallback(async (options?: { force?: boolean }) => {
     const textNow = inputValueRef.current.trim();
@@ -781,10 +879,8 @@ export function App() {
     if (!options?.force && !canSend) return;
     if (options?.force && (!hasContent || busy || speechBusy)) return;
     setError(null);
-    const text = input.trim();
-    setInput("");
+    const text = textNow;
     const file = imageFile;
-    setImageFile(null);
 
     let userContent: string | ContentPart[];
     if (file) {
@@ -799,14 +895,42 @@ export function App() {
       userContent = text;
     }
 
-    const userMessage: ChatMessage = { role: "user", content: userContent };
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+
+    let webSearchPayload: WebSearchResponse | undefined;
+    const useWebSearch =
+      activeThreadWebSearch &&
+      typeof userContent === "string" &&
+      text.length > 0 &&
+      !file &&
+      webSearchConfig?.enabled !== false;
+
+    if (useWebSearch) {
+      setWebSearchBusy(true);
+      try {
+        webSearchPayload = await fetchWebSearch(text, ctrl.signal);
+      } catch (e) {
+        setWebSearchBusy(false);
+        if (e instanceof Error && e.name === "AbortError") throw e;
+        setError(e instanceof Error ? e.message : "Websuche fehlgeschlagen.");
+        return;
+      }
+      setWebSearchBusy(false);
+    }
+
+    setInput("");
+    setImageFile(null);
+
+    const userMessage: ChatMessage = {
+      role: "user",
+      content: userContent,
+      ...(webSearchPayload ? { webSearch: webSearchPayload } : {}),
+    };
     const nextThread = [...messages, userMessage];
 
     setMessages([...nextThread, { role: "assistant", content: "" }]);
     setBusy(true);
-
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
 
     const hasVision =
       Array.isArray(userContent) &&
@@ -841,6 +965,9 @@ export function App() {
       apiMessages.push({ role: "system", content: rest ? `${line}\n\n${rest}` : line });
     } else if (systemPrompt.trim().length > 0) {
       apiMessages.push({ role: "system", content: systemPrompt.trim() });
+    }
+    if (webSearchPayload) {
+      apiMessages.push({ role: "system", content: formatWebSearchContext(webSearchPayload) });
     }
     for (const m of nextThread) {
       apiMessages.push(m);
@@ -962,6 +1089,7 @@ export function App() {
       });
     } finally {
       setBusy(false);
+      setWebSearchBusy(false);
       abortRef.current = null;
     }
   }, [
@@ -982,6 +1110,8 @@ export function App() {
     maxMessages,
     busy,
     speechBusy,
+    activeThreadWebSearch,
+    webSearchConfig,
   ]);
 
   useEffect(() => {
@@ -993,17 +1123,13 @@ export function App() {
       if (target instanceof HTMLElement && target.closest("[role='dialog']")) return;
 
       e.preventDefault();
-      const hasContent =
-        inputValueRef.current.trim().length > 0 || imageFileRef.current !== null;
-      speechInputRef.current?.stopRecording({ skipTranscribe: hasContent });
-      if (hasContent) {
-        void send({ force: true });
-      }
+      // Enter beendet Aufnahme und transkribiert; Senden erst beim nächsten Enter im Eingabefeld.
+      speechInputRef.current?.stopRecording();
     };
 
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [voiceRecording.active, send]);
+  }, [voiceRecording.active]);
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100">
@@ -1030,10 +1156,85 @@ export function App() {
           )}
         </div>
 
-        {!sidebarCollapsed && <div className="min-h-0 flex-1" aria-hidden="true" />}
+        {!sidebarCollapsed ? (
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden py-2">
+            <button
+              type="button"
+              onClick={newChat}
+              disabled={busy || speechBusy}
+              className="mx-2 mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-200/70 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-100 dark:hover:bg-neutral-800/80"
+              title="Neuer Chat"
+            >
+              <span className="text-base leading-none" aria-hidden>
+                ✎
+              </span>
+              Neuer Chat
+            </button>
+            <p className="mb-1 px-3 text-[11px] font-medium text-neutral-500 dark:text-neutral-500">
+              Aktuelle
+            </p>
+            <nav
+              className="min-h-0 flex-1 overflow-y-auto px-1.5"
+              aria-label="Chat-Verlauf"
+            >
+              {threads.map((t) => {
+                const active = t.id === activeThreadId;
+                return (
+                  <div
+                    key={t.id}
+                    className={`group mb-0.5 flex items-center rounded-lg ${
+                      active
+                        ? "bg-neutral-200/80 dark:bg-neutral-800"
+                        : "hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => selectThread(t.id)}
+                      disabled={busy}
+                      className="min-w-0 flex-1 truncate rounded-lg px-2.5 py-2 text-left text-[13px] text-neutral-700 disabled:cursor-not-allowed dark:text-neutral-200"
+                      title={
+                        t.webSearchEnabled
+                          ? `${t.title} (Websuche aktiv)`
+                          : t.title
+                      }
+                    >
+                      {t.webSearchEnabled ? (
+                        <span className="mr-1 inline-block text-sky-600 dark:text-sky-400" aria-hidden>
+                          ◉
+                        </span>
+                      ) : null}
+                      {t.title}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => deleteThread(t.id)}
+                      disabled={busy}
+                      className="mr-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-neutral-400 opacity-0 transition hover:bg-neutral-300/80 hover:text-neutral-700 group-hover:opacity-100 disabled:opacity-0 dark:hover:bg-neutral-700 dark:hover:text-neutral-200"
+                      title="Chat löschen"
+                      aria-label={`„${t.title}“ löschen`}
+                    >
+                      ×
+                    </button>
+                  </div>
+                );
+              })}
+            </nav>
+          </div>
+        ) : null}
 
         {sidebarCollapsed && (
           <div className="mt-2 flex flex-col items-center gap-1 px-1">
+            <button
+              type="button"
+              className="flex h-9 w-9 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200/80 dark:text-neutral-400 dark:hover:bg-neutral-800"
+              onClick={newChat}
+              disabled={busy || speechBusy}
+              title="Neuer Chat"
+              aria-label="Neuer Chat"
+            >
+              ✎
+            </button>
             <button
               type="button"
               className="flex h-9 w-9 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200/80 dark:text-neutral-400 dark:hover:bg-neutral-800"
@@ -1126,6 +1327,25 @@ export function App() {
             {sidebarCollapsed ? <BetaBadge /> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
+            {webSearchConfig?.enabled !== false ? (
+              <button
+                type="button"
+                onClick={() => setActiveThreadWebSearch(!activeThreadWebSearch)}
+                disabled={busy || webSearchBusy}
+                title={
+                  activeThreadWebSearch
+                    ? `Websuche aktiv (${providerLabel(webSearchConfig)}) — klicken zum Deaktivieren`
+                    : `Websuche für diesen Chat aktivieren (${providerLabel(webSearchConfig)})`
+                }
+                className={`rounded-lg px-2 py-1.5 text-xs font-medium transition ${
+                  activeThreadWebSearch
+                    ? "bg-sky-100 text-sky-900 ring-1 ring-sky-300/80 dark:bg-sky-950/60 dark:text-sky-100 dark:ring-sky-700"
+                    : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
+                }`}
+              >
+                {webSearchBusy ? "Suche…" : "Websuche"}
+              </button>
+            ) : null}
             <label htmlFor="theme-select" className="sr-only sm:not-sr-only text-xs text-neutral-500 dark:text-neutral-400">
               Design
             </label>
@@ -1262,6 +1482,9 @@ export function App() {
                 setQwenVisionOcr={setQwenVisionOcr}
                 systemPrompt={systemPrompt}
                 setSystemPrompt={setSystemPrompt}
+                webSearchConfig={webSearchConfig}
+                webSearchDefaultEnabled={webSearchDefaultEnabled}
+                setWebSearchDefaultEnabled={setWebSearchDefaultEnabled}
               />
               <div className="min-w-0 flex-1">
                 <div
@@ -1355,15 +1578,6 @@ export function App() {
                   </div>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={clearChat}
-                disabled={busy || speechBusy || voiceRecording.active || messages.length === 0}
-                className="mb-1 shrink-0 self-end rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[11px] font-medium text-neutral-700 shadow-sm outline-none hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-                title="Clear conversation"
-              >
-                Clear chat
-              </button>
             </div>
             <p className="mx-auto mt-2 max-w-3xl px-2 text-center text-[10px] leading-relaxed text-neutral-400 dark:text-neutral-500">
               <a

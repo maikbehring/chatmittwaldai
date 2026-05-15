@@ -9,6 +9,7 @@ import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
+import { getWebSearchConfig, searchWeb } from "./webSearch.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "../..");
@@ -36,6 +37,7 @@ const RATE_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 900000);
 const RATE_MAX_CHAT = Number(process.env.RATE_LIMIT_MAX_CHAT || 40);
 const RATE_MAX_MODELS = Number(process.env.RATE_LIMIT_MAX_MODELS || 120);
 const RATE_MAX_TRANSCRIBE = Number(process.env.RATE_LIMIT_MAX_TRANSCRIBE || 30);
+const RATE_MAX_WEB_SEARCH = Number(process.env.RATE_LIMIT_MAX_WEB_SEARCH || 30);
 
 const WHISPER_MODEL =
   process.env.PLAYGROUND_WHISPER_MODEL || "whisper-large-v3-turbo";
@@ -246,8 +248,45 @@ async function main() {
         language: WHISPER_LANGUAGE,
         maxAudioBytes: MAX_AUDIO_BYTES,
       },
+      webSearch: getWebSearchConfig(),
     });
   });
+
+  const webSearchLimiter = rateLimit({
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX_WEB_SEARCH,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: { code: "rate_limited", message: "Zu viele Websuchen. Bitte später erneut versuchen." },
+    },
+  });
+
+  app.post(
+    "/api/web/search",
+    webSearchLimiter,
+    express.json({ limit: 8192 }),
+    async (req, res) => {
+      const q = req.body?.q ?? req.body?.query;
+      if (typeof q !== "string" || !q.trim()) {
+        return jsonError(res, 400, "validation_error", "Suchbegriff (q) fehlt.");
+      }
+      try {
+        const data = await searchWeb(q, {
+          maxResults: Number(req.body?.maxResults) || undefined,
+        });
+        res.json(data);
+      } catch (e) {
+        console.error(e);
+        return jsonError(
+          res,
+          502,
+          "search_failed",
+          e instanceof Error ? e.message : "Websuche fehlgeschlagen.",
+        );
+      }
+    },
+  );
 
   app.post(
     "/api/audio/transcriptions",
