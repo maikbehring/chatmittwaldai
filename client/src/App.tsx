@@ -321,36 +321,6 @@ function BetaBadge() {
   );
 }
 
-function UsageStatChip({
-  label,
-  value,
-  title,
-  accent,
-}: {
-  label: string;
-  value: string;
-  title?: string;
-  accent?: boolean;
-}) {
-  return (
-    <div
-      className={`inline-flex min-w-[5.25rem] flex-col rounded-lg border px-2.5 py-1.5 ${
-        accent
-          ? "border-emerald-200/90 bg-emerald-50/90 dark:border-emerald-900/50 dark:bg-emerald-950/40"
-          : "border-neutral-200/90 bg-neutral-50/90 dark:border-neutral-700/80 dark:bg-neutral-900/55"
-      }`}
-      title={title}
-    >
-      <span className="text-[10px] font-medium leading-none text-neutral-500 dark:text-neutral-400">
-        {label}
-      </span>
-      <span className="mt-1 text-[12px] font-semibold leading-tight tabular-nums text-neutral-800 dark:text-neutral-100">
-        {value}
-      </span>
-    </div>
-  );
-}
-
 function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
   const fmt = (n: number | null) => (n == null ? "—" : n.toLocaleString("de-DE"));
   const tps =
@@ -377,31 +347,44 @@ function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
           maximumFractionDigits: stats.co2Grams < 1 ? 3 : 2,
         });
 
+  const sep = (
+    <span className="mx-1.5 text-neutral-300 dark:text-neutral-600" aria-hidden>
+      ·
+    </span>
+  );
+
   return (
-    <div className="mt-3 max-w-full space-y-1.5">
-      <div className="flex flex-wrap gap-1.5">
-        <UsageStatChip label="Eingabe" value={`${fmt(stats.promptTokens)} Token`} />
-        <UsageStatChip label="Ausgabe" value={`${fmt(stats.completionTokens)} Token`} />
-        {total != null && total > 0 ? (
-          <UsageStatChip label="Gesamt" value={`${fmt(total)} Token`} />
-        ) : null}
-        <UsageStatChip label="Geschwindigkeit" value={tps} />
-        <UsageStatChip label="Generierung" value={gen} />
-        {co2Fmt != null ? (
-          <UsageStatChip
-            label="CO₂eq (geschätzt)"
-            value={`≈ ${co2Fmt} g`}
-            title={CO2_FOOTPRINT_TOOLTIP}
-            accent
-          />
-        ) : null}
-      </div>
-      {stats.source === "heuristic" ? (
-        <p className="text-[10px] leading-snug text-neutral-400 dark:text-neutral-500">
-          Token- und CO₂-Werte teilweise geschätzt (API ohne vollständige Nutzungsdaten).
-        </p>
+    <p className="mt-2 max-w-full text-[11px] leading-relaxed text-neutral-500 dark:text-neutral-500">
+      <span>Eingabe: {fmt(stats.promptTokens)} Token</span>
+      {sep}
+      <span>Ausgabe: {fmt(stats.completionTokens)} Token</span>
+      {total != null && total > 0 ? (
+        <>
+          {sep}
+          <span>Gesamt: {fmt(total)} Token</span>
+        </>
       ) : null}
-    </div>
+      {sep}
+      <span>{tps}</span>
+      {sep}
+      <span>Generierung: {gen}</span>
+      {co2Fmt != null ? (
+        <>
+          {sep}
+          <span
+            className="cursor-help underline decoration-dotted decoration-neutral-400 underline-offset-2 dark:decoration-neutral-600"
+            title={CO2_FOOTPRINT_TOOLTIP}
+          >
+            ≈ {co2Fmt} g CO₂eq
+          </span>
+        </>
+      ) : null}
+      {stats.source === "heuristic" ? (
+        <span className="ml-1.5 text-neutral-400 dark:text-neutral-600">
+          (teilweise geschätzt)
+        </span>
+      ) : null}
+    </p>
   );
 }
 
