@@ -40,12 +40,22 @@ import {
   type ChatThread,
 } from "./chatStorage";
 import {
+  appErrorFromUnknown,
+  ensureOkApiResponse,
+  type AppUiError,
+  type PlaygroundRateLimits,
+} from "./apiErrors";
+import { RateLimitNotice } from "./RateLimitNotice";
+import { GITHUB_REPO_URL } from "./repoLinks";
+import {
   fetchWebSearch,
   formatWebSearchContext,
   providerLabel,
   type WebSearchConfig,
   type WebSearchResponse,
 } from "./webSearch";
+
+const DEFAULT_AI_HOSTING_URL = "https://www.mittwald.de/mstudio/ai-hosting";
 
 const THEME_STORAGE_KEY = "mittwald-ai-playground-theme";
 
@@ -146,28 +156,6 @@ async function encodeImageFile(file: File, maxEdge = 1024, quality = 0.85): Prom
   return dataUrl;
 }
 
-/** Liest ggf. verschachtelte JSON-Fehler (z. B. LLM-API) aus einer Rohtext-Meldung. */
-function extractUserFacingApiError(message: string): string {
-  const m = message.trim();
-  if (!m.startsWith("{")) return message;
-  try {
-    const o = JSON.parse(m) as {
-      error?: { message?: string; type?: string; code?: string };
-      message?: string;
-    };
-    const inner =
-      (typeof o.error?.message === "string" && o.error.message) ||
-      (typeof o.message === "string" && o.message) ||
-      "";
-    if (!inner) return message;
-    const type = o.error?.type && o.error.type !== "None" ? ` [${o.error.type}]` : "";
-    const code = o.error?.code && o.error.code !== "None" ? ` (${String(o.error.code)})` : "";
-    return `${inner}${type}${code}`;
-  } catch {
-    return message;
-  }
-}
-
 /** Sichtbare Antwort-Token (ohne reasoning_content — der würde die UI blockieren). */
 function extractStreamDeltaContent(json: unknown): string {
   if (!json || typeof json !== "object") return "";
@@ -201,6 +189,7 @@ async function streamChatCompletion(
   body: Record<string, unknown>,
   onDelta: (t: string) => void,
   signal: AbortSignal,
+  rateLimits?: PlaygroundRateLimits | null,
 ): Promise<TokenMeter | null> {
   const res = await fetch("/api/chat/completions", {
     method: "POST",
@@ -212,17 +201,7 @@ async function streamChatCompletion(
     signal,
   });
 
-  if (!res.ok) {
-    let msg = res.statusText;
-    try {
-      const j = (await res.json()) as { error?: { message?: string } };
-      msg = j.error?.message ?? msg;
-    } catch {
-      const t = await res.text();
-      msg = t.slice(0, 2000) || msg;
-    }
-    throw new Error(extractUserFacingApiError(msg));
-  }
+  await ensureOkApiResponse(res, rateLimits);
 
   const reader = res.body?.getReader();
   if (!reader) throw new Error("Keine Antwort vom Server.");
@@ -539,7 +518,12 @@ export function App() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [appError, setAppError] = useState<AppUiError | null>(null);
+  const [playgroundRateLimits, setPlaygroundRateLimits] = useState<PlaygroundRateLimits | null>(
+    null,
+  );
+  const [aiHostingUrl, setAiHostingUrl] = useState(DEFAULT_AI_HOSTING_URL);
+  const [selfHostRepoUrl, setSelfHostRepoUrl] = useState(GITHUB_REPO_URL);
   const [showGlossary, setShowGlossary] = useState(false);
   const [showModelsOverview, setShowModelsOverview] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
@@ -762,6 +746,9 @@ export function App() {
           const c = (await cfgRes.json()) as {
             title?: string;
             maxMessages?: number;
+            rateLimits?: PlaygroundRateLimits;
+            aiHostingUrl?: string;
+            selfHostRepoUrl?: string;
             speechToText?: {
               enabled?: boolean;
               model?: string;
@@ -770,6 +757,13 @@ export function App() {
             };
           };
           if (c.title) setTitle(c.title);
+          if (c.rateLimits) setPlaygroundRateLimits(c.rateLimits);
+          if (typeof c.aiHostingUrl === "string" && c.aiHostingUrl.trim()) {
+            setAiHostingUrl(c.aiHostingUrl.trim());
+          }
+          if (typeof c.selfHostRepoUrl === "string" && c.selfHostRepoUrl.trim()) {
+            setSelfHostRepoUrl(c.selfHostRepoUrl.trim());
+          }
           if (typeof c.maxMessages === "number" && c.maxMessages >= 4) {
             setMaxMessages(c.maxMessages);
           }
@@ -861,7 +855,7 @@ export function App() {
 
   const newChat = useCallback(() => {
     stop();
-    setError(null);
+    setAppError(null);
     setContextTrimNotice(null);
     setInput("");
     setImageFile(null);
@@ -890,7 +884,7 @@ export function App() {
     (id: string) => {
       if (id === activeThreadId) return;
       stop();
-      setError(null);
+      setAppError(null);
       setContextTrimNotice(null);
       let nextMessages: ChatMessage[] = [];
       setThreads((prev) => {
@@ -952,7 +946,7 @@ export function App() {
       });
       setActiveThreadId(nextActive);
       setMessages(nextMessages);
-      setError(null);
+      setAppError(null);
       setContextTrimNotice(null);
     },
     [activeThreadId, busy, messages, stop],
@@ -963,7 +957,7 @@ export function App() {
     const hasContent = textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
     if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy)) return;
-    setError(null);
+    setAppError(null);
     const text = textNow;
     const file = imageFile;
     const messagesBeforeSend = messages;
@@ -1011,20 +1005,22 @@ export function App() {
       ]);
       setWebSearchBusy(true);
       try {
-        webSearchPayload = await fetchWebSearch(text, ctrl.signal);
+        webSearchPayload = await fetchWebSearch(text, ctrl.signal, playgroundRateLimits);
       } catch (e) {
         setWebSearchBusy(false);
         setMessages(messagesBeforeSend);
         if (e instanceof Error && e.name === "AbortError") throw e;
-        setError(e instanceof Error ? e.message : "Websuche fehlgeschlagen.");
+        setAppError(appErrorFromUnknown(e, playgroundRateLimits));
         return;
       }
       setWebSearchBusy(false);
       if (webSearchPayload.results.length === 0) {
         setMessages(messagesBeforeSend);
-        setError(
-          "Websuche: keine Treffer (DuckDuckGo blockiert evtl. die Anfrage). Erneut versuchen oder in .env Serper nutzen.",
-        );
+        setAppError({
+          kind: "plain",
+          message:
+            "Websuche: keine Treffer (DuckDuckGo blockiert evtl. die Anfrage). Erneut versuchen oder in .env Serper nutzen.",
+        });
         return;
       }
     }
@@ -1145,6 +1141,7 @@ export function App() {
           if (delta.length > 0) deltaBatch.push(delta);
         },
         ctrl.signal,
+        playgroundRateLimits,
       );
       deltaBatch.flush();
       const streamEnd = performance.now();
@@ -1195,8 +1192,7 @@ export function App() {
       });
     } catch (e) {
       deltaBatch.cancel();
-      const msg = e instanceof Error ? e.message : "Unbekannter Fehler";
-      setError(msg);
+      setAppError(appErrorFromUnknown(e, playgroundRateLimits));
       setMessages((prev) => {
         if (prev.length === 0) return prev;
         const last = prev[prev.length - 1];
@@ -1230,6 +1226,7 @@ export function App() {
     speechBusy,
     activeThreadWebSearch,
     webSearchConfig,
+    playgroundRateLimits,
     requestEnableWebSearch,
   ]);
 
@@ -1481,14 +1478,28 @@ export function App() {
                 {contextTrimNotice}
               </div>
             )}
-            {error && (
+            {appError?.kind === "rate_limit" ? (
+              <div className="mx-auto mb-2 max-w-3xl">
+                <RateLimitNotice
+                  waitMinutes={appError.waitMinutes}
+                  scope={appError.scope}
+                  scopeLabel={appError.scopeLabel}
+                  maxRequests={appError.maxRequests}
+                  windowMinutes={appError.windowMinutes}
+                  rateLimits={playgroundRateLimits}
+                  aiHostingUrl={aiHostingUrl}
+                  selfHostRepoUrl={selfHostRepoUrl}
+                />
+              </div>
+            ) : null}
+            {appError?.kind === "plain" ? (
               <div
                 className="mx-auto mb-2 max-w-3xl rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-100"
                 role="alert"
               >
-                {error}
+                {appError.message}
               </div>
-            )}
+            ) : null}
             {imagePreview && (
               <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
                 <ChatImagePreviewThumb src={imagePreview} onOpen={openImageLightbox} />
@@ -1598,7 +1609,8 @@ export function App() {
                         language={speechToText.language}
                         maxAudioBytes={speechToText.maxAudioBytes}
                         onTranscript={handleSpeechTranscript}
-                        onError={setError}
+                        onError={setAppError}
+                        rateLimits={playgroundRateLimits}
                         onBusyChange={setSpeechBusy}
                         onRecordingChange={handleVoiceRecordingChange}
                         className={voiceRecording.active ? "sr-only" : undefined}

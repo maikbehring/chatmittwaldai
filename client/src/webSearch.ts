@@ -1,3 +1,4 @@
+import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 
 export type WebSearchResult = {
@@ -25,6 +26,7 @@ export type WebSearchConfig = {
 export async function fetchWebSearch(
   query: string,
   signal?: AbortSignal,
+  rateLimits?: PlaygroundRateLimits | null,
 ): Promise<WebSearchResponse> {
   const res = await fetch("/api/web/search", {
     method: "POST",
@@ -32,16 +34,7 @@ export async function fetchWebSearch(
     body: JSON.stringify({ q: query }),
     signal,
   });
-  if (!res.ok) {
-    let msg = res.statusText;
-    try {
-      const j = (await res.json()) as { error?: { message?: string } };
-      msg = j.error?.message ?? msg;
-    } catch {
-      msg = (await res.text()).slice(0, 500) || msg;
-    }
-    throw new Error(msg);
-  }
+  await ensureOkApiResponse(res, rateLimits);
   return (await res.json()) as WebSearchResponse;
 }
 

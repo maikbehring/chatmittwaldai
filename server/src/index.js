@@ -10,6 +10,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import { getPlaygroundLinks } from "./playgroundLinks.js";
+import { createRateLimitHandler, getRateLimitConfig } from "./rateLimit.js";
 import { getWebSearchConfig, searchWeb } from "./webSearch.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -34,11 +35,15 @@ const BRAND_TITLE = process.env.PLAYGROUND_BRAND_TITLE || "Mittwald KI-Playgroun
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 const TRUST_PROXY = process.env.TRUST_PROXY === "1";
 
-const RATE_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 900000);
-const RATE_MAX_CHAT = Number(process.env.RATE_LIMIT_MAX_CHAT || 40);
-const RATE_MAX_MODELS = Number(process.env.RATE_LIMIT_MAX_MODELS || 120);
-const RATE_MAX_TRANSCRIBE = Number(process.env.RATE_LIMIT_MAX_TRANSCRIBE || 30);
-const RATE_MAX_WEB_SEARCH = Number(process.env.RATE_LIMIT_MAX_WEB_SEARCH || 30);
+const RATE_LIMITS = getRateLimitConfig();
+const RATE_WINDOW_MS = RATE_LIMITS.windowMs;
+const RATE_MAX_CHAT = RATE_LIMITS.chat;
+const RATE_MAX_MODELS = RATE_LIMITS.models;
+const RATE_MAX_TRANSCRIBE = RATE_LIMITS.transcribe;
+const RATE_MAX_WEB_SEARCH = RATE_LIMITS.webSearch;
+
+const DEFAULT_AI_HOSTING_URL = "https://www.mittwald.de/mstudio/ai-hosting";
+const SELF_HOST_REPO_URL = "https://github.com/maikbehring/chatmittwaldai";
 
 const WHISPER_MODEL =
   process.env.PLAYGROUND_WHISPER_MODEL || "whisper-large-v3-turbo";
@@ -213,7 +218,7 @@ async function main() {
     max: RATE_MAX_CHAT,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: { code: "rate_limited", message: "Zu viele Anfragen. Bitte später erneut versuchen." } },
+    handler: createRateLimitHandler("chat"),
   });
 
   const modelsLimiter = rateLimit({
@@ -221,7 +226,7 @@ async function main() {
     max: RATE_MAX_MODELS,
     standardHeaders: true,
     legacyHeaders: false,
-    message: { error: { code: "rate_limited", message: "Zu viele Anfragen auf die Modellliste." } },
+    handler: createRateLimitHandler("models"),
   });
 
   const transcribeLimiter = rateLimit({
@@ -229,9 +234,7 @@ async function main() {
     max: RATE_MAX_TRANSCRIBE,
     standardHeaders: true,
     legacyHeaders: false,
-    message: {
-      error: { code: "rate_limited", message: "Zu viele Spracheingaben. Bitte später erneut versuchen." },
-    },
+    handler: createRateLimitHandler("transcribe"),
   });
 
   app.get("/api/health", (_req, res) => {
@@ -251,6 +254,10 @@ async function main() {
       },
       webSearch: getWebSearchConfig(),
       links: getPlaygroundLinks(),
+      rateLimits: RATE_LIMITS,
+      aiHostingUrl:
+        process.env.PLAYGROUND_LINK_AI_HOSTING_URL?.trim() || DEFAULT_AI_HOSTING_URL,
+      selfHostRepoUrl: SELF_HOST_REPO_URL,
     });
   });
 
@@ -259,9 +266,7 @@ async function main() {
     max: RATE_MAX_WEB_SEARCH,
     standardHeaders: true,
     legacyHeaders: false,
-    message: {
-      error: { code: "rate_limited", message: "Zu viele Websuchen. Bitte später erneut versuchen." },
-    },
+    handler: createRateLimitHandler("webSearch"),
   });
 
   app.post(

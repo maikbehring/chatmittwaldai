@@ -1,4 +1,11 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
+import {
+  appErrorFromUnknown,
+  ensureOkApiResponse,
+  plainAppError,
+  type AppUiError,
+  type PlaygroundRateLimits,
+} from "./apiErrors";
 import { blobToBase64, blobToWav16 } from "./blobToWav";
 
 export type SpeechInputHandle = {
@@ -11,7 +18,8 @@ type Props = {
   maxAudioBytes?: number;
   className?: string;
   onTranscript: (text: string) => void;
-  onError: (message: string) => void;
+  onError: (error: AppUiError) => void;
+  rateLimits?: PlaygroundRateLimits | null;
   onBusyChange?: (busy: boolean) => void;
   onRecordingChange?: (recording: boolean, stream: MediaStream | null) => void;
 };
@@ -60,6 +68,7 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
     className,
     onTranscript,
     onError,
+    rateLimits = null,
     onBusyChange,
     onRecordingChange,
   },
@@ -106,28 +115,19 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ audio, language }),
         });
-        if (!res.ok) {
-          let msg = res.statusText;
-          try {
-            const j = (await res.json()) as { error?: { message?: string } };
-            msg = j.error?.message ?? msg;
-          } catch {
-            msg = (await res.text()).slice(0, 500) || msg;
-          }
-          throw new Error(msg);
-        }
+        await ensureOkApiResponse(res, rateLimits);
         const data = (await res.json()) as { text?: string };
         const text = typeof data.text === "string" ? data.text.trim() : "";
         if (!text) throw new Error("Keine Sprache erkannt.");
         onTranscript(text);
       } catch (e) {
-        onError(e instanceof Error ? e.message : "Transkription fehlgeschlagen.");
+        onError(appErrorFromUnknown(e, rateLimits));
       } finally {
         setTranscribing(false);
         setBusy(false);
       }
     },
-    [language, maxAudioBytes, onError, onTranscript, setBusy],
+    [language, maxAudioBytes, onError, onTranscript, rateLimits, setBusy],
   );
 
   const notifyRecording = useCallback(
@@ -158,7 +158,7 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
   const startRecording = useCallback(async () => {
     if (disabled || transcribing || recording) return;
     if (!navigator.mediaDevices?.getUserMedia) {
-      onError("Mikrofon wird von diesem Browser nicht unterstützt.");
+      onError(plainAppError("Mikrofon wird von diesem Browser nicht unterstützt."));
       return;
     }
     try {
@@ -183,7 +183,7 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
         });
         chunksRef.current = [];
         if (blob.size < 200) {
-          onError("Aufnahme zu kurz.");
+          onError(plainAppError("Aufnahme zu kurz."));
           return;
         }
         void transcribeBlob(blob);
@@ -192,7 +192,7 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
         stopStream();
         setRecording(false);
         notifyRecording(false, null);
-        onError("Aufnahme fehlgeschlagen.");
+        onError(plainAppError("Aufnahme fehlgeschlagen."));
       };
       rec.start(250);
       setRecording(true);
@@ -206,7 +206,7 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
           : e instanceof Error
             ? e.message
             : "Mikrofon konnte nicht gestartet werden.";
-      onError(msg);
+      onError(plainAppError(msg));
     }
   }, [disabled, notifyRecording, onError, recording, stopStream, transcribeBlob, transcribing]);
 
