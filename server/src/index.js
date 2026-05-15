@@ -54,7 +54,10 @@ const CHAT_ALLOWED_KEYS = new Set([
   "stream_options",
 ]);
 
-const MAX_MESSAGES = 60;
+const MAX_MESSAGES = Math.min(
+  Math.max(Number(process.env.PLAYGROUND_MAX_MESSAGES || 60), 4),
+  500,
+);
 const MAX_MESSAGE_CHARS = 48000;
 const MAX_TOOLS = 16;
 
@@ -218,6 +221,7 @@ async function main() {
     res.json({
       title: BRAND_TITLE,
       allowedModelsConfigured: ALLOWED_MODELS.length > 0,
+      maxMessages: MAX_MESSAGES,
     });
   });
 

@@ -85,6 +85,33 @@ type LegacyPersistedV1 = {
 };
 
 const DEFAULT_MODEL = MODEL_MINISTRAL;
+const DEFAULT_MAX_MESSAGES = 60;
+
+type ApiMessage = { role: Role; content: ChatMessage["content"] };
+
+/** Behält System-Prompts, kürzt den Verlauf auf das Server-Limit. */
+function trimMessagesForApi(
+  messages: ApiMessage[],
+  maxMessages: number,
+): { messages: ApiMessage[]; trimmedCount: number } {
+  if (messages.length <= maxMessages) return { messages, trimmedCount: 0 };
+
+  const system: ApiMessage[] = [];
+  const rest: ApiMessage[] = [];
+  for (const m of messages) {
+    if (m.role === "system") system.push(m);
+    else rest.push(m);
+  }
+
+  const budget = Math.max(maxMessages - system.length, 1);
+  if (rest.length <= budget) return { messages, trimmedCount: 0 };
+
+  const kept = rest.slice(-budget);
+  return {
+    messages: [...system, ...kept],
+    trimmedCount: rest.length - kept.length,
+  };
+}
 
 function readJsonKey(key: string): unknown {
   try {
@@ -434,6 +461,8 @@ export function App() {
   const initialPreset = getInferencePreset(initialModel);
 
   const [title, setTitle] = useState("Mittwald KI-Playground");
+  const [maxMessages, setMaxMessages] = useState(DEFAULT_MAX_MESSAGES);
+  const [contextTrimNotice, setContextTrimNotice] = useState<string | null>(null);
   const [models, setModels] = useState<{ id: string }[]>([]);
   const [model, setModel] = useState(initialModel);
   const [temperature, setTemperature] = useState(
@@ -488,6 +517,18 @@ export function App() {
   const abortRef = useRef<AbortController | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
+  const inputRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const INPUT_MAX_HEIGHT_PX = 208; // entspricht max-h-52
+
+  const adjustInputHeight = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    const next = Math.min(el.scrollHeight, INPUT_MAX_HEIGHT_PX);
+    el.style.height = `${Math.max(next, 44)}px`;
+    el.style.overflowY = el.scrollHeight > INPUT_MAX_HEIGHT_PX ? "auto" : "hidden";
+  }, []);
   const modelRef = useRef(model);
   modelRef.current = model;
 
@@ -601,8 +642,11 @@ export function App() {
           fetch("/api/models"),
         ]);
         if (cfgRes.ok) {
-          const c = (await cfgRes.json()) as { title?: string };
+          const c = (await cfgRes.json()) as { title?: string; maxMessages?: number };
           if (c.title) setTitle(c.title);
+          if (typeof c.maxMessages === "number" && c.maxMessages >= 4) {
+            setMaxMessages(c.maxMessages);
+          }
         }
         if (!modRes.ok) {
           const t = await modRes.text();
@@ -624,6 +668,10 @@ export function App() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nur einmal beim Mount
   }, []);
+
+  useEffect(() => {
+    adjustInputHeight();
+  }, [input, adjustInputHeight]);
 
   useEffect(() => {
     if (!imageFile) {
@@ -650,6 +698,7 @@ export function App() {
     stop();
     setMessages([]);
     setError(null);
+    setContextTrimNotice(null);
   }, [stop]);
 
   const send = useCallback(async () => {
@@ -708,7 +757,7 @@ export function App() {
       }
     }
 
-    const apiMessages: Array<{ role: Role; content: ChatMessage["content"] }> = [];
+    let apiMessages: ApiMessage[] = [];
     if (model === MODEL_GPT_OSS) {
       const line = `Reasoning: ${gptOssReasoning}`;
       const rest = systemPrompt.trim();
@@ -718,6 +767,19 @@ export function App() {
     }
     for (const m of nextThread) {
       apiMessages.push(m);
+    }
+
+    const { messages: trimmedApiMessages, trimmedCount } = trimMessagesForApi(
+      apiMessages,
+      maxMessages,
+    );
+    apiMessages = trimmedApiMessages;
+    if (trimmedCount > 0) {
+      setContextTrimNotice(
+        `Langer Chatverlauf: ${trimmedCount} ältere Nachricht${trimmedCount === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}). „Clear chat“ setzt den Verlauf zurück.`,
+      );
+    } else {
+      setContextTrimNotice(null);
     }
 
     const body: Record<string, unknown> = {
@@ -834,6 +896,7 @@ export function App() {
     maxTokens,
     gptOssReasoning,
     qwenVisionOcr,
+    maxMessages,
   ]);
 
   return (
@@ -1044,6 +1107,14 @@ export function App() {
           </div>
 
           <div className="shrink-0 border-t border-transparent bg-gradient-to-t from-white via-white to-transparent px-4 pb-3 pt-2 dark:from-neutral-950 dark:via-neutral-950 dark:to-transparent">
+            {contextTrimNotice && (
+              <div
+                className="mx-auto mb-2 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+                role="status"
+              >
+                {contextTrimNotice}
+              </div>
+            )}
             {error && (
               <div
                 className="mx-auto mb-2 max-w-3xl rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-100"
@@ -1103,7 +1174,8 @@ export function App() {
                     />
                   </label>
                   <textarea
-                    className="max-h-52 min-h-[44px] flex-1 resize-none bg-transparent py-2.5 text-[15px] text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                    ref={inputRef}
+                    className="min-h-[44px] max-h-52 flex-1 resize-none overflow-hidden bg-transparent py-2.5 text-[15px] leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-neutral-100 dark:placeholder:text-neutral-500"
                     rows={1}
                     placeholder="Stelle irgendeine Frage"
                     value={input}
