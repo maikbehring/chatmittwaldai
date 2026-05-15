@@ -46,8 +46,8 @@ export async function fetchWebSearch(
 export function formatWebSearchContext(data: WebSearchResponse): string {
   if (!data.results.length) {
     return (
-      `Websuche (${data.provider}) für „${data.query}“: keine Treffer. ` +
-      "Antworte trotzdem hilfreich und weise darauf hin, dass keine aktuellen Web-Treffer geladen wurden."
+      `[Playground-Websuche: keine Treffer für „${data.query}“ (${data.provider}).] ` +
+      "Sage dem Nutzer, dass die Websuche leer war — nicht behaupten, du hättest allgemeines Trainingswissen als Live-Suche genutzt."
     );
   }
   const lines = data.results.map(
@@ -55,9 +55,10 @@ export function formatWebSearchContext(data: WebSearchResponse): string {
       `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet || "(kein Snippet)"}`,
   );
   return (
-    `Aktuelle Websuchergebnisse (${data.provider}, Anfrage: „${data.query}“). ` +
-    "Nutze diese Informationen für deine Antwort, nenne relevante Quellen mit URL wenn sinnvoll. " +
-    "Wenn die Treffer nicht passen, sage das ehrlich.\n\n" +
+    `[Playground-Websuche — vom Server geladene Treffer (${data.provider}), Anfrage: „${data.query}“]\n` +
+    "WICHTIG: Diese Ergebnisse sind frisch aus dem Internet. Du darfst sie als Quelle nutzen. " +
+    "Behaupte NICHT, du könntest nicht im Web suchen oder hättest keinen Live-Zugriff — die Suche wurde bereits für den Nutzer durchgeführt. " +
+    "Beantworte die Frage anhand der Treffer; nenne passende URLs. Wenn die Treffer nicht reichen, sage das ehrlich.\n\n" +
     lines.join("\n\n")
   );
 }

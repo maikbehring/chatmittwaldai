@@ -6,6 +6,9 @@
 const MAX_QUERY_LEN = 400;
 const DEFAULT_MAX_RESULTS = 5;
 
+const BROWSER_UA =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
 function decodeHtml(s) {
   return String(s)
     .replace(/&amp;/g, "&")
@@ -17,24 +20,78 @@ function decodeHtml(s) {
     .trim();
 }
 
+/** DuckDuckGo-Weiterleitungen in echte Ziel-URLs auflösen. */
+export function unwrapDdgUrl(href) {
+  try {
+    const u = href.startsWith("//") ? `https:${href}` : href;
+    const parsed = new URL(u);
+    if (parsed.hostname.includes("duckduckgo.com") && parsed.pathname === "/l/") {
+      const target = parsed.searchParams.get("uddg");
+      if (target) return decodeURIComponent(target);
+    }
+    return u;
+  } catch {
+    return href;
+  }
+}
+
 function normalizeResults(items, maxResults) {
   return items
     .filter((r) => r.url && r.title)
     .slice(0, maxResults)
     .map((r) => ({
       title: r.title.slice(0, 300),
-      url: r.url.slice(0, 2000),
+      url: unwrapDdgUrl(r.url).slice(0, 2000),
       snippet: (r.snippet ?? "").slice(0, 600),
     }));
 }
 
-/** DuckDuckGo HTML-Suche (kostenlos, ohne Key). */
-async function searchDuckDuckGo(query, maxResults) {
+function isDdgBotChallenge(html) {
+  return /anomaly-modal|bots use DuckDuckGo/i.test(html);
+}
+
+/** DuckDuckGo Lite — stabiler, mit Snippets. */
+async function searchDuckDuckGoLite(query, maxResults) {
+  const url = `https://lite.duckduckgo.com/lite/?q=${encodeURIComponent(query)}`;
+  const res = await fetch(url, {
+    headers: {
+      "User-Agent": BROWSER_UA,
+      Accept: "text/html",
+    },
+    signal: AbortSignal.timeout(12_000),
+  });
+  if (!res.ok) throw new Error(`DuckDuckGo Lite antwortete mit ${res.status}.`);
+
+  const html = await res.text();
+  if (isDdgBotChallenge(html)) return [];
+
+  const results = [];
+  const blockRe =
+    /<a[^>]*class=['"]result-link['"][^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<td class=['"]result-snippet['"]>([\s\S]*?)<\/td>/gi;
+
+  let m;
+  const seen = new Set();
+  while ((m = blockRe.exec(html)) !== null && results.length < maxResults + 2) {
+    let href = decodeHtml(m[1]);
+    if (href.startsWith("//")) href = `https:${href}`;
+    const canonical = unwrapDdgUrl(href);
+    if (!canonical.startsWith("http") || seen.has(canonical)) continue;
+    seen.add(canonical);
+    const title = decodeHtml(m[2]);
+    if (!title) continue;
+    const snippet = decodeHtml(m[3]);
+    results.push({ title, url: canonical, snippet });
+  }
+
+  return normalizeResults(results, maxResults);
+}
+
+/** DuckDuckGo HTML-Suche (Fallback). */
+async function searchDuckDuckGoHtml(query, maxResults) {
   const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
   const res = await fetch(url, {
     headers: {
-      "User-Agent":
-        "Mozilla/5.0 (compatible; MittwaldKIPlayground/1.0; +https://github.com/maikbehring/chatmittwaldai)",
+      "User-Agent": BROWSER_UA,
       Accept: "text/html",
     },
     signal: AbortSignal.timeout(12_000),
@@ -42,6 +99,8 @@ async function searchDuckDuckGo(query, maxResults) {
   if (!res.ok) throw new Error(`DuckDuckGo antwortete mit ${res.status}.`);
 
   const html = await res.text();
+  if (isDdgBotChallenge(html)) return [];
+
   const results = [];
   const linkRe =
     /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -51,8 +110,9 @@ async function searchDuckDuckGo(query, maxResults) {
   while ((m = linkRe.exec(html)) !== null && results.length < maxResults + 2) {
     let href = decodeHtml(m[1]);
     if (href.startsWith("//")) href = `https:${href}`;
-    if (!href.startsWith("http") || seen.has(href)) continue;
-    seen.add(href);
+    const canonical = unwrapDdgUrl(href);
+    if (!canonical.startsWith("http") || seen.has(canonical)) continue;
+    seen.add(canonical);
     const title = decodeHtml(m[2]);
     if (!title) continue;
 
@@ -62,10 +122,65 @@ async function searchDuckDuckGo(query, maxResults) {
       after.match(/class="result__snippet"[^>]*>([\s\S]*?)<\//i);
     const snippet = snippetMatch ? decodeHtml(snippetMatch[1]) : "";
 
-    results.push({ title, url: href, snippet });
+    results.push({ title, url: canonical, snippet });
   }
 
   return normalizeResults(results, maxResults);
+}
+
+/** DuckDuckGo Instant Answer API (JSON, oft ohne Captcha — weniger Treffer als HTML). */
+async function searchDuckDuckGoInstant(query, maxResults) {
+  const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) return [];
+
+  const json = await res.json();
+  const raw = [];
+
+  if (json.AbstractURL && json.Heading) {
+    raw.push({
+      title: String(json.Heading),
+      url: String(json.AbstractURL),
+      snippet: String(json.AbstractText || json.Abstract || ""),
+    });
+  }
+
+  function flattenRelated(topics) {
+    for (const t of topics || []) {
+      if (Array.isArray(t.Topics)) flattenRelated(t.Topics);
+      else if (t.FirstURL && t.Text) {
+        raw.push({
+          title: decodeHtml(String(t.Text)),
+          url: String(t.FirstURL).replace(/^\/\//, "https://"),
+          snippet: "",
+        });
+      }
+    }
+  }
+  flattenRelated(json.RelatedTopics);
+
+  for (const r of json.Results || []) {
+    if (r.FirstURL && r.Text) {
+      raw.push({
+        title: decodeHtml(String(r.Text)),
+        url: String(r.FirstURL).replace(/^\/\//, "https://"),
+        snippet: "",
+      });
+    }
+  }
+
+  return normalizeResults(raw, maxResults);
+}
+
+async function searchDuckDuckGo(query, maxResults) {
+  let results = await searchDuckDuckGoLite(query, maxResults);
+  if (results.length === 0) {
+    results = await searchDuckDuckGoHtml(query, maxResults);
+  }
+  if (results.length === 0) {
+    results = await searchDuckDuckGoInstant(query, maxResults);
+  }
+  return results;
 }
 
 /** Serper (Google) — optional mit API-Key. */

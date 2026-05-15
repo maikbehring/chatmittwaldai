@@ -917,6 +917,12 @@ export function App() {
         return;
       }
       setWebSearchBusy(false);
+      if (webSearchPayload.results.length === 0) {
+        setError(
+          "Websuche: keine Treffer (DuckDuckGo blockiert evtl. die Anfrage). Erneut versuchen oder in .env Serper nutzen.",
+        );
+        return;
+      }
     }
 
     setInput("");
@@ -966,11 +972,20 @@ export function App() {
     } else if (systemPrompt.trim().length > 0) {
       apiMessages.push({ role: "system", content: systemPrompt.trim() });
     }
-    if (webSearchPayload) {
-      apiMessages.push({ role: "system", content: formatWebSearchContext(webSearchPayload) });
-    }
     for (const m of nextThread) {
-      apiMessages.push(m);
+      if (
+        webSearchPayload &&
+        m.role === "user" &&
+        m === userMessage &&
+        typeof m.content === "string"
+      ) {
+        apiMessages.push({
+          role: "user",
+          content: `${m.content}\n\n${formatWebSearchContext(webSearchPayload)}`,
+        });
+      } else {
+        apiMessages.push(m);
+      }
     }
 
     const { messages: trimmedApiMessages, trimmedCount } = trimMessagesForApi(
@@ -1343,7 +1358,17 @@ export function App() {
                     : "border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-300 dark:hover:bg-neutral-800"
                 }`}
               >
-                {webSearchBusy ? "Suche…" : "Websuche"}
+                {webSearchBusy ? (
+                  <>
+                    Suche
+                    <span className="font-normal opacity-75"> · {providerLabel(webSearchConfig)}</span>…
+                  </>
+                ) : (
+                  <>
+                    Websuche
+                    <span className="font-normal opacity-75"> · {providerLabel(webSearchConfig)}</span>
+                  </>
+                )}
               </button>
             ) : null}
             <label htmlFor="theme-select" className="sr-only sm:not-sr-only text-xs text-neutral-500 dark:text-neutral-400">
