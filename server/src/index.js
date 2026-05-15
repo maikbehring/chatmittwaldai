@@ -35,6 +35,16 @@ const TRUST_PROXY = process.env.TRUST_PROXY === "1";
 const RATE_WINDOW_MS = Number(process.env.RATE_LIMIT_WINDOW_MS || 900000);
 const RATE_MAX_CHAT = Number(process.env.RATE_LIMIT_MAX_CHAT || 40);
 const RATE_MAX_MODELS = Number(process.env.RATE_LIMIT_MAX_MODELS || 120);
+const RATE_MAX_TRANSCRIBE = Number(process.env.RATE_LIMIT_MAX_TRANSCRIBE || 30);
+
+const WHISPER_MODEL =
+  process.env.PLAYGROUND_WHISPER_MODEL || "whisper-large-v3-turbo";
+const WHISPER_LANGUAGE = process.env.PLAYGROUND_WHISPER_LANGUAGE || "de";
+const MAX_AUDIO_BYTES = Math.min(
+  Math.max(Number(process.env.PLAYGROUND_MAX_AUDIO_BYTES || 25 * 1024 * 1024), 1024),
+  25 * 1024 * 1024,
+);
+const AUDIO_JSON_LIMIT = "36mb";
 
 const CHAT_ALLOWED_KEYS = new Set([
   "model",
@@ -195,8 +205,6 @@ async function main() {
     ),
   );
 
-  app.use(express.json({ limit: MAX_BODY_BYTES }));
-
   const chatLimiter = rateLimit({
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX_CHAT,
@@ -213,6 +221,16 @@ async function main() {
     message: { error: { code: "rate_limited", message: "Zu viele Anfragen auf die Modellliste." } },
   });
 
+  const transcribeLimiter = rateLimit({
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX_TRANSCRIBE,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: {
+      error: { code: "rate_limited", message: "Zu viele Spracheingaben. Bitte später erneut versuchen." },
+    },
+  });
+
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, title: BRAND_TITLE });
   });
@@ -222,8 +240,94 @@ async function main() {
       title: BRAND_TITLE,
       allowedModelsConfigured: ALLOWED_MODELS.length > 0,
       maxMessages: MAX_MESSAGES,
+      speechToText: {
+        enabled: true,
+        model: WHISPER_MODEL,
+        language: WHISPER_LANGUAGE,
+        maxAudioBytes: MAX_AUDIO_BYTES,
+      },
     });
   });
+
+  app.post(
+    "/api/audio/transcriptions",
+    transcribeLimiter,
+    express.json({ limit: AUDIO_JSON_LIMIT }),
+    async (req, res) => {
+      const audioB64 = req.body?.audio;
+      if (typeof audioB64 !== "string" || !audioB64.trim()) {
+        return jsonError(res, 400, "validation_error", "audio (Base64) fehlt.");
+      }
+
+      let buffer;
+      try {
+        buffer = Buffer.from(audioB64, "base64");
+      } catch {
+        return jsonError(res, 400, "validation_error", "Ungültige Base64-Audio-Daten.");
+      }
+
+      if (buffer.length < 100) {
+        return jsonError(res, 400, "validation_error", "Audio-Aufnahme ist zu kurz.");
+      }
+      if (buffer.length > MAX_AUDIO_BYTES) {
+        return jsonError(
+          res,
+          400,
+          "validation_error",
+          `Audio ist zu groß (max. ${Math.round(MAX_AUDIO_BYTES / (1024 * 1024))} MB).`,
+        );
+      }
+
+      const langRaw = req.body?.language;
+      const language =
+        typeof langRaw === "string" && /^[a-z]{2}$/i.test(langRaw.trim())
+          ? langRaw.trim().toLowerCase()
+          : WHISPER_LANGUAGE;
+
+      const form = new FormData();
+      form.append("file", new Blob([buffer], { type: "audio/wav" }), "recording.wav");
+      form.append("model", WHISPER_MODEL);
+      form.append("language", language);
+      form.append("response_format", "json");
+
+      let upstream;
+      try {
+        upstream = await fetch(`${BASE_URL}/audio/transcriptions`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${API_KEY}` },
+          body: form,
+        });
+      } catch (e) {
+        console.error(e);
+        return jsonError(res, 502, "upstream_unreachable", "Verbindung zu Whisper fehlgeschlagen.");
+      }
+
+      const text = await upstream.text();
+      if (!upstream.ok) {
+        return jsonError(
+          res,
+          upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502,
+          "upstream_error",
+          summarizeUpstreamError(text),
+        );
+      }
+
+      try {
+        const json = JSON.parse(text);
+        const transcript =
+          (typeof json?.text === "string" && json.text) ||
+          (typeof json?.transcript === "string" && json.transcript) ||
+          "";
+        return res.json({
+          text: transcript.trim(),
+          usage: json?.usage ?? null,
+          model: WHISPER_MODEL,
+        });
+      } catch {
+        return jsonError(res, 502, "bad_upstream", "Ungültige Whisper-Antwort.");
+      }
+    },
+  );
 
   app.get("/api/models", modelsLimiter, async (_req, res) => {
     try {
@@ -250,7 +354,11 @@ async function main() {
     }
   });
 
-  app.post("/api/chat/completions", chatLimiter, async (req, res) => {
+  app.post(
+    "/api/chat/completions",
+    chatLimiter,
+    express.json({ limit: MAX_BODY_BYTES }),
+    async (req, res) => {
     const parsed = sanitizeChatBody(req.body || {});
     if (parsed.error) {
       return jsonError(res, 400, "validation_error", parsed.error);

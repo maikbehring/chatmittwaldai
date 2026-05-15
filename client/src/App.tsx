@@ -13,6 +13,7 @@ import { ModelSettingsDock } from "./ModelSettingsDock";
 import { SettingsGlossaryOverlay } from "./SettingsGlossaryOverlay";
 import { ModelsOverviewOverlay } from "./ModelsOverviewOverlay";
 import { ChatImageAttachment, ChatImagePreviewThumb } from "./ChatImageAttachment";
+import { SpeechInputButton } from "./SpeechInputButton";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ImageLightbox } from "./ImageLightbox";
 import { createRafStreamBatcher } from "./streamDeltaBatch";
@@ -463,6 +464,13 @@ export function App() {
   const [title, setTitle] = useState("Mittwald KI-Playground");
   const [maxMessages, setMaxMessages] = useState(DEFAULT_MAX_MESSAGES);
   const [contextTrimNotice, setContextTrimNotice] = useState<string | null>(null);
+  const [speechBusy, setSpeechBusy] = useState(false);
+  const [speechToText, setSpeechToText] = useState({
+    enabled: true,
+    model: "whisper-large-v3-turbo",
+    language: "de",
+    maxAudioBytes: 25 * 1024 * 1024,
+  });
   const [models, setModels] = useState<{ id: string }[]>([]);
   const [model, setModel] = useState(initialModel);
   const [temperature, setTemperature] = useState(
@@ -642,10 +650,27 @@ export function App() {
           fetch("/api/models"),
         ]);
         if (cfgRes.ok) {
-          const c = (await cfgRes.json()) as { title?: string; maxMessages?: number };
+          const c = (await cfgRes.json()) as {
+            title?: string;
+            maxMessages?: number;
+            speechToText?: {
+              enabled?: boolean;
+              model?: string;
+              language?: string;
+              maxAudioBytes?: number;
+            };
+          };
           if (c.title) setTitle(c.title);
           if (typeof c.maxMessages === "number" && c.maxMessages >= 4) {
             setMaxMessages(c.maxMessages);
+          }
+          if (c.speechToText) {
+            setSpeechToText({
+              enabled: c.speechToText.enabled !== false,
+              model: c.speechToText.model ?? "whisper-large-v3-turbo",
+              language: c.speechToText.language ?? "de",
+              maxAudioBytes: c.speechToText.maxAudioBytes ?? 25 * 1024 * 1024,
+            });
           }
         }
         if (!modRes.ok) {
@@ -685,8 +710,16 @@ export function App() {
 
   const canSend = useMemo(() => {
     const t = input.trim();
-    return (t.length > 0 || imageFile !== null) && !busy;
-  }, [input, imageFile, busy]);
+    return (t.length > 0 || imageFile !== null) && !busy && !speechBusy;
+  }, [input, imageFile, busy, speechBusy]);
+
+  const handleSpeechTranscript = useCallback(
+    (text: string) => {
+      setInput((prev) => (prev.trim() ? `${prev.trimEnd()} ${text}` : text));
+      window.requestAnimationFrame(() => adjustInputHeight());
+    },
+    [adjustInputHeight],
+  );
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -1180,7 +1213,7 @@ export function App() {
                     placeholder="Stelle irgendeine Frage"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
-                    disabled={busy}
+                    disabled={busy || speechBusy}
                     onKeyDown={(e) => {
                       if (e.key === "Enter" && !e.shiftKey) {
                         e.preventDefault();
@@ -1189,6 +1222,16 @@ export function App() {
                     }}
                   />
                   <div className="flex shrink-0 items-center gap-1 pb-0.5">
+                    {speechToText?.enabled ? (
+                      <SpeechInputButton
+                        disabled={busy}
+                        language={speechToText.language}
+                        maxAudioBytes={speechToText.maxAudioBytes}
+                        onTranscript={handleSpeechTranscript}
+                        onError={setError}
+                        onBusyChange={setSpeechBusy}
+                      />
+                    ) : null}
                     {busy ? (
                       <button
                         type="button"
@@ -1215,7 +1258,7 @@ export function App() {
               <button
                 type="button"
                 onClick={clearChat}
-                disabled={busy || messages.length === 0}
+                disabled={busy || speechBusy || messages.length === 0}
                 className="mb-1 shrink-0 self-end rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-[11px] font-medium text-neutral-700 shadow-sm outline-none hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
                 title="Clear conversation"
               >
