@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { flushSync } from "react-dom";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   getInferencePreset,
   getQwenVisionInference,
@@ -14,6 +13,7 @@ import { ModelSettingsDock } from "./ModelSettingsDock";
 import { SettingsGlossaryOverlay } from "./SettingsGlossaryOverlay";
 import { ModelsOverviewOverlay } from "./ModelsOverviewOverlay";
 import { ChatMarkdown } from "./ChatMarkdown";
+import { createRafStreamBatcher } from "./streamDeltaBatch";
 import { estimateInferenceCo2Grams } from "./inferenceFootprint";
 import { GITHUB_NEW_BUG_ISSUE_URL } from "./repoLinks";
 
@@ -173,8 +173,8 @@ function extractUserFacingApiError(message: string): string {
   }
 }
 
-/** Extrahiert sichtbaren Text aus einem OpenAI-kompatiblen Stream-JSON-Chunk. */
-function extractStreamDeltaText(json: unknown): string {
+/** Sichtbare Antwort-Token (ohne reasoning_content — der würde die UI blockieren). */
+function extractStreamDeltaContent(json: unknown): string {
   if (!json || typeof json !== "object") return "";
   const root = json as Record<string, unknown>;
   const choices = root.choices;
@@ -187,8 +187,6 @@ function extractStreamDeltaText(json: unknown): string {
     const d = delta as Record<string, unknown>;
     const content = d.content;
     if (typeof content === "string" && content.length > 0) return content;
-    const reasoning = d.reasoning_content;
-    if (typeof reasoning === "string" && reasoning.length > 0) return reasoning;
   }
   const text = choice.text;
   if (typeof text === "string" && text.length > 0) return text;
@@ -269,7 +267,7 @@ async function streamChatCompletion(
             };
           }
         }
-        const piece = extractStreamDeltaText(streamPayload);
+        const piece = extractStreamDeltaContent(streamPayload);
         if (piece.length > 0) onDelta(piece);
       } catch {
         /* SSE-Zeile ignorieren */
@@ -335,6 +333,72 @@ function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
     </p>
   );
 }
+
+function renderMessageContent(content: string | ContentPart[], streaming: boolean) {
+  if (typeof content === "string") {
+    if (streaming) {
+      return (
+        <div className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink">
+          {content}
+        </div>
+      );
+    }
+    return <ChatMarkdown>{content}</ChatMarkdown>;
+  }
+  return (
+    <div className="space-y-2">
+      {content.map((part, j) =>
+        part.type === "text" ? (
+          streaming ? (
+            <div
+              key={j}
+              className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink"
+            >
+              {part.text}
+            </div>
+          ) : (
+            <ChatMarkdown key={j}>{part.text}</ChatMarkdown>
+          )
+        ) : (
+          <img
+            key={j}
+            src={part.image_url.url}
+            alt="Anhang"
+            className="max-h-56 max-w-full rounded-xl border border-neutral-200 dark:border-neutral-700"
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
+const ChatMessageRow = memo(function ChatMessageRow({
+  message,
+  streaming,
+}: {
+  message: ChatMessage;
+  streaming: boolean;
+}) {
+  if (message.role === "user") {
+    return (
+      <div className="flex justify-end">
+        <div className="max-w-[min(85%,28rem)] rounded-[1.25rem] bg-[#f4f4f4] px-4 py-3 text-[15px] leading-relaxed text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100">
+          {renderMessageContent(message.content, false)}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex justify-start">
+      <div className="flex max-w-full flex-col items-start">
+        <div className="max-w-full text-[15px] leading-relaxed text-neutral-900 dark:text-neutral-100">
+          {renderMessageContent(message.content, streaming)}
+        </div>
+        {message.usage ? <AssistantTokenFooter stats={message.usage} /> : null}
+      </div>
+    </div>
+  );
+});
 
 function applyPresetToState(
   modelId: string,
@@ -485,6 +549,7 @@ export function App() {
   }, [title]);
 
   useEffect(() => {
+    if (busy) return;
     const state: Persisted = {
       v: 2,
       model,
@@ -512,6 +577,7 @@ export function App() {
     systemPrompt,
     messages,
     qwenVisionOcr,
+    busy,
   ]);
 
   useEffect(() => {
@@ -657,24 +723,33 @@ export function App() {
     const streamStart = performance.now();
     let firstContentAt: number | null = null;
 
+    const appendAssistantDelta = (delta: string) => {
+      setMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (!last || last.role !== "assistant") return prev;
+        const prevText = typeof last.content === "string" ? last.content : "";
+        const nextText = prevText + delta;
+        if (nextText === prevText) return prev;
+        const copy = prev.slice();
+        copy[copy.length - 1] = { role: "assistant", content: nextText };
+        return copy;
+      });
+    };
+
+    const deltaBatch = createRafStreamBatcher((chunk) => {
+      if (chunk.length > 0) firstContentAt ??= performance.now();
+      appendAssistantDelta(chunk);
+    });
+
     try {
       const usageSnap = await streamChatCompletion(
         body,
         (delta) => {
-          if (delta.length > 0) firstContentAt ??= performance.now();
-          flushSync(() => {
-            setMessages((prev) => {
-              const copy = [...prev];
-              const last = copy[copy.length - 1];
-              if (!last || last.role !== "assistant") return prev;
-              const prevText = typeof last.content === "string" ? last.content : "";
-              copy[copy.length - 1] = { role: "assistant", content: prevText + delta };
-              return copy;
-            });
-          });
+          if (delta.length > 0) deltaBatch.push(delta);
         },
         ctrl.signal,
       );
+      deltaBatch.flush();
       const streamEnd = performance.now();
       const genSec =
         firstContentAt != null
@@ -716,6 +791,7 @@ export function App() {
         return copy;
       });
     } catch (e) {
+      deltaBatch.cancel();
       const msg = e instanceof Error ? e.message : "Unbekannter Fehler";
       setError(msg);
       setMessages((prev) => {
@@ -942,57 +1018,11 @@ export function App() {
             ) : (
               <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8">
                 {messages.map((m, i) => (
-                  <div
+                  <ChatMessageRow
                     key={i}
-                    className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
-                  >
-                    {m.role === "user" ? (
-                      <div className="max-w-[min(85%,28rem)] rounded-[1.25rem] bg-[#f4f4f4] px-4 py-3 text-[15px] leading-relaxed text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100">
-                        {typeof m.content === "string" ? (
-                          <ChatMarkdown>{m.content}</ChatMarkdown>
-                        ) : (
-                          <div className="space-y-2">
-                            {m.content.map((part, j) =>
-                              part.type === "text" ? (
-                                <ChatMarkdown key={j}>{part.text}</ChatMarkdown>
-                              ) : (
-                                <img
-                                  key={j}
-                                  src={part.image_url.url}
-                                  alt="Anhang"
-                                  className="max-h-56 max-w-full rounded-xl border border-neutral-200 dark:border-neutral-700"
-                                />
-                              ),
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div className="flex max-w-full flex-col items-start">
-                        <div className="max-w-full text-[15px] leading-relaxed text-neutral-900 dark:text-neutral-100">
-                          {typeof m.content === "string" ? (
-                            <ChatMarkdown>{m.content}</ChatMarkdown>
-                          ) : (
-                            <div className="space-y-2">
-                              {m.content.map((part, j) =>
-                                part.type === "text" ? (
-                                  <ChatMarkdown key={j}>{part.text}</ChatMarkdown>
-                                ) : (
-                                  <img
-                                    key={j}
-                                    src={part.image_url.url}
-                                    alt="Anhang"
-                                    className="max-h-56 max-w-full rounded-xl border border-neutral-200 dark:border-neutral-700"
-                                  />
-                                ),
-                              )}
-                            </div>
-                          )}
-                        </div>
-                        {m.usage ? <AssistantTokenFooter stats={m.usage} /> : null}
-                      </div>
-                    )}
-                  </div>
+                    message={m}
+                    streaming={busy && m.role === "assistant" && i === messages.length - 1}
+                  />
                 ))}
                 <div ref={bottomRef} />
               </div>
