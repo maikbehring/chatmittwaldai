@@ -48,6 +48,7 @@ import {
 import { RateLimitNotice } from "./RateLimitNotice";
 import { GITHUB_REPO_URL } from "./repoLinks";
 import {
+  buildWebSearchChatExcerpt,
   fetchWebSearch,
   formatWebSearchContext,
   providerLabel,
@@ -329,6 +330,41 @@ function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
   );
 }
 
+/** Nutzer-Nachrichten als Plaintext (Paste/Logs ohne Markdown-Artefakte). */
+function renderUserMessageContent(
+  content: string | ContentPart[],
+  onImageOpen: (src: string, alt: string) => void,
+) {
+  if (typeof content === "string") {
+    return (
+      <div className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+        {content}
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-2">
+      {content.map((part, j) =>
+        part.type === "text" ? (
+          <div
+            key={j}
+            className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed"
+          >
+            {part.text}
+          </div>
+        ) : (
+          <ChatImageAttachment
+            key={j}
+            src={part.image_url.url}
+            alt="Anhang"
+            onOpen={onImageOpen}
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
 function renderMessageContent(
   content: string | ContentPart[],
   streaming: boolean,
@@ -386,20 +422,22 @@ const ChatMessageRow = memo(function ChatMessageRow({
 }) {
   if (message.role === "user") {
     return (
-      <div className="flex max-w-[min(85%,28rem)] flex-col items-end gap-1">
+      <div className="flex w-full justify-end">
+        <div className="flex max-w-[min(85%,28rem)] flex-col items-end gap-1">
         {message.webSearch && message.webSearch.results.length > 0 ? (
-          <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
-            Websuche ({message.webSearch.provider}) · {message.webSearch.results.length} Treffer
-          </p>
-        ) : null}
+            <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+              Websuche ({message.webSearch.provider}) · {message.webSearch.results.length} Treffer
+            </p>
+          ) : null}
         <div className="rounded-[1.25rem] bg-[#f4f4f4] px-4 py-3 text-[15px] leading-relaxed text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100">
-          {renderMessageContent(message.content, false, onImageOpen)}
+            {renderUserMessageContent(message.content, onImageOpen)}
+          </div>
         </div>
       </div>
     );
   }
   return (
-    <div className="flex justify-start">
+    <div className="flex w-full justify-start">
       <div className="flex max-w-full flex-col items-start">
         <div className="max-w-full text-[15px] leading-relaxed text-neutral-900 dark:text-neutral-100">
           {webSearchPending ? (
@@ -1005,7 +1043,15 @@ export function App() {
       ]);
       setWebSearchBusy(true);
       try {
-        webSearchPayload = await fetchWebSearch(text, ctrl.signal, playgroundRateLimits);
+        webSearchPayload = await fetchWebSearch(
+          {
+            userMessage: text,
+            chatExcerpt: buildWebSearchChatExcerpt(messagesBeforeSend),
+            maxResults: webSearchConfig?.maxResults,
+          },
+          ctrl.signal,
+          playgroundRateLimits,
+        );
       } catch (e) {
         setWebSearchBusy(false);
         setMessages(messagesBeforeSend);
@@ -1308,19 +1354,21 @@ export function App() {
                       type="button"
                       onClick={() => selectThread(t.id)}
                       disabled={busy}
-                      className="min-w-0 flex-1 truncate rounded-lg px-2.5 py-2 text-left text-[13px] text-neutral-700 disabled:cursor-not-allowed dark:text-neutral-200"
+                      className="min-w-0 flex-1 overflow-hidden rounded-lg px-2.5 py-2 text-left text-[13px] text-neutral-700 disabled:cursor-not-allowed dark:text-neutral-200"
                       title={
                         t.webSearchEnabled
                           ? `${t.title} (Websuche aktiv)`
                           : t.title
                       }
                     >
-                      {t.webSearchEnabled ? (
-                        <span className="mr-1 inline-block text-sky-600 dark:text-sky-400" aria-hidden>
-                          ◉
-                        </span>
-                      ) : null}
-                      {t.title}
+                      <span className="flex min-w-0 items-center gap-1">
+                        {t.webSearchEnabled ? (
+                          <span className="shrink-0 text-sky-600 dark:text-sky-400" aria-hidden>
+                            ◉
+                          </span>
+                        ) : null}
+                        <span className="min-w-0 truncate">{t.title}</span>
+                      </span>
                     </button>
                     <button
                       type="button"

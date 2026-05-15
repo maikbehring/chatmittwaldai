@@ -54,10 +54,13 @@ export function WebSearchConsentDialog({ open, webSearchConfig, onConfirm, onCan
         <div className="mt-3 space-y-2 text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
           <p>{webSearchDataTransferHint(webSearchConfig)}</p>
           <p>
-            Der Anbieter <strong className="font-medium text-neutral-800 dark:text-neutral-100">{provider}</strong>{" "}
-            kann Suchanfragen und technische Daten (z. B. IP-Adresse) verarbeiten und nach eigenen Regeln speichern.
-            Dein Chatverlauf bleibt im Browser; nur die <strong className="font-medium">Suchanfrage</strong> geht über
-            unseren Server an den Suchdienst.
+            Chatverläufe liegen nur in deinem Browser. Zur Websuche wird serverseitig aus aktueller Eingabe und einem
+            Auszug des Chats <strong className="font-medium">eine kurze Suchzeile</strong> für Google formuliert
+            (mittwald-KI). An{" "}
+            <strong className="font-medium text-neutral-800 dark:text-neutral-100">{provider}</strong> geht{" "}
+            <strong className="font-medium">nur diese Kurzanfrage</strong>, zuzüglich üblicher technischer Daten einer
+            Websuche (z. B. IP-Adresse beim Anbieter). Der ausführliche Kontext wird nicht zur Speicherung an den
+            Suchdienst übergeben.
           </p>
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
             Diese Bestätigung wird einmalig in diesem Browser gespeichert. Du kannst die Websuche jederzeit wieder

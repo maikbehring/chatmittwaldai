@@ -108,6 +108,7 @@ Alle Variablen sind in [.env.example](./.env.example) dokumentiert. Wichtigste:
 | `WEB_SEARCH_SERPER_API_KEY` | Bei `serper` — Key von [serper.dev](https://serper.dev/) |
 | `WEB_SEARCH_GOOGLE_GL` / `HL` / `LOCATION` | Optional Region/Sprache für Google (z. B. `de`, `Germany`) |
 | `WEB_SEARCH_MAX_RESULTS` | Treffer pro Anfrage (Standard: 5) |
+| `WEB_SEARCH_QUERY_MODEL` | Optional: mittwald-Modell-ID für Kurz-Google-Query aus Chat-Auszug (sonst erstes `PLAYGROUND_ALLOWED_MODELS`; kostet 1 zusätzliche LLM-Anfrage pro Websuche) |
 | `RATE_LIMIT_MAX_WEB_SEARCH` | Rate-Limit für `POST /api/web/search` (Standard: 30 pro Fenster) |
 
 ### Websuche (Betrieb & UI)
@@ -127,7 +128,7 @@ Optional: `WEB_SEARCH_GOOGLE_GL`, `WEB_SEARCH_GOOGLE_HL`, `WEB_SEARCH_GOOGLE_LOC
 1. **Globus** neben dem Eingabefeld antippen → Websuche für diesen Chat **an** (blau) / erneut antippen → **aus**.
 2. Beim **ersten Aktivieren** erscheint ein **Einwilligungs-Dialog** (einmal pro Browser gespeichert): Hinweis, dass Suchanfragen an den konfigurierten Anbieter gehen und dort verarbeitet werden können.
 3. Ist der Modus aktiv, erscheint ein **Chip** über dem Feld (*„Im Web suchen · …“*) mit **×** zum Deaktivieren.
-4. Beim Senden einer **Textnachricht** mit aktiver Websuche: zuerst `POST /api/web/search`, dann Chat mit Suchtreffern und **heutigem Datum** (Europe/Berlin) als Kontext fürs Modell.
+4. Beim Senden einer **Textnachricht** mit aktiver Websuche: der Server bildet aus **aktueller Nachricht plus Chat-Verlauf** eine **kurze Google-Suchzeile** (über dieselbe mittwald-KI), ruft dann `POST /api/web/search` auf und streamt anschließend den Chat mit den Treffern (**heute** Europe/Berlin im Kontext).
 5. In den **Modell-Einstellungen** (Zahnrad): optional „Neue Chats starten mit aktivierter Websuche“.
 
 Suchtreffer werden **nicht** serverseitig dauerhaft gespeichert; der Chatverlauf bleibt im Browser.
@@ -198,7 +199,7 @@ Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
 - Chats liegen **nur im localStorage** des jeweiligen Browsers (inkl. mehrerer Threads, Websuche pro Chat, Websuche-Einwilligung).
 - Der **API-Key** (mittwald, ggf. SerpAPI/Serper) liegt nur in der Server-Umgebung (`.env`), nicht im Frontend.
 - Anfragen gehen über euren **Proxy** an mittwald; Inhalte unterliegen auch der [mittwald-Dokumentation](https://developer.mittwald.de/de/docs/v2/platform/aihosting/).
-- Bei aktivierter **Websuche** sendet der Proxy **Suchanfragen** (Inhalt der Nutzer-Nachricht) an **DuckDuckGo**, **SerpAPI** oder **Serper** — es gelten deren Nutzungsbedingungen; Daten können beim Suchanbieter verarbeitet oder gespeichert werden.
+- Bei aktivierter **Websuche**: Kurz-Anfragen an Google (SerpAPI/Serper) bzw. Abfragen an DuckDuckGo; der **rohe Chat-Verlauf** wird serverseitig nur verdichtet, nicht 1:1 an den Suchdienst geschickt. Es gelten die Nutzungsbedingungen des jeweiligen Anbieters.
 - Die **Einwilligung zur Websuche** wird nur lokal im Browser gespeichert; ersetzt keine Datenschutzerklärung — für öffentliche Instanzen eigene Seiten verlinken (`PLAYGROUND_LINK_*`).
 - CO₂- und Token-Werte sind **Schätzungen** zur Orientierung.
 
@@ -213,7 +214,7 @@ Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
 | `GET /api/models` | Modellliste (gefiltert) |
 | `POST /api/chat/completions` | Chat (Streaming); nur erlaubte JSON-Felder |
 | `POST /api/audio/transcriptions` | Sprache → Text (Whisper) |
-| `POST /api/web/search` | Websuche (`{ "q": "…" }`) — DuckDuckGo, SerpAPI oder Serper |
+| `POST /api/web/search` | Websuche — Body z. B. `{ "userMessage": "…", "chatExcerpt": "…", "maxResults": 10 }`; optional Legacy `{ "q": "…" }` ohne Verdichtung |
 
 Vision: Bilder nur als `data:image/…` Base64 im Request.
 

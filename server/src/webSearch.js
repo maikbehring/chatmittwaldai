@@ -4,8 +4,30 @@
  * Optional: SerpAPI (Google), Serper (Google) — jeweils per API-Key in .env.
  */
 
-const MAX_QUERY_LEN = 400;
+const MAX_QUERY_LEN = 2000;
 const DEFAULT_MAX_RESULTS = 5;
+
+/** Finale Sicherung: Google/SerpAPI nutzen kurze Queries besser. */
+const SEARCH_ENGINE_MAX_WORDS = 12;
+const SEARCH_ENGINE_MAX_CHARS = 150;
+
+function normalizeSearchEngineQuery(raw) {
+  let s = String(raw ?? "")
+    .replace(/\*\*?/g, " ")
+    .replace(/`+/g, " ")
+    .replace(/#{1,6}\s*|_{2,}/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  let words = s.split(/\s+/).filter(Boolean);
+  if (words.length > SEARCH_ENGINE_MAX_WORDS) words = words.slice(0, SEARCH_ENGINE_MAX_WORDS);
+  s = words.join(" ");
+  if (s.length > SEARCH_ENGINE_MAX_CHARS) {
+    s = s.slice(0, SEARCH_ENGINE_MAX_CHARS).trimEnd();
+    const cut = s.lastIndexOf(" ");
+    if (cut > 50) s = s.slice(0, cut).trimEnd();
+  }
+  return s;
+}
 
 const BROWSER_UA =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -288,7 +310,7 @@ export function getWebSearchConfig() {
 }
 
 export async function searchWeb(rawQuery, options = {}) {
-  const query = String(rawQuery ?? "").trim();
+  const query = normalizeSearchEngineQuery(String(rawQuery ?? "").trim());
   if (!query) return { query: "", provider: "duckduckgo", results: [] };
   if (query.length > MAX_QUERY_LEN) {
     throw new Error(`Suchanfrage zu lang (max. ${MAX_QUERY_LEN} Zeichen).`);

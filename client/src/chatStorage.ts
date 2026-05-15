@@ -73,15 +73,47 @@ function plainTextFromContent(content: StoredChatMessage["content"]): string {
     .trim();
 }
 
-/** Titel aus erster Nutzer-Nachricht, sonst Platzhalter. */
+/** Slack/Teams-Zeitstempel am Zeilenanfang entfernen. */
+function stripLeadingTimestamp(text: string): string {
+  return text
+    .replace(/^(\[\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\]\s*)+/i, "")
+    .replace(/^(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?\s*[-–—]\s*)+/i, "")
+    .trim();
+}
+
+function looksLikeBulkPaste(text: string): boolean {
+  const lines = text.split(/\n/).filter((l) => l.trim().length > 0);
+  return text.length > 220 || lines.length > 5 || (lines.length > 2 && text.length > 100);
+}
+
+function truncateTitle(text: string, max = 42): string {
+  const t = text.trim();
+  if (t.length <= max) return t;
+  return `${t.slice(0, max - 1)}…`;
+}
+
+/** Titel aus erster Nutzer-Nachricht — bei langen Paste-Blöcken kein Rohtext in der Sidebar. */
 export function deriveThreadTitle(messages: StoredChatMessage[], fallback = "Neuer Chat"): string {
   const firstUser = messages.find((m) => m.role === "user");
   if (!firstUser) return fallback;
   const text = plainTextFromContent(firstUser.content);
   if (!text) return fallback;
-  const oneLine = text.replace(/\s+/g, " ");
-  if (oneLine.length <= 42) return oneLine;
-  return `${oneLine.slice(0, 41)}…`;
+
+  if (looksLikeBulkPaste(text)) {
+    const lines = text.split(/\n/).map((l) => stripLeadingTimestamp(l.trim())).filter(Boolean);
+    for (const line of lines) {
+      if (line.length >= 12 && line.length <= 72 && !looksLikeBulkPaste(line)) {
+        return truncateTitle(line);
+      }
+    }
+    const shortLine = lines.find((l) => l.length >= 8 && l.length <= 72);
+    if (shortLine) return truncateTitle(shortLine);
+    return "Eingefügter Text";
+  }
+
+  const oneLine = stripLeadingTimestamp(text.replace(/\s+/g, " "));
+  if (!oneLine) return fallback;
+  return truncateTitle(oneLine);
 }
 
 export function createEmptyThread(webSearchDefault = false): ChatThread {

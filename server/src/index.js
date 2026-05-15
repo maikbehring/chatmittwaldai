@@ -12,6 +12,10 @@ import dotenv from "dotenv";
 import { getPlaygroundLinks } from "./playgroundLinks.js";
 import { createRateLimitHandler, getRateLimitConfig } from "./rateLimit.js";
 import { getWebSearchConfig, searchWeb } from "./webSearch.js";
+import {
+  pickWebSearchQueryModel,
+  synthesizeGoogleSearchQuery,
+} from "./webSearchQuerySynthesis.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "../..");
@@ -272,11 +276,37 @@ async function main() {
   app.post(
     "/api/web/search",
     webSearchLimiter,
-    express.json({ limit: 8192 }),
+    express.json({ limit: 196608 }),
     async (req, res) => {
-      const q = req.body?.q ?? req.body?.query;
-      if (typeof q !== "string" || !q.trim()) {
-        return jsonError(res, 400, "validation_error", "Suchbegriff (q) fehlt.");
+      const userMessage =
+        typeof req.body?.userMessage === "string" ? req.body.userMessage.trim() : "";
+      const chatExcerpt =
+        typeof req.body?.chatExcerpt === "string" ? req.body.chatExcerpt.trim() : "";
+      const legacyQ = typeof req.body?.q === "string" ? req.body.q.trim() : "";
+
+      let q;
+      if (userMessage) {
+        const model = pickWebSearchQueryModel(process.env.WEB_SEARCH_QUERY_MODEL ?? "", ALLOWED_MODELS);
+        try {
+          q = await synthesizeGoogleSearchQuery({
+            apiKey: API_KEY,
+            baseUrl: BASE_URL,
+            model,
+            userMessage,
+            chatExcerpt,
+          });
+        } catch (e) {
+          console.error("Websuche Suchbegriff-Verdichtung:", e);
+          q = (legacyQ || userMessage).replace(/\s+/g, " ").trim();
+        }
+      } else if (legacyQ) {
+        q = legacyQ;
+      } else {
+        return jsonError(res, 400, "validation_error", "Suchanfrage fehlt (userMessage oder q).");
+      }
+
+      if (!q) {
+        return jsonError(res, 400, "validation_error", "Suchbegriff ist leer.");
       }
       try {
         const data = await searchWeb(q, {

@@ -1,6 +1,9 @@
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 
+/** Server kürzt ohnehin — großzügig für LLM-Verdichtung. */
+export const WEB_SEARCH_CHAT_EXCERPT_MAX_CHARS = 16000;
+
 export type WebSearchResult = {
   title: string;
   url: string;
@@ -23,15 +26,70 @@ export type WebSearchConfig = {
   maxResults: number;
 };
 
+type SearchContextMessage = {
+  role: "user" | "assistant" | "system";
+  content:
+    | string
+    | ReadonlyArray<{ type: string; text?: string; image_url?: { url?: string } | undefined }>;
+};
+
+function plainTextFromMessageContent(content: SearchContextMessage["content"]): string {
+  if (typeof content === "string") return content.trim();
+  return content
+    .filter((p): p is { type: "text"; text: string } => p.type === "text" && typeof p.text === "string")
+    .map((p) => p.text.trim())
+    .join(" ")
+    .trim();
+}
+
+/**
+ * Roher Chat-Verlauf (nur für den Server zum Formulieren der Google-Suche; nicht für Google direkt).
+ * Letzte Turns, alte Drops wenn zu lang.
+ */
+export function buildWebSearchChatExcerpt(
+  priorMessages: ReadonlyArray<SearchContextMessage>,
+): string {
+  const maxPriorMessages = 28;
+  const maxPerTurn = 3800;
+  const tail = priorMessages.slice(-maxPriorMessages);
+
+  const lines: string[] = [];
+  for (const m of tail) {
+    if (m.role !== "user" && m.role !== "assistant") continue;
+    const raw = plainTextFromMessageContent(m.content);
+    if (!raw) continue;
+    const capped =
+      raw.length > maxPerTurn ? `${raw.slice(0, maxPerTurn - 1).trimEnd()}…` : raw;
+    lines.push(m.role === "user" ? `Nutzer: ${capped}` : `Assistent: ${capped}`);
+  }
+
+  while (lines.join("\n").length > WEB_SEARCH_CHAT_EXCERPT_MAX_CHARS && lines.length > 0) {
+    lines.shift();
+  }
+  return lines.join("\n");
+}
+
 export async function fetchWebSearch(
-  query: string,
+  args: {
+    userMessage: string;
+    chatExcerpt: string;
+    maxResults?: number;
+  },
   signal?: AbortSignal,
   rateLimits?: PlaygroundRateLimits | null,
 ): Promise<WebSearchResponse> {
+  const body: Record<string, unknown> = {
+    userMessage: args.userMessage.trim(),
+    chatExcerpt: args.chatExcerpt.trim(),
+  };
+  if (typeof args.maxResults === "number" && Number.isFinite(args.maxResults)) {
+    body.maxResults = args.maxResults;
+  }
+
   const res = await fetch("/api/web/search", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ q: query }),
+    body: JSON.stringify(body),
     signal,
   });
   await ensureOkApiResponse(res, rateLimits);
@@ -51,7 +109,8 @@ export function formatWebSearchContext(data: WebSearchResponse): string {
   );
   return (
     `${formatPlaygroundTodayContext()}\n\n` +
-    `[Playground-Websuche — vom Server geladene Treffer (${data.provider}), Anfrage: „${data.query}“]\n` +
+    `[Playground-Websuche — vom Server geladene Treffer (${data.provider}). ` +
+      `Die an Google geschickte Suchzeile („${data.query}“) wurde aus deinem Kontext plus aktueller Eingabe automatisch zu einer Kurz-Anfrage verdichtet.]\n` +
     "WICHTIG: Diese Ergebnisse sind frisch aus dem Internet. Du darfst sie als Quelle nutzen. " +
     "Behaupte NICHT, du könntest nicht im Web suchen oder hättest keinen Live-Zugriff — die Suche wurde bereits für den Nutzer durchgeführt. " +
     "Prüfe Fest- und Terminangaben gegen das oben genannte heutige Datum (z. B. ob ein Event heute liegt). " +
@@ -70,22 +129,22 @@ export function providerLabel(cfg: WebSearchConfig | null): string {
 export function webSearchDataTransferHint(cfg: WebSearchConfig | null): string {
   const label = providerLabel(cfg);
   if (cfg?.provider === "serpapi") {
-    return "Bei aktiver Websuche wird deine Frage an SerpAPI (Google-Suche) übermittelt.";
+    return "Aus Chat + Eingabe wird serverseitig eine Kurz-Suche formuliert, nur diese geht an SerpAPI (Google). Der Chat liegt nur bei mittwald (LLM-Verdichtung).";
   }
   if (cfg?.provider === "serper") {
-    return "Bei aktiver Websuche wird deine Frage an Serper (Google-Suche) übermittelt.";
+    return "Aus Chat + Eingabe wird serverseitig eine Kurz-Suche formuliert, nur diese geht an Serper (Google). Der Chat liegt nur bei mittwald (LLM-Verdichtung).";
   }
-  return `Bei aktiver Websuche wird deine Frage an ${label} übermittelt.`;
+  return `Aus Chat + Eingabe wird serverseitig eine Kurz-Suche formuliert, nur diese geht an ${label}. Kontext-Verdichtung über mittwald.`;
 }
 
 /** Kompakte Zeile unter dem Button, wenn Websuche aktiv ist. */
 export function webSearchDataTransferHintShort(cfg: WebSearchConfig | null): string {
   const label = providerLabel(cfg);
   if (cfg?.provider === "serpapi") {
-    return "Frage geht an SerpAPI (Google)";
+    return "Kurz-Suche an SerpAPI (Google)";
   }
   if (cfg?.provider === "serper") {
-    return "Frage geht an Serper (Google)";
+    return "Kurz-Suche an Serper (Google)";
   }
-  return `Frage geht an ${label}`;
+  return `Kurz-Suche an ${label}`;
 }
