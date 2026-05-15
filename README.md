@@ -98,7 +98,7 @@ Alle Variablen sind in [.env.example](./.env.example) dokumentiert. Wichtigste:
 | `MITTWALD_AI_API_KEY` | **Pflicht** — Key aus dem mStudio |
 | `PLAYGROUND_ALLOWED_MODELS` | Kommagetrennte Modell-IDs; nur diese erscheinen im UI. Für öffentliche Instanzen **unbedingt** setzen und bewusst kürzen. |
 | `PLAYGROUND_BRAND_TITLE` | Anzeigename (optional) |
-| `PLAYGROUND_LINK_*_URL` / `*_LABEL` | Impressum, Datenschutz, Doku, AI-Hosting, Bug-Link (siehe [.env.example](./.env.example)) |
+| `PLAYGROUND_LINK_*_URL` / `*_LABEL` | Footer- & Sidebar-Links (Impressum, Datenschutz, …) — siehe [Footer- & Rechts-Links](#footer--rechts-links-per-env) |
 | `CORS_ORIGIN` | Erlaubte Browser-Origins (z. B. `https://playground.example.com`). In Produktion **nicht** `*`. |
 | `RATE_LIMIT_*` | Schutz vor Missbrauch (Chat, Modellliste, Transkription, Websuche) |
 | `PLAYGROUND_MAX_MESSAGES` | Max. Nachrichten pro Request (Standard: 60) |
@@ -132,9 +132,49 @@ Optional: `WEB_SEARCH_GOOGLE_GL`, `WEB_SEARCH_GOOGLE_HL`, `WEB_SEARCH_GOOGLE_LOC
 
 Suchtreffer werden **nicht** serverseitig dauerhaft gespeichert; der Chatverlauf bleibt im Browser.
 
-### Footer- & Rechts-Links
+### Footer- & Rechts-Links (per `.env`)
 
-Nur gesetzte `PLAYGROUND_LINK_*_URL`-Werte erscheinen in Sidebar und Fußzeile (Impressum, Datenschutz, Nutzungsbedingungen, AI-Hosting, Doku, Bug-Meldung). Ohne eigene URLs bleibt nur der Standard-Bug-Link zum GitHub-Repo. Siehe [.env.example](./.env.example).
+Für **öffentliche Instanzen** solltest du eigene Seiten für Impressum und Datenschutz verlinken. Pro Link gibt es eine **URL**- und optional eine **LABEL**-Variable in `.env`; der Server liefert die Liste über `GET /api/config` → Feld `links`.
+
+**Verhalten:**
+
+- Nur Links mit gesetzter `*_URL` erscheinen im UI (Sidebar unten, Fußzeile, Glossar in den Modell-Einstellungen).
+- Fehlt `*_LABEL`, wird die Standard-Beschriftung aus der Tabelle unten genutzt.
+- **Bug melden:** Ohne `PLAYGROUND_LINK_BUG_URL` wird automatisch der GitHub-Issue-Link dieses Repos eingetragen (einziger Link, wenn sonst nichts konfiguriert ist).
+
+**Beispiel `.env`:**
+
+```env
+PLAYGROUND_LINK_IMPRESSUM_URL=https://example.com/impressum
+PLAYGROUND_LINK_IMPRESSUM_LABEL=Impressum
+
+PLAYGROUND_LINK_PRIVACY_URL=https://example.com/datenschutz
+PLAYGROUND_LINK_PRIVACY_LABEL=Datenschutz
+
+PLAYGROUND_LINK_TERMS_URL=https://example.com/nutzungsbedingungen
+PLAYGROUND_LINK_TERMS_LABEL=Nutzungsbedingungen
+
+PLAYGROUND_LINK_AI_HOSTING_URL=https://www.mittwald.de/mstudio/ai-hosting
+PLAYGROUND_LINK_AI_HOSTING_LABEL=AI Hosting
+
+PLAYGROUND_LINK_DOCS_URL=https://developer.mittwald.de/de/docs/v2/platform/aihosting/
+PLAYGROUND_LINK_DOCS_LABEL=Developer-Dokumentation
+
+# Optional — sonst Standard-Link zum GitHub-Repo
+# PLAYGROUND_LINK_BUG_URL=https://github.com/org/repo/issues/new
+# PLAYGROUND_LINK_BUG_LABEL=Bug melden
+```
+
+| Link | URL-Variable | Label-Variable (optional) | Standard-Label |
+|------|----------------|---------------------------|----------------|
+| Impressum | `PLAYGROUND_LINK_IMPRESSUM_URL` | `PLAYGROUND_LINK_IMPRESSUM_LABEL` | Impressum |
+| Datenschutz | `PLAYGROUND_LINK_PRIVACY_URL` | `PLAYGROUND_LINK_PRIVACY_LABEL` | Datenschutz |
+| Nutzungsbedingungen | `PLAYGROUND_LINK_TERMS_URL` | `PLAYGROUND_LINK_TERMS_LABEL` | Nutzungsbedingungen |
+| AI Hosting (Produkt) | `PLAYGROUND_LINK_AI_HOSTING_URL` | `PLAYGROUND_LINK_AI_HOSTING_LABEL` | AI Hosting |
+| Entwickler-Doku | `PLAYGROUND_LINK_DOCS_URL` | `PLAYGROUND_LINK_DOCS_LABEL` | Dokumentation |
+| Bug / Feedback | `PLAYGROUND_LINK_BUG_URL` | `PLAYGROUND_LINK_BUG_LABEL` | Bug melden |
+
+Alle Variablen sind auch auskommentiert in [.env.example](./.env.example) aufgeführt. Die Links öffnen in einem neuen Tab (`target="_blank"`). Sie ersetzen **keine** rechtliche Prüfung — Inhalte der verlinkten Seiten liegen bei dir.
 
 **Modell-IDs** müssen exakt zu `GET /v1/models` passen. Im Code sind u. a. Presets für `gpt-oss-120b`, Qwen3.5/3.6, Ministral und Devstral verdrahtet — fehlen sie in `PLAYGROUND_ALLOWED_MODELS`, erscheinen sie nicht im Dropdown.
 
