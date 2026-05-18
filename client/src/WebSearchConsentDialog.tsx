@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { providerLabel, webSearchDataTransferHint, type WebSearchConfig } from "./webSearch";
+import { providerLabel, type WebSearchConfig } from "./webSearch";
 
 type Props = {
   open: boolean;
@@ -7,6 +7,19 @@ type Props = {
   onConfirm: () => void;
   onCancel: () => void;
 };
+
+function providerStorageNote(cfg: WebSearchConfig | null, provider: string): string | null {
+  if (cfg?.provider === "serpapi") {
+    return `In diesem Playground kann bereits ein SerpAPI-Schlüssel hinterlegt sein, damit du die Websuche direkt ausprobieren kannst. Suchanfragen werden dabei an SerpAPI (Google-Ergebnisse) übermittelt und können dort gemäß den Bedingungen von SerpAPI gespeichert oder protokolliert werden.`;
+  }
+  if (cfg?.provider === "serper") {
+    return `In diesem Playground kann bereits ein Serper-Schlüssel hinterlegt sein, damit du die Websuche direkt ausprobieren kannst. Suchanfragen werden dabei an Serper (Google-Ergebnisse) übermittelt und können dort gemäß den Bedingungen des Anbieters gespeichert oder protokolliert werden.`;
+  }
+  if (cfg?.provider === "duckduckgo") {
+    return `Die Suche läuft über ${provider}. Auch dort können technische Daten der Anfrage (z. B. IP-Adresse) verarbeitet werden.`;
+  }
+  return `Suchanfragen gehen an ${provider} und können beim jeweiligen Anbieter verarbeitet oder gespeichert werden.`;
+}
 
 export function WebSearchConsentDialog({ open, webSearchConfig, onConfirm, onCancel }: Props) {
   useEffect(() => {
@@ -30,6 +43,7 @@ export function WebSearchConsentDialog({ open, webSearchConfig, onConfirm, onCan
   if (!open) return null;
 
   const provider = providerLabel(webSearchConfig);
+  const storageNote = providerStorageNote(webSearchConfig, provider);
 
   return (
     <div
@@ -49,22 +63,24 @@ export function WebSearchConsentDialog({ open, webSearchConfig, onConfirm, onCan
         className="relative z-10 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-600 dark:bg-slate-900"
       >
         <h2 id="web-search-consent-title" className="text-base font-semibold text-neutral-900 dark:text-neutral-100">
-          Websuche aktivieren?
+          Websuche im Playground ausprobieren?
         </h2>
-        <div className="mt-3 space-y-2 text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
-          <p>{webSearchDataTransferHint(webSearchConfig)}</p>
+        <div className="mt-3 space-y-3 text-sm leading-relaxed text-neutral-600 dark:text-neutral-300">
           <p>
-            Chatverläufe liegen nur in deinem Browser. Zur Websuche wird serverseitig aus aktueller Eingabe und einem
-            Auszug des Chats <strong className="font-medium">eine kurze Suchzeile</strong> für Google formuliert
-            (mittwald-KI). An{" "}
-            <strong className="font-medium text-neutral-800 dark:text-neutral-100">{provider}</strong> geht{" "}
-            <strong className="font-medium">nur diese Kurzanfrage</strong>, zuzüglich üblicher technischer Daten einer
-            Websuche (z. B. IP-Adresse beim Anbieter). Der ausführliche Kontext wird nicht zur Speicherung an den
-            Suchdienst übergeben.
+            Mit der Websuche sollst du erleben, wie sich eine gut eingebundene Live-Suche im Chat anfühlt — das ist
+            Teil der <strong className="font-medium text-neutral-800 dark:text-neutral-100">Demo</strong> dieses
+            Playgrounds, kein Produktiv-Feature.
           </p>
+          <p>
+            Aus deiner aktuellen Eingabe und einem kurzen Auszug des Chats formuliert die mittwald-KI serverseitig{" "}
+            <strong className="font-medium">eine kompakte Suchzeile</strong>. Nur diese Kurzanfrage geht an{" "}
+            <strong className="font-medium text-neutral-800 dark:text-neutral-100">{provider}</strong> — nicht dein
+            gesamter Verlauf. Die Chats selbst bleiben wie gewohnt nur in deinem Browser.
+          </p>
+          {storageNote ? <p>{storageNote}</p> : null}
           <p className="text-xs text-neutral-500 dark:text-neutral-400">
-            Diese Bestätigung wird einmalig in diesem Browser gespeichert. Du kannst die Websuche jederzeit wieder
-            deaktivieren oder die Einwilligung unter Modell-Einstellungen (Zahnrad) → Websuche zurückziehen.
+            Diese Bestätigung speichern wir einmalig in diesem Browser. Du kannst die Websuche jederzeit wieder
+            ausschalten oder die Einwilligung unter Modell-Einstellungen (Zahnrad) → Websuche zurückziehen.
           </p>
         </div>
         <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">

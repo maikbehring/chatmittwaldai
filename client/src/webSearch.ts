@@ -125,16 +125,13 @@ export function providerLabel(cfg: WebSearchConfig | null): string {
   return p?.label ?? cfg.provider;
 }
 
-/** Datenschutz-Hinweis (Tooltip). */
+/** Kurzer Hinweis (Tooltip am Globus). */
 export function webSearchDataTransferHint(cfg: WebSearchConfig | null): string {
   const label = providerLabel(cfg);
-  if (cfg?.provider === "serpapi") {
-    return "Aus Chat + Eingabe wird serverseitig eine Kurz-Suche formuliert, nur diese geht an SerpAPI (Google). Der Chat liegt nur bei mittwald (LLM-Verdichtung).";
+  if (cfg?.provider === "serpapi" || cfg?.provider === "serper") {
+    return `Playground-Demo über ${label}: Kurz-Suche statt ganzer Chat — Anfragen können beim Suchanbieter gespeichert werden.`;
   }
-  if (cfg?.provider === "serper") {
-    return "Aus Chat + Eingabe wird serverseitig eine Kurz-Suche formuliert, nur diese geht an Serper (Google). Der Chat liegt nur bei mittwald (LLM-Verdichtung).";
-  }
-  return `Aus Chat + Eingabe wird serverseitig eine Kurz-Suche formuliert, nur diese geht an ${label}. Kontext-Verdichtung über mittwald.`;
+  return `Playground-Demo: Kurz-Suche an ${label}, formuliert aus deiner Eingabe und einem Chat-Auszug.`;
 }
 
 /** Kompakte Zeile unter dem Button, wenn Websuche aktiv ist. */

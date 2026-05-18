@@ -11,8 +11,8 @@ export type StoredChatMessage = {
 };
 
 export const STORAGE_KEY_V3 = "mittwald-ai-playground-state-v3";
-const STORAGE_KEY_V2 = "mittwald-ai-playground-state-v2";
-const LEGACY_STORAGE_KEY = "mittwald-ai-playground-state-v1";
+export const STORAGE_KEY_V2 = "mittwald-ai-playground-state-v2";
+export const LEGACY_STORAGE_KEY = "mittwald-ai-playground-state-v1";
 
 export type ChatThread = {
   id: string;

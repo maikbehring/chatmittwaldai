@@ -10,6 +10,9 @@ export type ModelSettingsDockProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy: boolean;
+  /** Panel über dem Button (Desktop) vs. fixiert über der Eingabezeile (Mobile). */
+  panelMode?: "docked" | "fixed";
+  buttonClassName?: string;
   modelId: string;
   onReapplyPreset: () => void;
   temperature: number;
@@ -94,6 +97,8 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
     onWebSearchDefaultChange,
     webSearchConsentGranted,
     onRevokeWebSearchConsent,
+    panelMode = "docked",
+    buttonClassName,
   } = props;
 
   const rootRef = useRef<HTMLDivElement>(null);
@@ -144,8 +149,13 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
     }
   };
 
+  const panelClassName =
+    panelMode === "fixed"
+      ? "fixed inset-x-3 bottom-[max(5.75rem,calc(env(safe-area-inset-bottom)+4.75rem))] z-50 max-h-[min(58vh,26rem)] w-auto overflow-y-auto rounded-xl border border-neutral-200 bg-white p-3 text-xs shadow-xl dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-black/40"
+      : "absolute bottom-full left-0 z-50 mb-2 w-[min(calc(100vw-2rem),20rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-xl border border-neutral-200 bg-white p-3 text-xs shadow-xl dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-black/40";
+
   return (
-    <div ref={rootRef} className="relative shrink-0 self-end pb-1">
+    <div ref={rootRef} className="relative shrink-0 self-center">
       <button
         type="button"
         disabled={busy}
@@ -153,17 +163,16 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
         aria-haspopup="dialog"
         title="Modell-Einstellungen"
         onClick={() => onOpenChange(!open)}
-        className="flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+        className={
+          buttonClassName ??
+          "flex h-8 w-8 items-center justify-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+        }
       >
         <GearIcon />
       </button>
 
       {open ? (
-        <div
-          role="dialog"
-          aria-label="Modell-Einstellungen"
-          className="absolute bottom-full left-0 z-50 mb-2 w-[min(calc(100vw-2rem),20rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-xl border border-neutral-200 bg-white p-3 text-xs shadow-xl dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-black/40"
-        >
+        <div role="dialog" aria-label="Modell-Einstellungen" className={panelClassName}>
           <p className="mb-2 text-[11px] leading-snug text-neutral-500 dark:text-neutral-400">{hint}</p>
           <button
             type="button"

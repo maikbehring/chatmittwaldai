@@ -89,7 +89,7 @@ export function WebSearchGlobeToggle({
           ? `${hint} Klicken zum Deaktivieren.`
           : `Im Web suchen (${label}). ${hint}`
       }
-      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition ${
+      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition sm:h-10 sm:w-10 ${
         active
           ? "bg-sky-100 text-sky-700 ring-1 ring-sky-300/70 dark:bg-sky-950/80 dark:text-sky-300 dark:ring-sky-700"
           : "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"

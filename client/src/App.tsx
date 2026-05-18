@@ -24,6 +24,12 @@ import { CO2_FOOTPRINT_TOOLTIP, estimateInferenceCo2Grams } from "./inferenceFoo
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 import { WebSearchGlobeToggle, WebSearchModeChip } from "./WebSearchComposerControl";
 import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
+import { DeleteAllChatsDialog } from "./DeleteAllChatsDialog";
+import { ClearBrowserCacheDialog } from "./ClearBrowserCacheDialog";
+import {
+  clearPlaygroundBrowserStorage,
+  PLAYGROUND_THEME_STORAGE_KEY,
+} from "./playgroundBrowserStorage";
 import {
   clearWebSearchConsent,
   hasWebSearchConsent,
@@ -51,6 +57,7 @@ import {
 } from "./apiErrors";
 import { RateLimitNotice } from "./RateLimitNotice";
 import { GITHUB_REPO_URL } from "./repoLinks";
+import { useIsMobileLayout } from "./useMobileLayout";
 import {
   buildWebSearchChatExcerpt,
   fetchWebSearch,
@@ -62,13 +69,11 @@ import {
 
 const DEFAULT_AI_HOSTING_URL = "https://www.mittwald.de/mstudio/ai-hosting";
 
-const THEME_STORAGE_KEY = "mittwald-ai-playground-theme";
-
 type ThemePreference = "light" | "dark" | "system";
 
 function readThemePreference(): ThemePreference {
   try {
-    const v = localStorage.getItem(THEME_STORAGE_KEY);
+    const v = localStorage.getItem(PLAYGROUND_THEME_STORAGE_KEY);
     if (v === "light" || v === "dark" || v === "system") return v;
   } catch {
     /* ignore */
@@ -570,9 +575,27 @@ export function App() {
   const [aiHostingUrl, setAiHostingUrl] = useState(DEFAULT_AI_HOSTING_URL);
   const [selfHostRepoUrl, setSelfHostRepoUrl] = useState(GITHUB_REPO_URL);
   const [showGlossary, setShowGlossary] = useState(false);
+  const [deleteAllChatsOpen, setDeleteAllChatsOpen] = useState(false);
+  const [clearBrowserCacheOpen, setClearBrowserCacheOpen] = useState(false);
   const [showModelsOverview, setShowModelsOverview] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const isMobileLayout = useIsMobileLayout();
+  const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), []);
+  const openMobileSidebar = useCallback(() => setMobileSidebarOpen(true), []);
+  const toggleSidebar = useCallback(() => {
+    if (isMobileLayout) {
+      setMobileSidebarOpen((v) => !v);
+    } else {
+      setSidebarCollapsed((v) => !v);
+    }
+  }, [isMobileLayout]);
+  const sidebarExpanded = isMobileLayout ? mobileSidebarOpen : !sidebarCollapsed;
+
+  useEffect(() => {
+    if (!isMobileLayout) setMobileSidebarOpen(false);
+  }, [isMobileLayout]);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [imageLightbox, setImageLightbox] = useState<{ src: string; alt: string } | null>(null);
   const openImageLightbox = useCallback((src: string, alt: string) => {
@@ -596,9 +619,10 @@ export function App() {
     if (!el) return;
     el.style.height = "0px";
     const next = Math.min(el.scrollHeight, INPUT_MAX_HEIGHT_PX);
-    el.style.height = `${Math.max(next, 44)}px`;
+    const minHeight = isMobileLayout ? 40 : 44;
+    el.style.height = `${Math.max(next, minHeight)}px`;
     el.style.overflowY = el.scrollHeight > INPUT_MAX_HEIGHT_PX ? "auto" : "hidden";
-  }, []);
+  }, [isMobileLayout]);
 
   /** Clipboard-Bild wie in ChatGPT (Capture: greift vor Textfeld, verhindert Müll-Einfügen bei Screenshots). */
   const handleComposerPasteCapture = useCallback(
@@ -746,7 +770,7 @@ export function App() {
 
     apply();
     try {
-      localStorage.setItem(THEME_STORAGE_KEY, themePreference);
+      localStorage.setItem(PLAYGROUND_THEME_STORAGE_KEY, themePreference);
     } catch {
       /* ignore */
     }
@@ -955,7 +979,8 @@ export function App() {
     setThreads(sortThreadsByRecent([fresh, ...withCurrent]));
     setActiveThreadId(fresh.id);
     setMessages([]);
-  }, [activeThreadId, messages, stop, threads, webSearchDefaultEnabled]);
+    closeMobileSidebar();
+  }, [activeThreadId, closeMobileSidebar, messages, stop, threads, webSearchDefaultEnabled]);
 
   const selectThread = useCallback(
     (id: string) => {
@@ -988,8 +1013,9 @@ export function App() {
       setThreads(updated);
       setActiveThreadId(id);
       setMessages(nextMessages);
+      closeMobileSidebar();
     },
-    [activeThreadId, messages, stop, threads],
+    [activeThreadId, closeMobileSidebar, messages, stop, threads],
   );
 
   const deleteThread = useCallback(
@@ -1037,6 +1063,29 @@ export function App() {
     },
     [activeThreadId, busy, messages, stop, threads],
   );
+
+  const deleteAllChats = useCallback(() => {
+    if (busy) return;
+    stop();
+    setAppError(null);
+    setContextTrimNotice(null);
+    setInput("");
+    setImageFile(null);
+    setDeleteAllChatsOpen(false);
+    const fresh = createEmptyThread(webSearchDefaultEnabled);
+    setThreads([fresh]);
+    setActiveThreadId(fresh.id);
+    setMessages([]);
+  }, [busy, stop, webSearchDefaultEnabled]);
+
+  const clearBrowserCache = useCallback(() => {
+    if (busy) return;
+    stop();
+    setClearBrowserCacheOpen(false);
+    clearPlaygroundBrowserStorage();
+    closeMobileSidebar();
+    window.location.reload();
+  }, [busy, closeMobileSidebar, stop]);
 
   const send = useCallback(async (options?: { force?: boolean }) => {
     const textNow = inputValueRef.current.trim();
@@ -1343,22 +1392,52 @@ export function App() {
 
   return (
     <div className="flex h-[100dvh] overflow-hidden bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100">
+      {isMobileLayout && mobileSidebarOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 bg-neutral-900/45 md:hidden"
+          aria-label="Chat-Verlauf schließen"
+          onClick={closeMobileSidebar}
+        />
+      ) : null}
       <aside
-        className={`flex shrink-0 flex-col border-r border-neutral-200 bg-[#f9f9f9] transition-[width] duration-200 ease-out dark:border-neutral-800 dark:bg-neutral-900 ${
-          sidebarCollapsed ? "w-[52px]" : "w-[260px]"
+        className={`flex shrink-0 flex-col border-r border-neutral-200 bg-[#f9f9f9] transition-[width,transform] duration-200 ease-out dark:border-neutral-800 dark:bg-neutral-900 ${
+          isMobileLayout
+            ? `fixed inset-y-0 left-0 z-50 w-[min(100vw,280px)] max-w-[min(100vw,280px)] shadow-xl ${
+                mobileSidebarOpen
+                  ? "translate-x-0"
+                  : "pointer-events-none -translate-x-full"
+              }`
+            : sidebarCollapsed
+              ? "w-[52px]"
+              : "w-[260px]"
         }`}
       >
         <div className="flex h-12 shrink-0 items-center gap-1 border-b border-neutral-200/80 px-2 dark:border-neutral-800">
           <button
             type="button"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200/80 dark:text-neutral-400 dark:hover:bg-neutral-800"
-            onClick={() => setSidebarCollapsed((v) => !v)}
-            title={sidebarCollapsed ? "Sidebar ausklappen" : "Sidebar einklappen"}
-            aria-label="Sidebar umschalten"
+            onClick={toggleSidebar}
+            title={
+              isMobileLayout
+                ? mobileSidebarOpen
+                  ? "Chat-Verlauf schließen"
+                  : "Chat-Verlauf öffnen"
+                : sidebarCollapsed
+                  ? "Sidebar ausklappen"
+                  : "Sidebar einklappen"
+            }
+            aria-label={
+              isMobileLayout
+                ? mobileSidebarOpen
+                  ? "Chat-Verlauf schließen"
+                  : "Chat-Verlauf öffnen"
+                : "Sidebar umschalten"
+            }
           >
             <span className="text-lg leading-none">≡</span>
           </button>
-          {!sidebarCollapsed && (
+          {sidebarExpanded && (
             <div className="flex min-w-0 flex-1 items-center gap-2">
               <span className="truncate text-sm font-semibold tracking-tight dark:text-neutral-100">{title}</span>
               <BetaBadge />
@@ -1366,7 +1445,7 @@ export function App() {
           )}
         </div>
 
-        {!sidebarCollapsed ? (
+        {sidebarExpanded ? (
           <div className="flex min-h-0 flex-1 flex-col overflow-hidden py-2">
             <button
               type="button"
@@ -1435,7 +1514,7 @@ export function App() {
           </div>
         ) : null}
 
-        {sidebarCollapsed && (
+        {!isMobileLayout && sidebarCollapsed ? (
           <div className="mt-2 flex flex-col items-center gap-1 px-1">
             <button
               type="button"
@@ -1456,26 +1535,61 @@ export function App() {
               →
             </button>
           </div>
-        )}
+        ) : null}
 
         <div className="mt-auto shrink-0 space-y-1 border-t border-neutral-200/80 p-2 dark:border-neutral-800">
-          {!sidebarCollapsed ? <PlaygroundLinksSidebar links={footerLinks} /> : null}
+          <button
+            type="button"
+            onClick={() => setDeleteAllChatsOpen(true)}
+            disabled={busy || speechBusy}
+            className={`w-full rounded-md py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-red-950/40 dark:hover:text-red-400 ${
+              sidebarExpanded ? "px-2 text-left" : "px-0"
+            }`}
+            title="Alle Chats löschen"
+            aria-label="Alle Chats löschen"
+          >
+            {sidebarExpanded ? "Alle Chats löschen" : "🗑"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setClearBrowserCacheOpen(true)}
+            disabled={busy || speechBusy}
+            className={`w-full rounded-md py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-red-950/40 dark:hover:text-red-400 ${
+              sidebarExpanded ? "px-2 text-left" : "px-0"
+            }`}
+            title="Browsercache löschen"
+            aria-label="Browsercache löschen"
+          >
+            {sidebarExpanded ? "Browsercache löschen" : "⌫"}
+          </button>
+          {sidebarExpanded ? <PlaygroundLinksSidebar links={footerLinks} /> : null}
           <button
             type="button"
             onClick={() => setShowGlossary(true)}
             className={`w-full rounded-md py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-neutral-200/70 dark:text-neutral-400 dark:hover:bg-neutral-800/70 ${
-              sidebarCollapsed ? "px-0" : "px-2 text-left"
+              sidebarExpanded ? "px-2 text-left" : "px-0"
             }`}
             title="Begriffe erklärt"
           >
-            {sidebarCollapsed ? "?" : "Einfach erklärt"}
+            {sidebarExpanded ? "Einfach erklärt" : "?"}
           </button>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950">
-        <div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-neutral-200 px-2 sm:px-3 dark:border-neutral-800">
-          <div className="flex min-w-0 flex-1 items-center gap-2">
+        <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-neutral-200 px-2 sm:gap-3 sm:px-3 dark:border-neutral-800">
+          <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+            {isMobileLayout ? (
+              <button
+                type="button"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
+                onClick={openMobileSidebar}
+                aria-label="Chat-Verlauf öffnen"
+                title="Chat-Verlauf"
+              >
+                <span className="text-lg leading-none">≡</span>
+              </button>
+            ) : null}
             <label htmlFor="model-select" className="sr-only">
               Modell
             </label>
@@ -1501,15 +1615,15 @@ export function App() {
                 ))
               )}
             </select>
-            {sidebarCollapsed ? <BetaBadge /> : null}
+            {isMobileLayout || sidebarCollapsed ? <BetaBadge /> : null}
           </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <label htmlFor="theme-select" className="sr-only sm:not-sr-only text-xs text-neutral-500 dark:text-neutral-400">
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <label htmlFor="theme-select" className="sr-only">
               Design
             </label>
             <select
               id="theme-select"
-              className="rounded-lg border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-800 shadow-sm outline-none focus:ring-2 focus:ring-neutral-300 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:focus:ring-neutral-600"
+              className="max-w-[6.5rem] rounded-lg border border-neutral-200 bg-white px-1.5 py-1.5 text-xs text-neutral-800 shadow-sm outline-none focus:ring-2 focus:ring-neutral-300 sm:max-w-none sm:px-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:focus:ring-neutral-600"
               value={themePreference}
               onChange={(e) => setThemePreference(e.target.value as ThemePreference)}
             >
@@ -1522,8 +1636,8 @@ export function App() {
         <div className="flex min-h-0 flex-1 flex-col">
           <div ref={chatScrollRef} className="min-h-0 flex-1 overflow-y-auto">
             {messages.length === 0 ? (
-              <div className="flex h-full min-h-[50vh] flex-col items-center justify-center px-6 pb-40">
-                <h1 className="text-center text-3xl font-semibold tracking-tight text-neutral-900 md:text-4xl dark:text-neutral-100">
+              <div className="flex h-full min-h-[50vh] flex-col items-center justify-center px-4 pb-32 sm:px-6 sm:pb-40">
+                <h1 className="text-center text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl md:text-4xl dark:text-neutral-100">
                   Bereit loszulegen?
                 </h1>
                 <p className="mt-3 max-w-md text-center text-sm text-neutral-500 dark:text-neutral-400">
@@ -1565,7 +1679,7 @@ export function App() {
             )}
           </div>
 
-          <div className="shrink-0 border-t border-transparent bg-gradient-to-t from-white via-white to-transparent px-4 pb-3 pt-2 dark:from-neutral-950 dark:via-neutral-950 dark:to-transparent">
+          <div className="shrink-0 border-t border-transparent bg-gradient-to-t from-white via-white to-transparent px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-3 dark:from-neutral-950 dark:via-neutral-950 dark:to-transparent">
             {contextTrimNotice && (
               <div
                 className="mx-auto mb-2 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
@@ -1604,8 +1718,11 @@ export function App() {
                 </button>
               </div>
             )}
-            <div className="mx-auto flex max-w-3xl items-end gap-1.5">
-              <ModelSettingsDock
+            <div
+              className={`mx-auto w-full max-w-3xl ${isMobileLayout ? "" : "flex items-end gap-1 sm:gap-1.5"}`}
+            >
+              {!isMobileLayout ? (
+                <ModelSettingsDock
                 open={showModelSettings}
                 onOpenChange={setShowModelSettings}
                 busy={busy}
@@ -1638,6 +1755,7 @@ export function App() {
                 webSearchConsentGranted={webSearchConsentGranted}
                 onRevokeWebSearchConsent={revokeWebSearchConsent}
               />
+              ) : null}
               <div className="min-w-0 flex-1">
                 <WebSearchModeChip
                   config={webSearchConfig}
@@ -1647,19 +1765,56 @@ export function App() {
                   onDeactivate={() => setActiveThreadWebSearch(false)}
                 />
                 <div
-                  className={`flex gap-2 rounded-[28px] border border-neutral-200 bg-white py-2 pl-2 pr-2 shadow-[0_2px_12px_rgba(0,0,0,0.08)] dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
-                    voiceRecording.active ? "items-center" : "items-end"
+                  className={`flex gap-1 rounded-[24px] border border-neutral-200 bg-white py-1.5 pl-1.5 pr-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.08)] sm:gap-2 sm:rounded-[28px] sm:py-2 sm:pl-2 sm:pr-2 dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
+                    voiceRecording.active ? "items-center" : "items-center sm:items-end"
                   } ${activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-800/80" : ""}`}
                   onPasteCapture={handleComposerPasteCapture}
                 >
+                  {isMobileLayout ? (
+                    <ModelSettingsDock
+                      open={showModelSettings}
+                      onOpenChange={setShowModelSettings}
+                      busy={busy}
+                      modelId={model}
+                      onReapplyPreset={() => applyPreset(model)}
+                      temperature={temperature}
+                      setTemperature={setTemperature}
+                      topP={topP}
+                      setTopP={setTopP}
+                      topK={topK}
+                      setTopK={setTopK}
+                      presencePenalty={presencePenalty}
+                      setPresencePenalty={setPresencePenalty}
+                      maxTokens={maxTokens}
+                      setMaxTokens={setMaxTokens}
+                      extraBody={extraBody}
+                      setExtraBody={setExtraBody}
+                      gptOssReasoning={gptOssReasoning}
+                      setGptOssReasoning={setGptOssReasoning}
+                      qwenVisionOcr={qwenVisionOcr}
+                      setQwenVisionOcr={setQwenVisionOcr}
+                      systemPrompt={systemPrompt}
+                      setSystemPrompt={setSystemPrompt}
+                      webSearchConfig={webSearchConfig}
+                      webSearchDefaultEnabled={webSearchDefaultEnabled}
+                      onWebSearchDefaultChange={(enabled) => {
+                        if (!enabled) setWebSearchDefaultEnabled(false);
+                        else requestEnableWebSearch("default");
+                      }}
+                      webSearchConsentGranted={webSearchConsentGranted}
+                      onRevokeWebSearchConsent={revokeWebSearchConsent}
+                      panelMode="fixed"
+                      buttonClassName="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
+                    />
+                  ) : null}
                   <label
-                    className={`flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800 ${
+                    className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 sm:h-10 sm:w-10 dark:text-neutral-400 dark:hover:bg-neutral-800 ${
                       voiceRecording.active || speechTranscribing
                         ? "pointer-events-none opacity-40"
                         : ""
                     }`}
                   >
-                    <span className="text-xl font-light leading-none">+</span>
+                    <span className="text-lg font-light leading-none sm:text-xl">+</span>
                     <input
                       type="file"
                       accept="image/*"
@@ -1686,9 +1841,13 @@ export function App() {
                   ) : (
                     <textarea
                       ref={inputRef}
-                      className="min-h-[44px] max-h-52 flex-1 resize-none overflow-hidden bg-transparent py-2.5 text-[15px] leading-relaxed text-neutral-900 outline-none placeholder:text-neutral-400 dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                      className="max-h-52 min-h-[40px] flex-1 resize-none self-center overflow-hidden bg-transparent py-2 text-sm leading-normal text-neutral-900 outline-none placeholder:text-neutral-400 sm:min-h-[44px] sm:py-2.5 sm:text-[15px] sm:leading-relaxed dark:text-neutral-100 dark:placeholder:text-neutral-500"
                       rows={1}
-                      placeholder="Stelle irgendeine Frage (Bild: einfügen oder +)"
+                      placeholder={
+                        isMobileLayout
+                          ? "Nachricht…"
+                          : "Stelle irgendeine Frage (Bild: einfügen oder +)"
+                      }
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       disabled={busy || speechBusy || webSearchBusy}
@@ -1700,7 +1859,7 @@ export function App() {
                       }}
                     />
                   )}
-                  <div className="flex shrink-0 items-center gap-1 pb-0.5">
+                  <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 sm:pb-0.5">
                     {speechToText?.enabled ? (
                       <SpeechInputButton
                         ref={speechInputRef}
@@ -1712,7 +1871,11 @@ export function App() {
                         rateLimits={playgroundRateLimits}
                         onBusyChange={setSpeechBusy}
                         onRecordingChange={handleVoiceRecordingChange}
-                        className={voiceRecording.active ? "sr-only" : undefined}
+                        className={
+                          voiceRecording.active
+                            ? "sr-only"
+                            : "h-8 w-8 sm:h-9 sm:w-9"
+                        }
                       />
                     ) : null}
                     {voiceRecording.active ? (
@@ -1727,7 +1890,7 @@ export function App() {
                       <button
                         type="button"
                         onClick={stop}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white text-xs font-medium text-neutral-800 hover:bg-neutral-50 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white text-xs font-medium text-neutral-800 hover:bg-neutral-50 sm:h-9 sm:w-9 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
                         title="Stoppen"
                       >
                         ■
@@ -1737,7 +1900,7 @@ export function App() {
                         type="button"
                         onClick={() => void send()}
                         disabled={!canSend}
-                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-35 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-35 sm:h-9 sm:w-9 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
                         title="Senden"
                       >
                         <span className="text-sm">↑</span>
@@ -1758,7 +1921,10 @@ export function App() {
                 </button>
               </PlaygroundLinksFooter>
               {footerLinks.length > 0 ? <br /> : null}
-              <span className="mt-1 inline-block max-w-2xl text-[11px] text-neutral-500 dark:text-neutral-400">
+              <span className="mt-1 inline-block max-w-2xl text-[11px] text-neutral-500 sm:hidden dark:text-neutral-400">
+                Test-Playground — Chats nur im Browser, nicht für Produktion oder vertrauliche Inhalte.
+              </span>
+              <span className="mt-1 hidden max-w-2xl text-[11px] text-neutral-500 sm:inline-block dark:text-neutral-400">
                 Dies ist ein reiner Test-Playground: Du kannst die Modelle ausprobieren und dir einen ersten Eindruck
                 verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den produktiven Einsatz noch
                 für vertrauliche oder geschäftskritische Inhalte vorgesehen.
@@ -1773,6 +1939,17 @@ export function App() {
         webSearchConfig={webSearchConfig}
         onConfirm={confirmWebSearchConsent}
         onCancel={cancelWebSearchConsent}
+      />
+      <DeleteAllChatsDialog
+        open={deleteAllChatsOpen}
+        chatCount={threads.length}
+        onConfirm={deleteAllChats}
+        onCancel={() => setDeleteAllChatsOpen(false)}
+      />
+      <ClearBrowserCacheDialog
+        open={clearBrowserCacheOpen}
+        onConfirm={clearBrowserCache}
+        onCancel={() => setClearBrowserCacheOpen(false)}
       />
       <SettingsGlossaryOverlay
         open={showGlossary}
