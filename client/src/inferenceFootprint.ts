@@ -6,74 +6,85 @@ import {
   MODEL_QWEN_36,
 } from "./modelPresets";
 
+/** Eingabe-Token zählen mit 1/4 Gewicht (Prefill vs. Decode). */
+export const PROMPT_TOKEN_ENERGY_WEIGHT = 0.25;
+
 /**
- * Geschätztes Verhältnis Energie/CO₂: Ausgabe-Token zu Eingabe-Token (Decode vs. Prefill).
- * Kalibriert auf typischen Chat (ca. 10k Prompt / 1,5k Completion), vgl. Inferenz-Benchmarks.
+ * Gemessene GPU-Energie pro 1 Mio. gewichtete Token (kWh), Benchmark-Tabelle Mittwald AI Hosting.
  */
-export const CO2_OUTPUT_TO_INPUT_RATIO = 2.5;
-
-/** Referenz-Workload zur Ableitung getrennter Faktoren aus dem Blended-Wert. */
-const REFERENCE_PROMPT_TOKENS = 10_000;
-const REFERENCE_COMPLETION_TOKENS = 1_500;
-
-/** Blended: kg CO₂eq pro 1 Mio. Token (Mittel aus Eingabe+Ausgabe im Referenz-Mix). */
-export const CO2_KG_PER_MILLION_TOKENS: Record<string, number> = {
-  [MODEL_QWEN_36]: 0.36,
-  [MODEL_GPT_OSS]: 0.39,
-  [MODEL_MINISTRAL]: 0.72,
-  [MODEL_QWEN_35]: 1.08,
-  [MODEL_DEVSTRAL]: 1.17,
+export const KWH_PER_MILLION_TOKENS: Record<string, number> = {
+  [MODEL_QWEN_36]: 0.55,
+  [MODEL_GPT_OSS]: 0.73,
+  [MODEL_QWEN_35]: 1.31,
+  [MODEL_MINISTRAL]: 1.5,
+  [MODEL_DEVSTRAL]: 2.5,
 };
 
-export const DEFAULT_CO2_KG_PER_MILLION_TOKENS = 0.72;
+export const DEFAULT_KWH_PER_MILLION_TOKENS = KWH_PER_MILLION_TOKENS[MODEL_MINISTRAL];
 
-export function getCo2KgPerMillionTokens(modelId: string): number {
-  return CO2_KG_PER_MILLION_TOKENS[modelId] ?? DEFAULT_CO2_KG_PER_MILLION_TOKENS;
+/**
+ * Deutscher Strommix (UBA, vorläufig 2025): spezifische CO₂-Emissionen je kWh Stromverbrauch.
+ * @see https://www.umweltbundesamt.de/themen/co2-emissionen-pro-kilowattstunde-strom-2025-nur
+ */
+export const GRID_CO2_GRAMS_PER_KWH = 344;
+
+export function getKwhPerMillionTokens(modelId: string): number {
+  return KWH_PER_MILLION_TOKENS[modelId] ?? DEFAULT_KWH_PER_MILLION_TOKENS;
 }
 
-function splitCo2Factors(blendedKgPerMio: number): {
-  promptKgPerMio: number;
-  completionKgPerMio: number;
-} {
-  const refTotal = REFERENCE_PROMPT_TOKENS + REFERENCE_COMPLETION_TOKENS;
-  const promptKgPerMio =
-    (blendedKgPerMio * refTotal) /
-    (REFERENCE_PROMPT_TOKENS + CO2_OUTPUT_TO_INPUT_RATIO * REFERENCE_COMPLETION_TOKENS);
-  return {
-    promptKgPerMio,
-    completionKgPerMio: promptKgPerMio * CO2_OUTPUT_TO_INPUT_RATIO,
-  };
-}
-
-export function getCo2KgPerMillionPromptTokens(modelId: string): number {
-  return splitCo2Factors(getCo2KgPerMillionTokens(modelId)).promptKgPerMio;
-}
-
-export function getCo2KgPerMillionCompletionTokens(modelId: string): number {
-  return splitCo2Factors(getCo2KgPerMillionTokens(modelId)).completionKgPerMio;
-}
-
-function tokensToCo2Grams(tokens: number, kgPerMillion: number): number {
-  if (tokens <= 0) return 0;
-  return (tokens / 1_000_000) * kgPerMillion * 1000;
+/** Gewichtete Tokenzahl: Eingabe × 1/4 + Ausgabe. */
+export function effectiveInferenceTokens(
+  promptTokens: number,
+  completionTokens: number,
+): number {
+  return promptTokens * PROMPT_TOKEN_ENERGY_WEIGHT + completionTokens;
 }
 
 /**
- * CO₂-Äquivalent in Gramm; Eingabe- und Ausgabe-Token mit unterschiedlichen Faktoren.
+ * CO₂-Äquivalent in Gramm:
+ * ((Eingabe × 1/4) + Ausgabe) / 1 Mio. × kWh/Mio. × g CO₂/kWh
  */
 export function estimateInferenceCo2Grams(
   promptTokens: number,
   completionTokens: number,
   modelId: string,
 ): number {
-  const { promptKgPerMio, completionKgPerMio } = splitCo2Factors(getCo2KgPerMillionTokens(modelId));
-  return (
-    tokensToCo2Grams(promptTokens, promptKgPerMio) +
-    tokensToCo2Grams(completionTokens, completionKgPerMio)
-  );
+  const weighted = effectiveInferenceTokens(promptTokens, completionTokens);
+  if (weighted <= 0) return 0;
+  const kwh = (weighted / 1_000_000) * getKwhPerMillionTokens(modelId);
+  return kwh * GRID_CO2_GRAMS_PER_KWH;
 }
 
 export const CO2_FOOTPRINT_TOOLTIP =
-  "Schätzung: Eingabe- und Ausgabe-Token getrennt (Ausgabe ~2,5× Eingabe pro Token, Referenz ~10k/1,5k). " +
-  "Blended kg/Mio.: Qwen3.6 ~0,36, gpt-oss ~0,39, Ministral ~0,72, Qwen3.5 ~1,08, Devstral ~1,17. " +
+  "Schätzung aus Benchmark-Energie (kWh pro 1 Mio. gewichtete Token): " +
+  "Eingabe-Token × 1/4 + Ausgabe-Token, dann × deutscher Strommix (UBA 2025) 344 g CO₂/kWh. " +
+  "kWh/Mio.: Qwen3.6 0,55 · gpt-oss 0,73 · Qwen3.5 1,31 · Ministral 1,50 · Devstral 2,50. " +
   "Ohne API-Nutzungsdaten nur Ausgabe-Token grob geschätzt.";
+
+export const SESSION_CO2_TOOLTIP =
+  `${CO2_FOOTPRINT_TOOLTIP} Summe aller Antworten über alle Chats in diesem Browser.`;
+
+export function formatCo2Grams(grams: number): string {
+  return grams.toLocaleString("de-DE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: grams < 1 ? 3 : 2,
+  });
+}
+
+export type Co2UsageMessage = {
+  role: string;
+  usage?: { co2Grams?: number | null };
+};
+
+/** Summiert gespeicherte CO₂-Schätzungen aller Assistenten-Antworten. */
+export function sumCo2GramsFromAssistantMessages(
+  messages: ReadonlyArray<Co2UsageMessage>,
+): number {
+  let sum = 0;
+  for (const m of messages) {
+    if (m.role !== "assistant") continue;
+    const g = m.usage?.co2Grams;
+    if (typeof g === "number" && g > 0) sum += g;
+  }
+  return sum;
+}

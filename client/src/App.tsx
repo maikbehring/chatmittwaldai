@@ -20,7 +20,13 @@ import { VoiceRecordingControls } from "./VoiceRecordingControls";
 import { ChatMarkdown } from "./ChatMarkdown";
 import { ImageLightbox } from "./ImageLightbox";
 import { createRafStreamBatcher } from "./streamDeltaBatch";
-import { CO2_FOOTPRINT_TOOLTIP, estimateInferenceCo2Grams } from "./inferenceFootprint";
+import {
+  CO2_FOOTPRINT_TOOLTIP,
+  estimateInferenceCo2Grams,
+  formatCo2Grams,
+  sumCo2GramsFromAssistantMessages,
+} from "./inferenceFootprint";
+import { SessionCo2Footprint } from "./SessionCo2Footprint";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 import { WebSearchGlobeToggle, WebSearchModeChip } from "./WebSearchComposerControl";
 import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
@@ -40,7 +46,12 @@ import {
   PlaygroundLinksInline,
   PlaygroundLinksSidebar,
 } from "./PlaygroundExternalLinks";
-import { withDefaultBugLink, type PlaygroundLink } from "./playgroundLinks";
+import {
+  legalFooterLinks,
+  sidebarMenuLinks,
+  withDefaultBugLink,
+  type PlaygroundLink,
+} from "./playgroundLinks";
 import {
   createEmptyThread,
   deriveThreadTitle,
@@ -290,13 +301,7 @@ function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
       ? prompt + completion
       : null;
 
-  const co2Fmt =
-    stats.co2Grams == null
-      ? null
-      : stats.co2Grams.toLocaleString("de-DE", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: stats.co2Grams < 1 ? 3 : 2,
-        });
+  const co2Fmt = stats.co2Grams == null ? null : formatCo2Grams(stats.co2Grams);
 
   const sep = (
     <span className="mx-1.5 text-neutral-300 dark:text-neutral-600" aria-hidden>
@@ -547,6 +552,8 @@ export function App() {
   const [systemPrompt, setSystemPrompt] = useState(() => initial.systemPrompt ?? "");
   const [playgroundLinks, setPlaygroundLinks] = useState<PlaygroundLink[]>([]);
   const footerLinks = useMemo(() => withDefaultBugLink(playgroundLinks), [playgroundLinks]);
+  const menuLinks = useMemo(() => sidebarMenuLinks(footerLinks), [footerLinks]);
+  const legalLinks = useMemo(() => legalFooterLinks(footerLinks), [footerLinks]);
   const [webSearchConfig, setWebSearchConfig] = useState<WebSearchConfig | null>(null);
   const [webSearchDefaultEnabled, setWebSearchDefaultEnabled] = useState(
     () => Boolean(initial.webSearchDefaultEnabled),
@@ -654,6 +661,15 @@ export function App() {
     () => threads.find((t) => t.id === activeThreadId)?.webSearchEnabled ?? false,
     [threads, activeThreadId],
   );
+
+  const sessionCo2Grams = useMemo(() => {
+    let sum = 0;
+    for (const t of threads) {
+      const msgs = (t.id === activeThreadId ? messages : t.messages) as ChatMessage[];
+      sum += sumCo2GramsFromAssistantMessages(msgs);
+    }
+    return sum;
+  }, [threads, activeThreadId, messages]);
 
   const setActiveThreadWebSearch = useCallback(
     (enabled: boolean) => {
@@ -1538,6 +1554,11 @@ export function App() {
         ) : null}
 
         <div className="mt-auto shrink-0 space-y-1 border-t border-neutral-200/80 p-2 dark:border-neutral-800">
+          {sidebarExpanded ? (
+            <SessionCo2Footprint grams={sessionCo2Grams} className="px-2 pb-1" />
+          ) : (
+            <SessionCo2Footprint grams={sessionCo2Grams} compact className="pb-1" />
+          )}
           <button
             type="button"
             onClick={() => setDeleteAllChatsOpen(true)}
@@ -1562,7 +1583,7 @@ export function App() {
           >
             {sidebarExpanded ? "Browsercache löschen" : "⌫"}
           </button>
-          {sidebarExpanded ? <PlaygroundLinksSidebar links={footerLinks} /> : null}
+          {sidebarExpanded ? <PlaygroundLinksSidebar links={menuLinks} /> : null}
           <button
             type="button"
             onClick={() => setShowGlossary(true)}
@@ -1644,7 +1665,7 @@ export function App() {
                   Stelle eine Frage oder nutze + für ein Bild. Nur in diesem Browser gespeichert.
                 </p>
                 <PlaygroundLinksInline
-                  links={footerLinks}
+                  links={menuLinks}
                   className="mt-5 max-w-md text-center text-xs text-neutral-500 dark:text-neutral-400"
                 >
                   <button
@@ -1911,16 +1932,26 @@ export function App() {
               </div>
             </div>
             <p className="mx-auto mt-2 max-w-3xl px-2 text-center text-[10px] leading-relaxed text-neutral-400 dark:text-neutral-500">
-              <PlaygroundLinksFooter links={footerLinks}>
-                <button
-                  type="button"
-                  className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                  onClick={() => setShowModelsOverview(true)}
-                >
-                  Modellübersicht
-                </button>
-              </PlaygroundLinksFooter>
-              {footerLinks.length > 0 ? <br /> : null}
+              <button
+                type="button"
+                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
+                onClick={() => setShowModelsOverview(true)}
+              >
+                Modellübersicht
+              </button>
+              {menuLinks.length > 0 ? (
+                <>
+                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
+                  <PlaygroundLinksFooter links={menuLinks} />
+                </>
+              ) : null}
+              {sessionCo2Grams > 0 ? (
+                <>
+                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
+                  <SessionCo2Footprint grams={sessionCo2Grams} compact inline />
+                </>
+              ) : null}
+              <br />
               <span className="mt-1 inline-block max-w-2xl text-[11px] text-neutral-500 sm:hidden dark:text-neutral-400">
                 Test-Playground — Chats nur im Browser, nicht für Produktion oder vertrauliche Inhalte.
               </span>
@@ -1929,6 +1960,14 @@ export function App() {
                 verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den produktiven Einsatz noch
                 für vertrauliche oder geschäftskritische Inhalte vorgesehen.
               </span>
+              {legalLinks.length > 0 ? (
+                <>
+                  <br />
+                  <span className="mt-2 inline-block">
+                    <PlaygroundLinksFooter links={legalLinks} />
+                  </span>
+                </>
+              ) : null}
             </p>
           </div>
         </div>
