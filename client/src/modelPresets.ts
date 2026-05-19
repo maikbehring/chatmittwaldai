@@ -21,6 +21,8 @@ export const MODEL_DEVSTRAL = "Devstral-Small-2-24B-Instruct-2512";
 export const MODEL_GPT_OSS = "gpt-oss-120b";
 export const MODEL_QWEN_35 = "Qwen3.5-122B-A10B-FP8";
 export const MODEL_QWEN_36 = "Qwen3.6-35B-A3B-FP8";
+/** EUrouter (OpenAI-kompatibel), nicht mittwald AI Hosting. */
+export const MODEL_DEEPSEEK_V4_PRO = "deepseek-v4-pro";
 
 export function getInferencePreset(modelId: string): InferencePresetSlice {
   switch (modelId) {
@@ -59,6 +61,14 @@ export function getInferencePreset(modelId: string): InferencePresetSlice {
         maxTokens: 32768,
         hint: "Doku: Non-Thinking (enable_thinking false), Allgemein 0.7/0.8/20, presence_penalty 1.5; Vision separat.",
       };
+    case MODEL_DEEPSEEK_V4_PRO:
+      return {
+        temperature: 0.3,
+        topP: 0.95,
+        extraBody: null,
+        maxTokens: 8192,
+        hint: "Über EUrouter; konservatives Chat-Preset (kein mittwald-Doku-Preset).",
+      };
     default:
       return {
         temperature: 0.7,
@@ -71,6 +81,10 @@ export function getInferencePreset(modelId: string): InferencePresetSlice {
 
 export function isQwen3Model(modelId: string): boolean {
   return modelId === MODEL_QWEN_35 || modelId === MODEL_QWEN_36;
+}
+
+export function isEurouterModel(modelId: string, eurouterModelIds: string[]): boolean {
+  return eurouterModelIds.length > 0 && eurouterModelIds.includes(modelId);
 }
 
 /** Vision-Overrides laut Qwen-Modellseiten (Thinking aus, Parameter, kürzere Ausgabe). */

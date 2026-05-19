@@ -16,6 +16,10 @@ import {
   pickWebSearchQueryModel,
   synthesizeGoogleSearchQuery,
 } from "./webSearchQuerySynthesis.js";
+import {
+  anonymizeMessagesForEurouter,
+  getAnonymizeModelId,
+} from "./anonymizeMessages.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "../..");
@@ -34,6 +38,42 @@ const ALLOWED_MODELS = (process.env.PLAYGROUND_ALLOWED_MODELS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
+
+const EUROUTER_API_KEY = process.env.EUROUTER_API_KEY?.trim() || "";
+const EUROUTER_BASE_URL = (
+  process.env.EUROUTER_BASE_URL || "https://api.eurouter.ai/api/v1"
+).replace(/\/$/, "");
+
+/** Zusätzliche Modell-IDs über EUrouter (OpenAI-kompatibel). Nur aktiv mit EUROUTER_API_KEY. */
+function parseEurouterModelIds() {
+  if (!EUROUTER_API_KEY) return [];
+  const raw = process.env.PLAYGROUND_EUROUTER_MODELS;
+  if (raw != null && /^(none|off|-)$/i.test(String(raw).trim())) return [];
+  const fallback = "deepseek-v4-pro";
+  const src = raw != null && String(raw).trim() !== "" ? String(raw).trim() : fallback;
+  return src
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+}
+
+const EUROUTER_MODEL_IDS = parseEurouterModelIds();
+const EUROUTER_MODEL_SET = new Set(EUROUTER_MODEL_IDS);
+
+function isEurouterModel(modelId) {
+  return typeof modelId === "string" && EUROUTER_MODEL_SET.has(modelId);
+}
+
+/** Request-Body für EUrouter: bevorzugt max_completion_tokens (OpenAI-kompatibel). */
+function chatBodyForEurouter(body) {
+  const o = { ...body };
+  if (typeof o.max_tokens === "number" && o.max_completion_tokens == null) {
+    o.max_completion_tokens = o.max_tokens;
+    delete o.max_tokens;
+  }
+  return o;
+}
+
 const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 524288);
 const BRAND_TITLE = process.env.PLAYGROUND_BRAND_TITLE || "Mittwald KI-Playground";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
@@ -164,6 +204,9 @@ function sanitizeChatBody(body) {
   if (ALLOWED_MODELS.length && !ALLOWED_MODELS.includes(out.model)) {
     return { error: "Dieses Modell ist für diesen Playground nicht freigegeben." };
   }
+  if (isEurouterModel(out.model) && !EUROUTER_API_KEY) {
+    return { error: "EUrouter ist nicht konfiguriert (EUROUTER_API_KEY fehlt)." };
+  }
   const msgErr = validateMessages(out.messages);
   if (msgErr) return { error: msgErr };
   if (out.tools !== undefined) {
@@ -181,6 +224,11 @@ function filterModelsPayload(json) {
     ...json,
     data: json.data.filter((m) => m?.id && ALLOWED_MODELS.includes(m.id)),
   };
+}
+
+function filterEurouterModelsByAllowlist(ids) {
+  if (ALLOWED_MODELS.length === 0) return ids;
+  return ids.filter((id) => ALLOWED_MODELS.includes(id));
 }
 
 async function main() {
@@ -257,6 +305,11 @@ async function main() {
         maxAudioBytes: MAX_AUDIO_BYTES,
       },
       webSearch: getWebSearchConfig(),
+      eurouterModelIds: EUROUTER_MODEL_IDS,
+      anonymousMode: {
+        enabled: Boolean(EUROUTER_API_KEY && EUROUTER_MODEL_IDS.length > 0),
+        anonymizeModel: getAnonymizeModelId(),
+      },
       links: getPlaygroundLinks(),
       rateLimits: RATE_LIMITS,
       aiHostingUrl:
@@ -423,7 +476,17 @@ async function main() {
       } catch {
         return jsonError(res, 502, "bad_upstream", "Ungültige Antwort der Modell-API.");
       }
-      res.json(filterModelsPayload(json));
+      let merged = json;
+      if (EUROUTER_MODEL_IDS.length > 0) {
+        const euEffective = filterEurouterModelsByAllowlist(EUROUTER_MODEL_IDS);
+        const data = Array.isArray(json?.data) ? json.data : [];
+        const seen = new Set(data.map((m) => m?.id).filter(Boolean));
+        const extraRows = euEffective
+          .filter((id) => !seen.has(id))
+          .map((id) => ({ id, object: "model", owned_by: "eurouter" }));
+        merged = { ...json, data: [...data, ...extraRows] };
+      }
+      res.json(filterModelsPayload(merged));
     } catch (e) {
       console.error(e);
       return jsonError(res, 502, "models_fetch_failed", "Modellliste konnte nicht geladen werden.");
@@ -435,21 +498,65 @@ async function main() {
     chatLimiter,
     express.json({ limit: MAX_BODY_BYTES }),
     async (req, res) => {
-    const parsed = sanitizeChatBody(req.body || {});
+    const rawBody = req.body || {};
+    const anonymousMode = rawBody.anonymous_mode === true;
+    const parsed = sanitizeChatBody(rawBody);
     if (parsed.error) {
       return jsonError(res, 400, "validation_error", parsed.error);
     }
 
+    const useEurouter = isEurouterModel(parsed.body.model);
+    if (anonymousMode && !useEurouter) {
+      return jsonError(
+        res,
+        400,
+        "validation_error",
+        "Anonymmodus gilt nur für EUrouter-Modelle.",
+      );
+    }
+
+    let requestBody = parsed.body;
+
+    if (useEurouter && anonymousMode) {
+      try {
+        requestBody = {
+          ...requestBody,
+          messages: await anonymizeMessagesForEurouter({
+            apiKey: API_KEY,
+            baseUrl: BASE_URL,
+            messages: requestBody.messages,
+          }),
+        };
+        res.setHeader("X-Playground-Anonymous-Mode", "applied");
+      } catch (e) {
+        console.error("Anonymisierung:", e);
+        return jsonError(
+          res,
+          502,
+          "anonymize_failed",
+          e instanceof Error ? e.message : "Anonymisierung fehlgeschlagen.",
+        );
+      }
+    }
+
+    const chatUrl = useEurouter
+      ? `${EUROUTER_BASE_URL}/chat/completions`
+      : `${BASE_URL}/chat/completions`;
+    const authKey = useEurouter ? EUROUTER_API_KEY : API_KEY;
+    if (useEurouter) {
+      requestBody = chatBodyForEurouter(requestBody);
+    }
+
     let upstream;
     try {
-      upstream = await fetch(`${BASE_URL}/chat/completions`, {
+      upstream = await fetch(chatUrl, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${API_KEY}`,
+          Authorization: `Bearer ${authKey}`,
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
-        body: JSON.stringify(parsed.body),
+        body: JSON.stringify(requestBody),
       });
     } catch (e) {
       console.error(e);
@@ -511,6 +618,9 @@ async function main() {
 
   const server = app.listen(PORT, () => {
     console.log(`Playground-Server läuft auf http://localhost:${PORT}`);
+    if (EUROUTER_MODEL_IDS.length > 0) {
+      console.log(`EUrouter-Zusatzmodelle: ${EUROUTER_MODEL_IDS.join(", ")}`);
+    }
     if (fs.existsSync(staticDir)) {
       console.log(`Statische Dateien: ${staticDir}`);
     } else {

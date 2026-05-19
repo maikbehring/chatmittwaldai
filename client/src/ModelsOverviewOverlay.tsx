@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import {
   getInferencePreset,
+  MODEL_DEEPSEEK_V4_PRO,
   MODEL_DEVSTRAL,
   MODEL_GPT_OSS,
   MODEL_MINISTRAL,
@@ -10,6 +11,7 @@ import {
 
 const MODEL_DOCS_URL =
   "https://developer.mittwald.de/de/docs/v2/platform/aihosting/models/";
+const EUROUTER_DEEPSEEK_URL = "https://www.eurouter.ai/models/deepseek-v4-pro";
 
 type Props = {
   open: boolean;
@@ -47,6 +49,12 @@ const MODEL_ROWS: { id: string; title: string; teaser: string }[] = [
     title: "Qwen 3.6 (35B)",
     teaser:
       "Effizientes Qwen‑Modell mit hohem Kontext; gleiche Instruct‑Logik wie 3.5, andere Modellgröße.",
+  },
+  {
+    id: MODEL_DEEPSEEK_V4_PRO,
+    title: "DeepSeek V4 Pro (EUrouter)",
+    teaser:
+      "Großes Reasoning‑/Chat‑Modell mit EU‑Routing; Anfragen laufen über EUrouter, nicht über mittwald AI Hosting.",
   },
 ];
 
@@ -116,20 +124,38 @@ export function ModelsOverviewOverlay({ open, onClose }: Props) {
           <ul className="space-y-4">
             {MODEL_ROWS.map(({ id, title, teaser }) => {
               const hint = getInferencePreset(id).hint;
+              const docHref = id === MODEL_DEEPSEEK_V4_PRO ? EUROUTER_DEEPSEEK_URL : MODEL_DOCS_URL;
+              const docLabel =
+                id === MODEL_DEEPSEEK_V4_PRO
+                  ? "EUrouter Modellseite"
+                  : "Modell‑Dokumentation (mittwald Developer)";
               return (
-                <li key={id} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0 dark:border-slate-700">
-                  <p className="font-mono text-[11px] font-medium text-slate-500 dark:text-slate-400">{id}</p>
+                <li
+                  key={id}
+                  className="border-b border-slate-100 pb-4 last:border-0 last:pb-0 dark:border-slate-700"
+                >
+                  <p className="font-mono text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                    {id}
+                  </p>
                   <p className="mt-1 font-medium text-ink">{title}</p>
                   <p className="mt-1 text-ink-muted">{teaser}</p>
                   <p className="mt-2 text-xs text-slate-600 dark:text-slate-400">
-                    <span className="font-medium text-ink">Preset‑Hinweis:</span> {hint}
+                    <span className="font-medium text-ink">Preset‑Hinweis:</span> {hint}{" "}
+                    <a className="text-accent underline" href={docHref} target="_blank" rel="noreferrer">
+                      ({docLabel})
+                    </a>
                   </p>
                 </li>
               );
             })}
           </ul>
           <p className="mt-4 text-xs text-ink-muted">
-            Welche IDs im Dropdown erscheinen, kann auf dem Server über{" "}
+            Mit gesetztem <span className="font-mono text-[11px]">EUROUTER_API_KEY</span> ergänzt der Server
+            die Modellliste um IDs aus{" "}
+            <span className="font-mono text-[11px]">PLAYGROUND_EUROUTER_MODELS</span> (Standard:{" "}
+            <span className="font-mono text-[11px]">deepseek-v4-pro</span>; Abschalten:{" "}
+            <span className="font-mono text-[11px]">PLAYGROUND_EUROUTER_MODELS=none</span>). Welche IDs im
+            Dropdown erscheinen, kann zusätzlich über{" "}
             <span className="font-mono text-[11px]">PLAYGROUND_ALLOWED_MODELS</span> eingeschränkt sein.
           </p>
         </div>

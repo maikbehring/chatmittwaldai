@@ -37,6 +37,8 @@ export type PlaygroundSettings = {
   qwenVisionOcr: boolean;
   /** Standard für neu erstellte Chats (nur Browser). */
   webSearchDefaultEnabled?: boolean;
+  /** EUrouter: Nachrichten vor Versand über Qwen3.6 anonymisieren (nur Server). */
+  anonymousModeEnabled?: boolean;
 };
 
 export type PersistedV3 = PlaygroundSettings & {

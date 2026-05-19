@@ -3,8 +3,10 @@ import {
   getInferencePreset,
   getQwenVisionInference,
   getQwenVisionOcrInference,
+  isEurouterModel,
   isQwen3Model,
   MODEL_GPT_OSS,
+  MODEL_DEEPSEEK_V4_PRO,
   MODEL_DEVSTRAL,
   MODEL_MINISTRAL,
   type GptOssReasoning,
@@ -29,6 +31,7 @@ import {
 import { SessionCo2Footprint } from "./SessionCo2Footprint";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 import { WebSearchGlobeToggle, WebSearchModeChip } from "./WebSearchComposerControl";
+import { AnonymousModeChip, AnonymousModeToggle } from "./AnonymousModeControl";
 import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
 import { DeleteAllChatsDialog } from "./DeleteAllChatsDialog";
 import { ClearBrowserCacheDialog } from "./ClearBrowserCacheDialog";
@@ -559,6 +562,11 @@ export function App() {
     () => Boolean(initial.webSearchDefaultEnabled),
   );
   const [webSearchBusy, setWebSearchBusy] = useState(false);
+  const [eurouterModelIds, setEurouterModelIds] = useState<string[]>([MODEL_DEEPSEEK_V4_PRO]);
+  const [anonymousModeAvailable, setAnonymousModeAvailable] = useState(false);
+  const [anonymousModeEnabled, setAnonymousModeEnabled] = useState(
+    () => Boolean(initial.anonymousModeEnabled),
+  );
   const [webSearchConsentOpen, setWebSearchConsentOpen] = useState(false);
   const [webSearchConsentGranted, setWebSearchConsentGranted] = useState(() =>
     hasWebSearchConsent(),
@@ -834,6 +842,7 @@ export function App() {
         systemPrompt,
         qwenVisionOcr,
         webSearchDefaultEnabled,
+        anonymousModeEnabled,
       });
       return next;
     });
@@ -852,6 +861,7 @@ export function App() {
     systemPrompt,
     qwenVisionOcr,
     webSearchDefaultEnabled,
+    anonymousModeEnabled,
   ]);
 
   useEffect(() => {
@@ -896,6 +906,10 @@ export function App() {
           }
           const cWeb = (c as { webSearch?: WebSearchConfig }).webSearch;
           if (cWeb?.enabled) setWebSearchConfig(cWeb);
+          const euIds = (c as { eurouterModelIds?: string[] }).eurouterModelIds;
+          if (Array.isArray(euIds) && euIds.length > 0) setEurouterModelIds(euIds);
+          const anon = (c as { anonymousMode?: { enabled?: boolean } }).anonymousMode;
+          setAnonymousModeAvailable(Boolean(anon?.enabled));
           const cLinks = (c as { links?: PlaygroundLink[] }).links;
           if (Array.isArray(cLinks)) setPlaygroundLinks(cLinks);
         }
@@ -935,6 +949,10 @@ export function App() {
   }, [imageFile]);
 
   const speechTranscribing = speechBusy && !voiceRecording.active;
+
+  const activeEurouterModel = isEurouterModel(model, eurouterModelIds);
+  const useAnonymousPipeline =
+    anonymousModeEnabled && activeEurouterModel && anonymousModeAvailable;
 
   const canSend = useMemo(() => {
     const t = input.trim();
@@ -1144,6 +1162,15 @@ export function App() {
 
     const useWebSearch = wantsWebSearch && hasWebSearchConsent();
 
+    if (useAnonymousPipeline && file) {
+      setAppError({
+        kind: "plain",
+        message:
+          "Anonymmodus: Bilder werden nicht an EUrouter gesendet. Bitte ohne Bild senden oder Anonymmodus deaktivieren.",
+      });
+      return;
+    }
+
     setInput("");
     setImageFile(null);
 
@@ -1207,7 +1234,7 @@ export function App() {
       extraBody && Object.keys(extraBody).length > 0 ? { ...extraBody } : null;
 
     if (hasVision) {
-      if (model === MODEL_MINISTRAL || model === MODEL_DEVSTRAL) {
+      if (model === MODEL_MINISTRAL || model === MODEL_DEVSTRAL || model === MODEL_DEEPSEEK_V4_PRO) {
         effTemp = 0.1;
       } else if (isQwen3Model(model)) {
         const qv = qwenVisionOcr ? getQwenVisionOcrInference() : getQwenVisionInference();
@@ -1271,6 +1298,7 @@ export function App() {
     if (effMax !== null && effMax > 0) body.max_tokens = effMax;
     if (effExtra && Object.keys(effExtra).length > 0) body.extra_body = effExtra;
     body.stream_options = { include_usage: true };
+    if (useAnonymousPipeline) body.anonymous_mode = true;
 
     const streamStart = performance.now();
     let firstContentAt: number | null = null;
@@ -1386,6 +1414,9 @@ export function App() {
     activeThreadWebSearch,
     webSearchConfig,
     playgroundRateLimits,
+    useAnonymousPipeline,
+    anonymousModeEnabled,
+    eurouterModelIds,
     requestEnableWebSearch,
   ]);
 
@@ -1785,10 +1816,18 @@ export function App() {
                   disabled={busy || voiceRecording.active || speechTranscribing}
                   onDeactivate={() => setActiveThreadWebSearch(false)}
                 />
+                <AnonymousModeChip
+                  active={useAnonymousPipeline}
+                  busy={busy && useAnonymousPipeline}
+                  disabled={voiceRecording.active || speechTranscribing}
+                  onDeactivate={() => setAnonymousModeEnabled(false)}
+                />
                 <div
                   className={`flex gap-1 rounded-[24px] border border-neutral-200 bg-white py-1.5 pl-1.5 pr-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.08)] sm:gap-2 sm:rounded-[28px] sm:py-2 sm:pl-2 sm:pr-2 dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
                     voiceRecording.active ? "items-center" : "items-center sm:items-end"
-                  } ${activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-800/80" : ""}`}
+                  } ${activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-800/80" : ""} ${
+                    useAnonymousPipeline ? "ring-1 ring-violet-300/50 dark:ring-violet-800/80" : ""
+                  }`}
                   onPasteCapture={handleComposerPasteCapture}
                 >
                   {isMobileLayout ? (
@@ -1854,6 +1893,13 @@ export function App() {
                     searching={webSearchBusy}
                     disabled={busy || voiceRecording.active || speechTranscribing}
                     onToggle={toggleThreadWebSearch}
+                  />
+                  <AnonymousModeToggle
+                    available={anonymousModeAvailable}
+                    active={anonymousModeEnabled}
+                    busy={busy && useAnonymousPipeline}
+                    disabled={busy || voiceRecording.active || speechTranscribing}
+                    onToggle={() => setAnonymousModeEnabled((v) => !v)}
                   />
                   {voiceRecording.active ? (
                     <SpeechWaveform stream={voiceRecording.stream} />
