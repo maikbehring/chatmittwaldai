@@ -970,7 +970,18 @@ export function App() {
     abortRef.current?.abort();
     abortRef.current = null;
     setBusy(false);
+    setWebSearchBusy(false);
   }, []);
+
+  const changeModel = useCallback(
+    (modelId: string) => {
+      if (modelId === model) return;
+      if (busy || webSearchBusy) stop();
+      setModel(modelId);
+      applyPreset(modelId);
+    },
+    [applyPreset, busy, model, stop, webSearchBusy],
+  );
 
   const newChat = useCallback(() => {
     stop();
@@ -1618,13 +1629,12 @@ export function App() {
               id="model-select"
               className="max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-2 text-sm font-semibold text-neutral-900 outline-none hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-300 dark:text-neutral-100 dark:hover:bg-neutral-800/80 dark:focus-visible:ring-neutral-600 sm:max-w-[min(100%,28rem)]"
               value={model}
-              onChange={(e) => {
-                const m = e.target.value;
-                setModel(m);
-                applyPreset(m);
-              }}
-              disabled={busy}
-              title="Modell"
+              onChange={(e) => changeModel(e.target.value)}
+              title={
+                busy || webSearchBusy
+                  ? "Modell wechseln (bricht die laufende Anfrage ab)"
+                  : "Modell"
+              }
             >
               {models.length === 0 ? (
                 <option value={model}>{model}</option>
