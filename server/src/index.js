@@ -38,6 +38,8 @@ const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 524288);
 const BRAND_TITLE = process.env.PLAYGROUND_BRAND_TITLE || "Mittwald KI-Playground";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 const TRUST_PROXY = process.env.TRUST_PROXY === "1";
+const APP_API_KEY = process.env.PLAYGROUND_APP_API_KEY?.trim() || "";
+const REQUIRE_ORIGIN_CHECK = process.env.REQUIRE_ORIGIN_CHECK !== "0";
 
 const RATE_LIMITS = getRateLimitConfig();
 const RATE_WINDOW_MS = RATE_LIMITS.windowMs;
@@ -45,6 +47,7 @@ const RATE_MAX_CHAT = RATE_LIMITS.chat;
 const RATE_MAX_MODELS = RATE_LIMITS.models;
 const RATE_MAX_TRANSCRIBE = RATE_LIMITS.transcribe;
 const RATE_MAX_WEB_SEARCH = RATE_LIMITS.webSearch;
+const RATE_MAX_GLOBAL = RATE_LIMITS.global;
 
 const DEFAULT_AI_HOSTING_URL = "https://www.mittwald.de/mstudio/ai-hosting";
 const SELF_HOST_REPO_URL = "https://github.com/maikbehring/chatmittwaldai";
@@ -90,8 +93,24 @@ function parseCorsOrigins(raw) {
   return list;
 }
 
+function hasWildcardOrigin(raw) {
+  return raw
+    .split(",")
+    .map((entry) => entry.trim())
+    .filter(Boolean)
+    .some((entry) => entry === "*" || entry.includes("*"));
+}
+
 function jsonError(res, status, code, message) {
   res.status(status).type("application/json").json({ error: { code, message } });
+}
+
+function normalizeOriginValue(value) {
+  try {
+    return new URL(String(value)).origin;
+  } catch {
+    return String(value).trim().toLowerCase();
+  }
 }
 
 /** Versucht, aus einer Upstream-JSON-Fehlerantwort eine kurze Meldung zu lesen. */
@@ -192,6 +211,13 @@ async function main() {
   const app = express();
   if (TRUST_PROXY) app.set("trust proxy", 1);
 
+  if (process.env.NODE_ENV === "production" && hasWildcardOrigin(CORS_ORIGIN)) {
+    console.error(
+      "Unsichere CORS-Konfiguration in Produktion: CORS_ORIGIN darf keinen Wildcard-Wert enthalten.",
+    );
+    process.exit(1);
+  }
+
   app.use(
     helmet({
       contentSecurityPolicy: false,
@@ -241,6 +267,53 @@ async function main() {
     handler: createRateLimitHandler("transcribe"),
   });
 
+  const globalLimiter = rateLimit({
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX_GLOBAL,
+    standardHeaders: true,
+    legacyHeaders: false,
+    handler: createRateLimitHandler("global"),
+  });
+
+  const sensitiveAllowedOrigins = parseCorsOrigins(CORS_ORIGIN);
+  const allowedOriginSet =
+    sensitiveAllowedOrigins === true
+      ? null
+      : new Set(sensitiveAllowedOrigins.map((origin) => normalizeOriginValue(origin)));
+
+  function requireApiKey(req, res, next) {
+    if (!APP_API_KEY) return next();
+    const presented = req.get("x-playground-api-key");
+    if (!presented || presented !== APP_API_KEY) {
+      return jsonError(res, 401, "unauthorized", "Ungültiger oder fehlender API-Key.");
+    }
+    return next();
+  }
+
+  function requireAllowedOrigin(req, res, next) {
+    if (!REQUIRE_ORIGIN_CHECK) return next();
+    if (sensitiveAllowedOrigins === true) return next();
+    if (!(allowedOriginSet instanceof Set) || allowedOriginSet.size === 0) {
+      return jsonError(
+        res,
+        500,
+        "origin_policy_error",
+        "Origin-Policy ist nicht korrekt konfiguriert.",
+      );
+    }
+    const origin = req.get("origin");
+    if (!origin) {
+      return jsonError(res, 403, "origin_required", "Origin-Header fehlt.");
+    }
+    const normalizedOrigin = normalizeOriginValue(origin);
+    if (!allowedOriginSet.has(normalizedOrigin)) {
+      return jsonError(res, 403, "origin_forbidden", "Origin ist nicht erlaubt.");
+    }
+    return next();
+  }
+
+  app.use("/api", globalLimiter);
+
   app.get("/api/health", (_req, res) => {
     res.json({ ok: true, title: BRAND_TITLE });
   });
@@ -275,6 +348,8 @@ async function main() {
 
   app.post(
     "/api/web/search",
+    requireApiKey,
+    requireAllowedOrigin,
     webSearchLimiter,
     express.json({ limit: 196608 }),
     async (req, res) => {
@@ -327,6 +402,8 @@ async function main() {
 
   app.post(
     "/api/audio/transcriptions",
+    requireApiKey,
+    requireAllowedOrigin,
     transcribeLimiter,
     express.json({ limit: AUDIO_JSON_LIMIT }),
     async (req, res) => {
@@ -432,6 +509,8 @@ async function main() {
 
   app.post(
     "/api/chat/completions",
+    requireApiKey,
+    requireAllowedOrigin,
     chatLimiter,
     express.json({ limit: MAX_BODY_BYTES }),
     async (req, res) => {
