@@ -3,6 +3,7 @@
  */
 
 const SCOPE_LABELS = {
+  global: "API-Anfragen",
   chat: "Chat-Nachrichten",
   models: "Modellliste",
   transcribe: "Spracheingaben",
@@ -15,6 +16,7 @@ export function getRateLimitConfig() {
   return {
     windowMs,
     windowMinutes,
+    global: Number(process.env.RATE_LIMIT_MAX_GLOBAL || 300),
     chat: Number(process.env.RATE_LIMIT_MAX_CHAT || 40),
     models: Number(process.env.RATE_LIMIT_MAX_MODELS || 120),
     transcribe: Number(process.env.RATE_LIMIT_MAX_TRANSCRIBE || 30),
@@ -23,6 +25,7 @@ export function getRateLimitConfig() {
 }
 
 function maxRequestsForScope(scope, limits) {
+  if (scope === "global") return limits.global;
   if (scope === "chat") return limits.chat;
   if (scope === "models") return limits.models;
   if (scope === "transcribe") return limits.transcribe;
@@ -56,7 +59,7 @@ export function buildRateLimitPayload(scope, windowMs) {
   };
 }
 
-/** @param {"chat"|"models"|"transcribe"|"webSearch"} scope */
+/** @param {"global"|"chat"|"models"|"transcribe"|"webSearch"} scope */
 export function createRateLimitHandler(scope) {
   return (_req, res, _next, options) => {
     const windowMs = options.windowMs;

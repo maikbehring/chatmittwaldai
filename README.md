@@ -100,7 +100,9 @@ Alle Variablen sind in [.env.example](./.env.example) dokumentiert. Wichtigste:
 | `PLAYGROUND_BRAND_TITLE` | Anzeigename (optional) |
 | `PLAYGROUND_LINK_*_URL` / `*_LABEL` | Footer- & Sidebar-Links (Impressum, Datenschutz, …) — siehe [Footer- & Rechts-Links](#footer--rechts-links-per-env) |
 | `CORS_ORIGIN` | Erlaubte Browser-Origins (z. B. `https://playground.example.com`). In Produktion **nicht** `*`. |
-| `RATE_LIMIT_*` | Schutz vor Missbrauch (Chat, Modellliste, Transkription, Websuche) |
+| `PLAYGROUND_APP_API_KEY` | Optionaler zusätzlicher Zugriffsschutz: erwartet Header `x-playground-api-key` auf kostenintensiven POST-Routen |
+| `REQUIRE_ORIGIN_CHECK` | Standard `1`: erzwingt Origin-Check auf kostenintensiven POST-Routen (mit `0` deaktivierbar) |
+| `RATE_LIMIT_*` | Schutz vor Missbrauch (global, Chat, Modellliste, Transkription, Websuche) |
 | `PLAYGROUND_MAX_MESSAGES` | Max. Nachrichten pro Request (Standard: 60) |
 | `PLAYGROUND_WHISPER_*` | Spracheingabe (Modell, Sprache, max. Audio-Größe) |
 | `WEB_SEARCH_PROVIDER` | `duckduckgo` (Standard), `serpapi` (Google) oder `serper` (Google) |
@@ -110,6 +112,22 @@ Alle Variablen sind in [.env.example](./.env.example) dokumentiert. Wichtigste:
 | `WEB_SEARCH_MAX_RESULTS` | Treffer pro Anfrage (Standard: 5) |
 | `WEB_SEARCH_QUERY_MODEL` | Optional: mittwald-Modell-ID für Kurz-Google-Query aus Chat-Auszug (sonst erstes `PLAYGROUND_ALLOWED_MODELS`; kostet 1 zusätzliche LLM-Anfrage pro Websuche) |
 | `RATE_LIMIT_MAX_WEB_SEARCH` | Rate-Limit für `POST /api/web/search` (Standard: 30 pro Fenster) |
+| `RATE_LIMIT_MAX_GLOBAL` | Globales Rate-Limit für alle `/api/*`-Routen (Standard: 300 pro Fenster) |
+
+### Zugriffsschutz für kostenintensive API-Routen
+
+Die Endpunkte `POST /api/chat/completions`, `POST /api/audio/transcriptions` und `POST /api/web/search` können optional zusätzlich geschützt werden:
+
+- Setze `PLAYGROUND_APP_API_KEY` in der Server-Umgebung.
+- Sende im Client bei den genannten Routen den Header `x-playground-api-key`.
+- Bei fehlendem/falschem Key antwortet der Server mit `401 unauthorized`.
+
+Zusätzlich erzwingt der Server standardmäßig einen `Origin`-Check für diese Routen (`REQUIRE_ORIGIN_CHECK=1`).
+
+Wichtig für Produktion:
+
+- Verwende eine explizite CORS-Allowlist via `CORS_ORIGIN`.
+- Starte nicht mit Wildcard-CORS (`*`) in `NODE_ENV=production` — der Server beendet sich in diesem Fall absichtlich mit Fehler.
 
 ### Websuche (Betrieb & UI)
 
