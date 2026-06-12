@@ -6,12 +6,20 @@ export default {
     extend: {
       fontFamily: {
         sans: [
+          "Inter",
           "ui-sans-serif",
           "system-ui",
           "Segoe UI",
           "Roboto",
           "Helvetica Neue",
           "Arial",
+          "sans-serif",
+        ],
+        display: [
+          "Inter",
+          "Proxima Nova",
+          "ui-sans-serif",
+          "system-ui",
           "sans-serif",
         ],
       },
@@ -28,6 +36,17 @@ export default {
           DEFAULT: "rgb(var(--accent) / <alpha-value>)",
           hover: "rgb(var(--accent-hover) / <alpha-value>)",
         },
+        playground: {
+          sidebar: "rgb(var(--playground-sidebar) / <alpha-value>)",
+          main: "rgb(var(--playground-main) / <alpha-value>)",
+          border: "rgb(var(--playground-border) / <alpha-value>)",
+          send: "rgb(var(--playground-send) / <alpha-value>)",
+          ink: "rgb(var(--playground-ink) / <alpha-value>)",
+          muted: "rgb(var(--playground-muted) / 0.64)",
+        },
+      },
+      maxWidth: {
+        playground: "909px",
       },
     },
   },

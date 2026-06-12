@@ -10,8 +10,6 @@ import {
   type GptOssReasoning,
 } from "./modelPresets";
 import { ModelSettingsDock } from "./ModelSettingsDock";
-import { SettingsGlossaryOverlay } from "./SettingsGlossaryOverlay";
-import { ModelsOverviewOverlay } from "./ModelsOverviewOverlay";
 import { ChatImageAttachment, ChatImagePreviewThumb } from "./ChatImageAttachment";
 import { SpeechInputButton, type SpeechInputHandle } from "./SpeechInputButton";
 import { SpeechTranscribingIndicator } from "./SpeechTranscribingIndicator";
@@ -41,17 +39,10 @@ import {
   hasWebSearchConsent,
   setWebSearchConsent,
 } from "./webSearchConsent";
-import {
-  PlaygroundLinksFooter,
-  PlaygroundLinksInline,
-  PlaygroundLinksSidebar,
-} from "./PlaygroundExternalLinks";
-import {
-  legalFooterLinks,
-  sidebarMenuLinks,
-  withDefaultBugLink,
-  type PlaygroundLink,
-} from "./playgroundLinks";
+import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
+import { PlaygroundSidebarCta } from "./PlaygroundSidebarCta";
+import { ArrowUpIcon, MenuIcon, PenIcon } from "./playgroundIcons";
+import { mainFooterLinks, withDefaultBugLink, type PlaygroundLink } from "./playgroundLinks";
 import {
   createEmptyThread,
   deriveThreadTitle,
@@ -351,7 +342,7 @@ function renderUserMessageContent(
 ) {
   if (typeof content === "string") {
     return (
-      <div className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+      <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
         {content}
       </div>
     );
@@ -360,10 +351,7 @@ function renderUserMessageContent(
     <div className="space-y-2">
       {content.map((part, j) =>
         part.type === "text" ? (
-          <div
-            key={j}
-            className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed"
-          >
+          <div key={j} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
             {part.text}
           </div>
         ) : (
@@ -387,7 +375,7 @@ function renderMessageContent(
   if (typeof content === "string") {
     if (streaming) {
       return (
-        <div className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink">
+        <div className="playground-text-chat max-w-none whitespace-pre-wrap break-words text-playground-muted">
           {content}
         </div>
       );
@@ -401,7 +389,7 @@ function renderMessageContent(
           streaming ? (
             <div
               key={j}
-              className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink"
+              className="playground-text-chat max-w-none whitespace-pre-wrap break-words text-playground-muted"
             >
               {part.text}
             </div>
@@ -437,13 +425,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
   if (message.role === "user") {
     return (
       <div className="flex w-full justify-end">
-        <div className="flex max-w-[min(85%,28rem)] flex-col items-end gap-1">
-        {message.webSearch && message.webSearch.results.length > 0 ? (
+        <div className="flex w-full max-w-full flex-col items-end gap-1">
+          {message.webSearch && message.webSearch.results.length > 0 ? (
             <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
               Websuche ({message.webSearch.provider}) · {message.webSearch.results.length} Treffer
             </p>
           ) : null}
-        <div className="rounded-[1.25rem] bg-[#f4f4f4] px-4 py-3 text-[15px] leading-relaxed text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100">
+          <div className="playground-user-prompt-bubble playground-text-user-prompt">
             {renderUserMessageContent(message.content, onImageOpen)}
           </div>
         </div>
@@ -453,7 +441,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   return (
     <div className="flex w-full justify-start">
       <div className="flex max-w-full flex-col items-start">
-        <div className="max-w-full text-[15px] leading-relaxed text-neutral-900 dark:text-neutral-100">
+        <div className="playground-text-chat max-w-full text-playground-muted">
           {webSearchPending ? (
             <p className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400" role="status">
               <span
@@ -552,8 +540,7 @@ export function App() {
   const [systemPrompt, setSystemPrompt] = useState(() => initial.systemPrompt ?? "");
   const [playgroundLinks, setPlaygroundLinks] = useState<PlaygroundLink[]>([]);
   const footerLinks = useMemo(() => withDefaultBugLink(playgroundLinks), [playgroundLinks]);
-  const menuLinks = useMemo(() => sidebarMenuLinks(footerLinks), [footerLinks]);
-  const legalLinks = useMemo(() => legalFooterLinks(footerLinks), [footerLinks]);
+  const pageFooterLinks = useMemo(() => mainFooterLinks(footerLinks), [footerLinks]);
   const [webSearchConfig, setWebSearchConfig] = useState<WebSearchConfig | null>(null);
   const [webSearchDefaultEnabled, setWebSearchDefaultEnabled] = useState(
     () => Boolean(initial.webSearchDefaultEnabled),
@@ -581,10 +568,8 @@ export function App() {
   );
   const [aiHostingUrl, setAiHostingUrl] = useState(DEFAULT_AI_HOSTING_URL);
   const [selfHostRepoUrl, setSelfHostRepoUrl] = useState(GITHUB_REPO_URL);
-  const [showGlossary, setShowGlossary] = useState(false);
   const [deleteAllChatsOpen, setDeleteAllChatsOpen] = useState(false);
   const [clearBrowserCacheOpen, setClearBrowserCacheOpen] = useState(false);
-  const [showModelsOverview, setShowModelsOverview] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -1418,7 +1403,7 @@ export function App() {
   }, [voiceRecording.active]);
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100">
+    <div className="flex h-[100dvh] overflow-hidden bg-playground-main text-playground-ink antialiased">
       {isMobileLayout && mobileSidebarOpen ? (
         <button
           type="button"
@@ -1428,22 +1413,22 @@ export function App() {
         />
       ) : null}
       <aside
-        className={`flex shrink-0 flex-col border-r border-neutral-200 bg-[#f9f9f9] transition-[width,transform] duration-200 ease-out dark:border-neutral-800 dark:bg-neutral-900 ${
+        className={`flex shrink-0 flex-col border-r border-playground-border bg-playground-sidebar px-2 transition-[width,transform] duration-200 ease-out ${
           isMobileLayout
-            ? `fixed inset-y-0 left-0 z-50 w-[min(100vw,280px)] max-w-[min(100vw,280px)] shadow-xl ${
+            ? `fixed inset-y-0 left-0 z-50 w-[min(100vw,329px)] max-w-[min(100vw,329px)] shadow-xl ${
                 mobileSidebarOpen
                   ? "translate-x-0"
                   : "pointer-events-none -translate-x-full"
               }`
             : sidebarCollapsed
               ? "w-[52px]"
-              : "w-[260px]"
+              : "w-[329px]"
         }`}
       >
-        <div className="flex h-12 shrink-0 items-center gap-1 border-b border-neutral-200/80 px-2 dark:border-neutral-800">
+        <div className="flex h-[62px] shrink-0 items-center gap-5 border-b border-playground-border p-3">
           <button
             type="button"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200/80 dark:text-neutral-400 dark:hover:bg-neutral-800"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-playground-ink hover:bg-playground-muted/5"
             onClick={toggleSidebar}
             title={
               isMobileLayout
@@ -1462,31 +1447,34 @@ export function App() {
                 : "Sidebar umschalten"
             }
           >
-            <span className="text-lg leading-none">≡</span>
+            <MenuIcon />
           </button>
           {sidebarExpanded && (
             <div className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="truncate text-sm font-semibold tracking-tight dark:text-neutral-100">{title}</span>
-              <BetaBadge />
+              <span className="playground-text-body truncate font-bold text-playground-ink">{title}</span>
             </div>
           )}
         </div>
 
         {sidebarExpanded ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden py-2">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <button
               type="button"
               onClick={newChat}
               disabled={busy || speechBusy}
-              className="mx-2 mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-200/70 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-100 dark:hover:bg-neutral-800/80"
+              className="flex items-center gap-3 rounded-lg p-3 hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40"
               title="Neuer Chat"
             >
-              <span className="text-base leading-none" aria-hidden>
-                ✎
+              <span
+                className="playground-surface-glass-strong flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-playground-ink"
+                aria-hidden
+              >
+                <PenIcon />
               </span>
-              Neuer Chat
+              <span className="playground-text-new-chat text-playground-muted">Neuer Chat</span>
             </button>
-            <p className="mb-1 px-3 text-[11px] font-medium text-neutral-500 dark:text-neutral-500">
+            <div className="border-t border-playground-border py-3">
+            <p className="playground-text-small px-3 py-2 font-bold text-playground-ink">
               Aktuelle
             </p>
             <nav
@@ -1499,16 +1487,18 @@ export function App() {
                   <div
                     key={t.id}
                     className={`group mb-0.5 flex items-center rounded-lg ${
-                      active
-                        ? "bg-neutral-200/80 dark:bg-neutral-800"
-                        : "hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50"
+                      active ? "bg-playground-muted/[0.08]" : "hover:bg-playground-muted/5"
                     }`}
                   >
                     <button
                       type="button"
                       onClick={() => selectThread(t.id)}
                       disabled={busy}
-                      className="min-w-0 flex-1 overflow-hidden rounded-lg px-2.5 py-2 text-left text-[13px] text-neutral-700 disabled:cursor-not-allowed dark:text-neutral-200"
+                      className={`playground-text-body min-w-0 flex-1 overflow-hidden rounded-lg px-3 py-2 text-left disabled:cursor-not-allowed ${
+                        active
+                          ? "font-bold text-playground-ink"
+                          : "font-medium text-playground-muted"
+                      }`}
                       title={
                         t.webSearchEnabled
                           ? `${t.title} (Websuche aktiv)`
@@ -1538,6 +1528,10 @@ export function App() {
                 );
               })}
             </nav>
+            </div>
+            <div className="px-1 py-6">
+              <PlaygroundSidebarCta href={aiHostingUrl} />
+            </div>
           </div>
         ) : null}
 
@@ -1564,9 +1558,9 @@ export function App() {
           </div>
         ) : null}
 
-        <div className="mt-auto shrink-0 space-y-1 border-t border-neutral-200/80 p-2 dark:border-neutral-800">
+        <div className="mt-auto shrink-0 space-y-0 border-t border-playground-border py-3">
           {sidebarExpanded ? (
-            <SessionCo2Footprint grams={sessionCo2Grams} className="px-2 pb-1" />
+            <SessionCo2Footprint grams={sessionCo2Grams} className="px-3 pb-2" />
           ) : (
             <SessionCo2Footprint grams={sessionCo2Grams} compact className="pb-1" />
           )}
@@ -1574,8 +1568,8 @@ export function App() {
             type="button"
             onClick={() => setDeleteAllChatsOpen(true)}
             disabled={busy || speechBusy}
-            className={`w-full rounded-md py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-red-950/40 dark:hover:text-red-400 ${
-              sidebarExpanded ? "px-2 text-left" : "px-0"
+            className={`playground-text-tiny w-full rounded-lg px-3 py-2 text-left font-medium text-playground-ink hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40 ${
+              sidebarExpanded ? "" : "px-0"
             }`}
             title="Alle Chats löschen"
             aria-label="Alle Chats löschen"
@@ -1586,30 +1580,19 @@ export function App() {
             type="button"
             onClick={() => setClearBrowserCacheOpen(true)}
             disabled={busy || speechBusy}
-            className={`w-full rounded-md py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-red-950/40 dark:hover:text-red-400 ${
-              sidebarExpanded ? "px-2 text-left" : "px-0"
+            className={`playground-text-tiny w-full rounded-lg px-3 py-2 text-left font-medium text-playground-ink hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40 ${
+              sidebarExpanded ? "" : "px-0"
             }`}
             title="Browsercache löschen"
             aria-label="Browsercache löschen"
           >
             {sidebarExpanded ? "Browsercache löschen" : "⌫"}
           </button>
-          {sidebarExpanded ? <PlaygroundLinksSidebar links={menuLinks} /> : null}
-          <button
-            type="button"
-            onClick={() => setShowGlossary(true)}
-            className={`w-full rounded-md py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-neutral-200/70 dark:text-neutral-400 dark:hover:bg-neutral-800/70 ${
-              sidebarExpanded ? "px-2 text-left" : "px-0"
-            }`}
-            title="Begriffe erklärt"
-          >
-            {sidebarExpanded ? "Einfach erklärt" : "?"}
-          </button>
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950">
-        <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-neutral-200 px-2 sm:gap-3 sm:px-3 dark:border-neutral-800">
+      <div className="flex min-w-0 flex-1 flex-col bg-playground-main">
+        <div className="flex h-[62px] shrink-0 items-center justify-between gap-3 border-b border-playground-border px-3 sm:px-6">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
             {isMobileLayout ? (
               <button
@@ -1627,7 +1610,7 @@ export function App() {
             </label>
             <select
               id="model-select"
-              className="max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-2 text-sm font-semibold text-neutral-900 outline-none hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-300 dark:text-neutral-100 dark:hover:bg-neutral-800/80 dark:focus-visible:ring-neutral-600 sm:max-w-[min(100%,28rem)]"
+              className="playground-text-small max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-8 font-bold text-playground-muted outline-none hover:bg-playground-muted/5 focus-visible:ring-2 focus-visible:ring-playground-border sm:max-w-[min(100%,28rem)]"
               value={model}
               onChange={(e) => changeModel(e.target.value)}
               title={
@@ -1654,7 +1637,7 @@ export function App() {
             </label>
             <select
               id="theme-select"
-              className="max-w-[6.5rem] rounded-lg border border-neutral-200 bg-white px-1.5 py-1.5 text-xs text-neutral-800 shadow-sm outline-none focus:ring-2 focus:ring-neutral-300 sm:max-w-none sm:px-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:focus:ring-neutral-600"
+              className="playground-theme-chevron playground-text-small max-w-[6.5rem] appearance-none rounded-lg border border-transparent bg-transparent bg-[length:1rem] bg-[right_0.25rem_center] bg-no-repeat py-1.5 pl-2 pr-7 font-bold text-playground-muted outline-none focus:ring-2 focus:ring-playground-border sm:max-w-none"
               value={themePreference}
               onChange={(e) => setThemePreference(e.target.value as ThemePreference)}
             >
@@ -1665,30 +1648,23 @@ export function App() {
           </div>
         </div>
         <div className="flex min-h-0 flex-1 flex-col">
-          <div ref={chatScrollRef} className="min-h-0 flex-1 overflow-y-auto">
+          <div ref={chatScrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
             {messages.length === 0 ? (
-              <div className="flex h-full min-h-[50vh] flex-col items-center justify-center px-4 pb-32 sm:px-6 sm:pb-40">
-                <h1 className="text-center text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl md:text-4xl dark:text-neutral-100">
-                  Bereit loszulegen?
-                </h1>
-                <p className="mt-3 max-w-md text-center text-sm text-neutral-500 dark:text-neutral-400">
-                  Stelle eine Frage oder nutze + für ein Bild. Nur in diesem Browser gespeichert.
-                </p>
-                <PlaygroundLinksInline
-                  links={menuLinks}
-                  className="mt-5 max-w-md text-center text-xs text-neutral-500 dark:text-neutral-400"
-                >
-                  <button
-                    type="button"
-                    className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                    onClick={() => setShowModelsOverview(true)}
-                  >
-                    Modellübersicht
-                  </button>
-                </PlaygroundLinksInline>
+              <div className="flex min-h-full flex-col items-center justify-center gap-12 px-4 py-8 sm:px-6">
+                <div className="flex max-w-5xl flex-col items-center gap-8 text-center">
+                  <p className="playground-text-hero-label font-bold text-playground-ink">
+                    mittwald Playground
+                  </p>
+                  <h1 className="playground-text-hero max-w-5xl text-playground-ink">
+                    Bereit loszulegen?
+                  </h1>
+                  <p className="playground-text-subtitle max-w-4xl font-medium text-playground-ink">
+                    Stelle eine Frage oder nutze + für ein Bild. Nur in diesem Browser gespeichert.
+                  </p>
+                </div>
               </div>
             ) : (
-              <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8">
+              <div className="mx-auto w-full max-w-playground space-y-6 px-4 py-8">
                 {messages.map((m, i) => (
                   <ChatMessageRow
                     key={i}
@@ -1708,9 +1684,30 @@ export function App() {
                 <div ref={bottomRef} />
               </div>
             )}
+            {appError?.kind === "rate_limit" ? (
+              <div
+                className="pointer-events-none absolute inset-0 z-20 flex items-start justify-center overflow-y-auto px-4 pb-8 pt-6 sm:items-center sm:px-6 sm:py-8"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="rate-limit-title"
+              >
+                <div className="pointer-events-auto w-full max-w-[907px]">
+                  <RateLimitNotice
+                    waitMinutes={appError.waitMinutes}
+                    scope={appError.scope}
+                    scopeLabel={appError.scopeLabel}
+                    maxRequests={appError.maxRequests}
+                    windowMinutes={appError.windowMinutes}
+                    rateLimits={playgroundRateLimits}
+                    aiHostingUrl={aiHostingUrl}
+                    selfHostRepoUrl={selfHostRepoUrl}
+                  />
+                </div>
+              </div>
+            ) : null}
           </div>
 
-          <div className="shrink-0 border-t border-transparent bg-gradient-to-t from-white via-white to-transparent px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-3 dark:from-neutral-950 dark:via-neutral-950 dark:to-transparent">
+          <div className="playground-main-glow shrink-0 border-t border-transparent bg-gradient-to-t from-playground-main via-playground-main to-transparent px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-3">
             {contextTrimNotice && (
               <div
                 className="mx-auto mb-2 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
@@ -1719,20 +1716,6 @@ export function App() {
                 {contextTrimNotice}
               </div>
             )}
-            {appError?.kind === "rate_limit" ? (
-              <div className="mx-auto mb-2 max-w-3xl">
-                <RateLimitNotice
-                  waitMinutes={appError.waitMinutes}
-                  scope={appError.scope}
-                  scopeLabel={appError.scopeLabel}
-                  maxRequests={appError.maxRequests}
-                  windowMinutes={appError.windowMinutes}
-                  rateLimits={playgroundRateLimits}
-                  aiHostingUrl={aiHostingUrl}
-                  selfHostRepoUrl={selfHostRepoUrl}
-                />
-              </div>
-            ) : null}
             {appError?.kind === "plain" ? (
               <div
                 className="mx-auto mb-2 max-w-3xl rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-100"
@@ -1750,13 +1733,14 @@ export function App() {
               </div>
             )}
             <div
-              className={`mx-auto w-full max-w-3xl ${isMobileLayout ? "" : "flex items-end gap-1 sm:gap-1.5"}`}
+              className={`mx-auto w-full max-w-playground ${isMobileLayout ? "" : "flex items-center gap-4"}`}
             >
               {!isMobileLayout ? (
                 <ModelSettingsDock
                 open={showModelSettings}
                 onOpenChange={setShowModelSettings}
                 busy={busy}
+                buttonClassName="flex h-6 w-6 shrink-0 items-center justify-center text-playground-ink transition hover:text-playground-muted disabled:opacity-40"
                 modelId={model}
                 onReapplyPreset={() => applyPreset(model)}
                 temperature={temperature}
@@ -1795,10 +1779,13 @@ export function App() {
                   disabled={busy || voiceRecording.active || speechTranscribing}
                   onDeactivate={() => setActiveThreadWebSearch(false)}
                 />
+                <div className={isMobileLayout ? "" : "flex items-center gap-4"}>
                 <div
-                  className={`flex gap-1 rounded-[24px] border border-neutral-200 bg-white py-1.5 pl-1.5 pr-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.08)] sm:gap-2 sm:rounded-[28px] sm:py-2 sm:pl-2 sm:pr-2 dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
-                    voiceRecording.active ? "items-center" : "items-center sm:items-end"
-                  } ${activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-800/80" : ""}`}
+                  className={`playground-surface-glass flex h-14 min-w-0 gap-2 rounded-full border border-transparent py-1.5 pl-5 pr-1.5 sm:h-16 sm:gap-2 sm:py-2 sm:pl-5 sm:pr-2 ${
+                    isMobileLayout ? "" : "flex-1"
+                  } ${voiceRecording.active ? "items-center" : "items-center"} ${
+                    activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-400/30" : ""
+                  }`}
                   onPasteCapture={handleComposerPasteCapture}
                 >
                   {isMobileLayout ? (
@@ -1839,7 +1826,7 @@ export function App() {
                     />
                   ) : null}
                   <label
-                    className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 sm:h-10 sm:w-10 dark:text-neutral-400 dark:hover:bg-neutral-800 ${
+                    className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-playground-ink hover:bg-playground-muted/5 sm:h-10 sm:w-10 ${
                       voiceRecording.active || speechTranscribing
                         ? "pointer-events-none opacity-40"
                         : ""
@@ -1872,7 +1859,7 @@ export function App() {
                   ) : (
                     <textarea
                       ref={inputRef}
-                      className="max-h-52 min-h-[40px] flex-1 resize-none self-center overflow-hidden bg-transparent py-2 text-sm leading-normal text-neutral-900 outline-none placeholder:text-neutral-400 sm:min-h-[44px] sm:py-2.5 sm:text-[15px] sm:leading-relaxed dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                      className="playground-composer-input max-h-52 min-h-[40px] flex-1 resize-none self-center overflow-hidden bg-transparent py-2 text-playground-ink outline-none placeholder:text-playground-muted sm:min-h-[44px] sm:py-2.5"
                       rows={1}
                       placeholder={
                         isMobileLayout
@@ -1890,25 +1877,59 @@ export function App() {
                       }}
                     />
                   )}
-                  <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 sm:pb-0.5">
-                    {speechToText?.enabled ? (
-                      <SpeechInputButton
-                        ref={speechInputRef}
-                        disabled={busy}
-                        language={speechToText.language}
-                        maxAudioBytes={speechToText.maxAudioBytes}
-                        onTranscript={handleSpeechTranscript}
-                        onError={setAppError}
-                        rateLimits={playgroundRateLimits}
-                        onBusyChange={setSpeechBusy}
-                        onRecordingChange={handleVoiceRecordingChange}
-                        className={
-                          voiceRecording.active
-                            ? "sr-only"
-                            : "h-8 w-8 sm:h-9 sm:w-9"
-                        }
-                      />
-                    ) : null}
+                  {isMobileLayout ? (
+                    <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 sm:pb-0.5">
+                      {speechToText?.enabled ? (
+                        <SpeechInputButton
+                          ref={speechInputRef}
+                          disabled={busy}
+                          language={speechToText.language}
+                          maxAudioBytes={speechToText.maxAudioBytes}
+                          onTranscript={handleSpeechTranscript}
+                          onError={setAppError}
+                          rateLimits={playgroundRateLimits}
+                          onBusyChange={setSpeechBusy}
+                          onRecordingChange={handleVoiceRecordingChange}
+                          className={
+                            voiceRecording.active
+                              ? "sr-only"
+                              : "h-8 w-8 sm:h-9 sm:w-9"
+                          }
+                        />
+                      ) : null}
+                      {voiceRecording.active ? (
+                        <VoiceRecordingControls
+                          disabled={busy}
+                          onCancel={() =>
+                            speechInputRef.current?.stopRecording({ skipTranscribe: true })
+                          }
+                          onConfirm={() => speechInputRef.current?.stopRecording()}
+                        />
+                      ) : busy ? (
+                        <button
+                          type="button"
+                          onClick={stop}
+                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white text-xs font-medium text-neutral-800 hover:bg-neutral-50 sm:h-9 sm:w-9 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                          title="Stoppen"
+                        >
+                          ■
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => void send()}
+                          disabled={!canSend}
+                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-playground-send text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35 sm:h-16 sm:w-16"
+                          title="Senden"
+                        >
+                          <ArrowUpIcon className="h-5 w-5 sm:h-6 sm:w-6" />
+                        </button>
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+                {!isMobileLayout ? (
+                  <div className="flex shrink-0 items-center">
                     {voiceRecording.active ? (
                       <VoiceRecordingControls
                         disabled={busy}
@@ -1921,7 +1942,7 @@ export function App() {
                       <button
                         type="button"
                         onClick={stop}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white text-xs font-medium text-neutral-800 hover:bg-neutral-50 sm:h-9 sm:w-9 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
+                        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-playground-border bg-playground-sidebar text-sm font-medium text-playground-ink hover:bg-playground-muted/5"
                         title="Stoppen"
                       >
                         ■
@@ -1931,54 +1952,37 @@ export function App() {
                         type="button"
                         onClick={() => void send()}
                         disabled={!canSend}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-35 sm:h-9 sm:w-9 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
+                        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-playground-send text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"
                         title="Senden"
                       >
-                        <span className="text-sm">↑</span>
+                        <ArrowUpIcon className="h-6 w-6" />
                       </button>
                     )}
                   </div>
+                ) : null}
                 </div>
               </div>
             </div>
-            <p className="mx-auto mt-2 max-w-3xl px-2 text-center text-[10px] leading-relaxed text-neutral-400 dark:text-neutral-500">
-              <button
-                type="button"
-                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                onClick={() => setShowModelsOverview(true)}
-              >
-                Modellübersicht
-              </button>
-              {menuLinks.length > 0 ? (
-                <>
-                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
-                  <PlaygroundLinksFooter links={menuLinks} />
-                </>
+            <div className="mx-auto mt-6 max-w-playground px-2 text-center">
+              <p className="playground-text-tiny font-medium text-playground-ink">
+                {sessionCo2Grams > 0 ? (
+                  <>
+                    <SessionCo2Footprint grams={sessionCo2Grams} compact inline />
+                    <br />
+                  </>
+                ) : null}
+                <span className="inline-block max-w-2xl">
+                  Dies ist ein reiner Test-Playground: Du kannst die Modelle ausprobieren und dir einen ersten Eindruck
+                  verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den produktiven Einsatz noch
+                  für vertrauliche oder geschäftskritische Inhalte vorgesehen.
+                </span>
+              </p>
+              {pageFooterLinks.length > 0 ? (
+                <p className="playground-text-tiny mt-4 font-medium">
+                  <PlaygroundLinksFooter links={pageFooterLinks} />
+                </p>
               ) : null}
-              {sessionCo2Grams > 0 ? (
-                <>
-                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
-                  <SessionCo2Footprint grams={sessionCo2Grams} compact inline />
-                </>
-              ) : null}
-              <br />
-              <span className="mt-1 inline-block max-w-2xl text-[11px] text-neutral-500 sm:hidden dark:text-neutral-400">
-                Test-Playground — Chats nur im Browser, nicht für Produktion oder vertrauliche Inhalte.
-              </span>
-              <span className="mt-1 hidden max-w-2xl text-[11px] text-neutral-500 sm:inline-block dark:text-neutral-400">
-                Dies ist ein reiner Test-Playground: Du kannst die Modelle ausprobieren und dir einen ersten Eindruck
-                verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den produktiven Einsatz noch
-                für vertrauliche oder geschäftskritische Inhalte vorgesehen.
-              </span>
-              {legalLinks.length > 0 ? (
-                <>
-                  <br />
-                  <span className="mt-2 inline-block">
-                    <PlaygroundLinksFooter links={legalLinks} />
-                  </span>
-                </>
-              ) : null}
-            </p>
+            </div>
           </div>
         </div>
       </div>
@@ -2000,12 +2004,6 @@ export function App() {
         onConfirm={clearBrowserCache}
         onCancel={() => setClearBrowserCacheOpen(false)}
       />
-      <SettingsGlossaryOverlay
-        open={showGlossary}
-        onClose={() => setShowGlossary(false)}
-        links={playgroundLinks}
-      />
-      <ModelsOverviewOverlay open={showModelsOverview} onClose={() => setShowModelsOverview(false)} />
       <ImageLightbox
         open={imageLightbox !== null}
         src={imageLightbox?.src ?? ""}

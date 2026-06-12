@@ -25,13 +25,24 @@ export class RateLimitError extends Error {
   readonly waitMinutes: number;
   readonly scope?: RateLimitScope;
   readonly scopeLabel?: string;
+  readonly maxRequests?: number;
+  readonly windowMinutes?: number;
 
-  constructor(waitMinutes: number, scope?: RateLimitScope, scopeLabel?: string, message?: string) {
+  constructor(
+    waitMinutes: number,
+    scope?: RateLimitScope,
+    scopeLabel?: string,
+    message?: string,
+    maxRequests?: number,
+    windowMinutes?: number,
+  ) {
     super(message ?? "Rate limit");
     this.name = "RateLimitError";
     this.waitMinutes = waitMinutes;
     this.scope = scope;
     this.scopeLabel = scopeLabel;
+    this.maxRequests = maxRequests;
+    this.windowMinutes = windowMinutes;
   }
 }
 
@@ -79,12 +90,28 @@ function waitMinutesFromResponse(
 }
 
 export async function readApiErrorBody(res: Response): Promise<ApiErrorJson & { rawText?: string }> {
+  const rawText = (await res.text()).slice(0, 2000);
+  if (!rawText.trim()) return {};
   try {
-    return (await res.json()) as ApiErrorJson;
+    return JSON.parse(rawText) as ApiErrorJson;
   } catch {
-    const rawText = (await res.text()).slice(0, 2000);
     return { rawText };
   }
+}
+
+function isRateLimitErrorInstance(e: unknown): e is RateLimitError {
+  return e instanceof RateLimitError || (e instanceof Error && e.name === "RateLimitError");
+}
+
+function looksLikeRateLimitMessage(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("rate limit") ||
+    m.includes("rate_limited") ||
+    m.includes("too many requests") ||
+    m.includes("zu viele") ||
+    (m.includes("limit") && m.includes("erreicht"))
+  );
 }
 
 export function appErrorFromApiResponse(
@@ -127,7 +154,14 @@ export async function ensureOkApiResponse(
   const body = await readApiErrorBody(res);
   const err = appErrorFromApiResponse(res, body, rateLimits);
   if (err.kind === "rate_limit") {
-    throw new RateLimitError(err.waitMinutes, err.scope, err.scopeLabel, body.error?.message);
+    throw new RateLimitError(
+      err.waitMinutes,
+      err.scope,
+      err.scopeLabel,
+      body.error?.message,
+      err.maxRequests,
+      err.windowMinutes,
+    );
   }
   throw new Error(err.message);
 }
@@ -162,18 +196,18 @@ export function appErrorFromUnknown(
   e: unknown,
   rateLimits?: PlaygroundRateLimits | null,
 ): AppUiError {
-  if (e instanceof RateLimitError) {
+  if (isRateLimitErrorInstance(e)) {
     return {
       kind: "rate_limit",
       waitMinutes: e.waitMinutes,
       scope: e.scope,
       scopeLabel: e.scopeLabel,
-      maxRequests: maxRequestsForScope(e.scope, rateLimits),
-      windowMinutes: rateLimits?.windowMinutes,
+      maxRequests: e.maxRequests ?? maxRequestsForScope(e.scope, rateLimits),
+      windowMinutes: e.windowMinutes ?? rateLimits?.windowMinutes,
     };
   }
   if (e instanceof Error) {
-    if (e.message.toLowerCase().includes("rate") || e.message.includes("Zu viele")) {
+    if (looksLikeRateLimitMessage(e.message)) {
       return {
         kind: "rate_limit",
         waitMinutes: rateLimits?.windowMinutes ?? 15,
