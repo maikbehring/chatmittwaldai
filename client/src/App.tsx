@@ -9,6 +9,15 @@ import {
   MODEL_MINISTRAL,
   type GptOssReasoning,
 } from "./modelPresets";
+import { PlaygroundUseCaseCards } from "./PlaygroundUseCaseCards";
+import { PlaygroundUseCaseGuide } from "./PlaygroundUseCaseGuide";
+import {
+  getUseCaseById,
+  isCopyableUseCase,
+  PLAYGROUND_USE_CASES,
+  type PlaygroundUseCaseId,
+} from "./playgroundUseCases";
+import type { TranscribeProgress } from "./speechTranscription";
 import { ModelSettingsDock } from "./ModelSettingsDock";
 import { ChatImageAttachment, ChatImagePreviewThumb } from "./ChatImageAttachment";
 import { SpeechInputButton, type SpeechInputHandle } from "./SpeechInputButton";
@@ -39,7 +48,9 @@ import {
   hasWebSearchConsent,
   setWebSearchConsent,
 } from "./webSearchConsent";
+import { CopyTextButton, extractCopySections } from "./CopyTextButton";
 import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
+import { MittwaldLogo } from "./MittwaldLogo";
 import { PlaygroundSidebarCta } from "./PlaygroundSidebarCta";
 import { ArrowUpIcon, MenuIcon, PenIcon } from "./playgroundIcons";
 import { mainFooterLinks, withDefaultBugLink, type PlaygroundLink } from "./playgroundLinks";
@@ -263,17 +274,6 @@ async function streamChatCompletion(
   return lastUsage;
 }
 
-function BetaBadge() {
-  return (
-    <span
-      className="shrink-0 rounded border border-amber-500/70 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/60 dark:text-amber-100"
-      title="Öffentliche Beta — Funktion und Modelle können sich ändern."
-    >
-      Beta
-    </span>
-  );
-}
-
 function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
   const fmt = (n: number | null) => (n == null ? "—" : n.toLocaleString("de-DE"));
   const tps =
@@ -409,17 +409,57 @@ function renderMessageContent(
   );
 }
 
+function assistantMessagePlainText(content: string | ContentPart[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((p) => p.text)
+    .join("\n");
+}
+
+function UseCaseCopyActions({ content }: { content: string }) {
+  const sections = extractCopySections(content);
+  if (sections.length === 0) {
+    const plain = content.trim();
+    if (!plain) return null;
+    return (
+      <div className="mb-3 flex flex-wrap gap-2">
+        <CopyTextButton text={plain} label="Antwort kopieren" />
+      </div>
+    );
+  }
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      {sections.map((section, i) => (
+        <CopyTextButton
+          key={`${i}-${section.label}`}
+          text={section.text}
+          label={`${section.label} kopieren`}
+        />
+      ))}
+      {sections.length > 1 ? (
+        <CopyTextButton
+          text={sections.map((s) => s.text).join("\n\n")}
+          label="Alles kopieren"
+        />
+      ) : null}
+    </div>
+  );
+}
+
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   streaming,
   webSearchPending,
   webSearchProviderLabel,
+  activeUseCaseId,
   onImageOpen,
 }: {
   message: ChatMessage;
   streaming: boolean;
   webSearchPending?: boolean;
   webSearchProviderLabel?: string;
+  activeUseCaseId?: PlaygroundUseCaseId | null;
   onImageOpen: (src: string, alt: string) => void;
 }) {
   if (message.role === "user") {
@@ -438,9 +478,17 @@ const ChatMessageRow = memo(function ChatMessageRow({
       </div>
     );
   }
+  const assistantPlain = assistantMessagePlainText(message.content).trim();
+  const showCopyActions =
+    isCopyableUseCase(activeUseCaseId) &&
+    !streaming &&
+    !webSearchPending &&
+    assistantPlain.length > 0;
+
   return (
     <div className="flex w-full justify-start">
       <div className="flex max-w-full flex-col items-start">
+        {showCopyActions ? <UseCaseCopyActions content={assistantPlain} /> : null}
         <div className="playground-text-chat max-w-full text-playground-muted">
           {webSearchPending ? (
             <p className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400" role="status">
@@ -493,6 +541,7 @@ export function App() {
   const [maxMessages, setMaxMessages] = useState(DEFAULT_MAX_MESSAGES);
   const [contextTrimNotice, setContextTrimNotice] = useState<string | null>(null);
   const [speechBusy, setSpeechBusy] = useState(false);
+  const [speechTranscribeStatus, setSpeechTranscribeStatus] = useState<string | null>(null);
   const [voiceRecording, setVoiceRecording] = useState<{
     active: boolean;
     stream: MediaStream | null;
@@ -538,6 +587,8 @@ export function App() {
     return initialPreset.maxTokens;
   });
   const [systemPrompt, setSystemPrompt] = useState(() => initial.systemPrompt ?? "");
+  const [activeUseCaseId, setActiveUseCaseId] = useState<PlaygroundUseCaseId | null>(null);
+  const activeUseCase = useMemo(() => getUseCaseById(activeUseCaseId), [activeUseCaseId]);
   const [playgroundLinks, setPlaygroundLinks] = useState<PlaygroundLink[]>([]);
   const footerLinks = useMemo(() => withDefaultBugLink(playgroundLinks), [playgroundLinks]);
   const pageFooterLinks = useMemo(() => mainFooterLinks(footerLinks), [footerLinks]);
@@ -609,10 +660,15 @@ export function App() {
   const adjustInputHeight = useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
+    const minHeight = isMobileLayout ? 36 : 40;
+    const isSingleLine = !el.value.includes("\n");
     el.style.height = "0px";
     const next = Math.min(el.scrollHeight, INPUT_MAX_HEIGHT_PX);
-    const minHeight = isMobileLayout ? 40 : 44;
-    el.style.height = `${Math.max(next, minHeight)}px`;
+    if (isSingleLine) {
+      el.style.height = `${minHeight}px`;
+    } else {
+      el.style.height = `${Math.max(next, minHeight)}px`;
+    }
     el.style.overflowY = el.scrollHeight > INPUT_MAX_HEIGHT_PX ? "auto" : "hidden";
   }, [isMobileLayout]);
 
@@ -783,7 +839,7 @@ export function App() {
   }, [themePreference]);
 
   useEffect(() => {
-    document.title = `${title} · Beta`;
+    document.title = title;
   }, [title]);
 
   useEffect(() => {
@@ -921,6 +977,20 @@ export function App() {
 
   const speechTranscribing = speechBusy && !voiceRecording.active;
 
+  const composerPlaceholder = useMemo(() => {
+    if (activeUseCase) return activeUseCase.composerPlaceholder;
+    return isMobileLayout
+      ? "Nachricht…"
+      : "Stelle irgendeine Frage (Bild: einfügen oder +)";
+  }, [activeUseCase, isMobileLayout]);
+
+  const sendButtonTitle = activeUseCase?.sendButtonLabel ?? "Senden";
+
+  const composerTall = input.includes("\n");
+
+  const showSpeechInComposer =
+    speechToText?.enabled && Boolean(activeUseCase?.prefersSpeech);
+
   const canSend = useMemo(() => {
     const t = input.trim();
     return (
@@ -939,7 +1009,10 @@ export function App() {
   const handleSpeechTranscript = useCallback(
     (text: string) => {
       setInput((prev) => {
-        const next = prev.trim() ? `${prev.trimEnd()} ${text}` : text;
+        const next =
+          activeUseCase?.prefersLongSpeech || !prev.trim()
+            ? text
+            : `${prev.trimEnd()} ${text}`;
         inputValueRef.current = next;
         return next;
       });
@@ -948,8 +1021,29 @@ export function App() {
         inputRef.current?.focus();
       });
     },
+    [activeUseCase?.prefersLongSpeech, adjustInputHeight],
+  );
+
+  const handleSpeechTranscriptSegment = useCallback(
+    (_segment: string, fullText: string) => {
+      setInput(fullText);
+      inputValueRef.current = fullText;
+      window.requestAnimationFrame(() => adjustInputHeight());
+    },
     [adjustInputHeight],
   );
+
+  const handleSpeechTranscribeProgress = useCallback((progress: TranscribeProgress | null) => {
+    if (!progress) {
+      setSpeechTranscribeStatus(null);
+      return;
+    }
+    if (progress.phase === "segment") {
+      setSpeechTranscribeStatus(`Transkribiere Besprechungs-Abschnitt ${progress.chunk} …`);
+      return;
+    }
+    setSpeechTranscribeStatus(`Transkribiere Teil ${progress.chunk} von ${progress.total} …`);
+  }, []);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -960,12 +1054,40 @@ export function App() {
 
   const changeModel = useCallback(
     (modelId: string) => {
-      if (modelId === model) return;
       if (busy || webSearchBusy) stop();
-      setModel(modelId);
+      if (modelId !== model) setModel(modelId);
       applyPreset(modelId);
     },
     [applyPreset, busy, model, stop, webSearchBusy],
+  );
+
+  const clearUseCase = useCallback(() => {
+    setActiveUseCaseId(null);
+    setSystemPrompt("");
+  }, []);
+
+  const activateUseCase = useCallback(
+    (id: PlaygroundUseCaseId) => {
+      const uc = getUseCaseById(id);
+      if (!uc) return;
+      stop();
+      setAppError(null);
+      setContextTrimNotice(null);
+      setActiveUseCaseId(id);
+      setMessages([]);
+      setImageFile(null);
+      setActiveThreadWebSearch(false);
+      changeModel(uc.modelId);
+      setSystemPrompt(uc.systemPrompt);
+      const starter = uc.starterInput ?? "";
+      setInput(starter);
+      inputValueRef.current = starter;
+      window.requestAnimationFrame(() => {
+        adjustInputHeight();
+        inputRef.current?.focus();
+      });
+    },
+    [adjustInputHeight, changeModel, setActiveThreadWebSearch, stop],
   );
 
   const newChat = useCallback(() => {
@@ -974,6 +1096,7 @@ export function App() {
     setContextTrimNotice(null);
     setInput("");
     setImageFile(null);
+    clearUseCase();
     const fresh = createEmptyThread(webSearchDefaultEnabled);
     const withCurrent = threads.map((t) =>
       t.id === activeThreadId
@@ -992,7 +1115,15 @@ export function App() {
     setActiveThreadId(fresh.id);
     setMessages([]);
     closeMobileSidebar();
-  }, [activeThreadId, closeMobileSidebar, messages, stop, threads, webSearchDefaultEnabled]);
+  }, [activeThreadId, clearUseCase, closeMobileSidebar, messages, stop, threads, webSearchDefaultEnabled]);
+
+  const goToDashboard = useCallback(() => {
+    if (busy || speechBusy) return;
+    newChat();
+    window.requestAnimationFrame(() => {
+      chatScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }, [busy, newChat, speechBusy]);
 
   const selectThread = useCallback(
     (id: string) => {
@@ -1105,9 +1236,17 @@ export function App() {
     if (!options?.force && !canSend) return;
     if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy)) return;
     setAppError(null);
-    const text = textNow;
+    let text = textNow;
     const file = imageFile;
     const messagesBeforeSend = messages;
+
+    if (
+      activeUseCase?.formatSubmissionMessage &&
+      text.length > 0 &&
+      !file
+    ) {
+      text = activeUseCase.formatSubmissionMessage(text);
+    }
 
     let userContent: string | ContentPart[];
     if (file) {
@@ -1382,6 +1521,7 @@ export function App() {
     activeThreadWebSearch,
     webSearchConfig,
     playgroundRateLimits,
+    activeUseCase,
     requestEnableWebSearch,
   ]);
 
@@ -1425,7 +1565,13 @@ export function App() {
               : "w-[329px]"
         }`}
       >
-        <div className="flex h-[62px] shrink-0 items-center gap-5 border-b border-playground-border p-3">
+        <div
+          className={`flex shrink-0 border-b border-playground-border ${
+            sidebarExpanded
+              ? "h-[56px] items-center gap-3 p-2.5"
+              : "flex-col items-center gap-1.5 py-2.5"
+          }`}
+        >
           <button
             type="button"
             className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-playground-ink hover:bg-playground-muted/5"
@@ -1449,10 +1595,31 @@ export function App() {
           >
             <MenuIcon />
           </button>
-          {sidebarExpanded && (
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="playground-text-body truncate font-bold text-playground-ink">{title}</span>
-            </div>
+          {sidebarExpanded ? (
+            <button
+              type="button"
+              onClick={goToDashboard}
+              disabled={busy || speechBusy}
+              title="Zur Startseite"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <MittwaldLogo size="md" className="text-playground-ink" />
+              <div className="min-w-0">
+                <p className="playground-text-body truncate font-bold leading-tight text-playground-ink">
+                  Playground
+                </p>
+              </div>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={goToDashboard}
+              disabled={busy || speechBusy}
+              title="Zur Startseite"
+              className="rounded-lg p-1 transition hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <MittwaldLogo size="sm" variant="mark" className="text-playground-ink" title="mittwald Playground" />
+            </button>
           )}
         </div>
 
@@ -1592,7 +1759,7 @@ export function App() {
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col bg-playground-main">
-        <div className="flex h-[62px] shrink-0 items-center justify-between gap-3 border-b border-playground-border px-3 sm:px-6">
+        <div className="flex h-[56px] shrink-0 items-center justify-between gap-2 border-b border-playground-border px-3 sm:px-5">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
             {isMobileLayout ? (
               <button
@@ -1629,7 +1796,6 @@ export function App() {
                 ))
               )}
             </select>
-            {isMobileLayout || sidebarCollapsed ? <BetaBadge /> : null}
           </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
             <label htmlFor="theme-select" className="sr-only">
@@ -1650,21 +1816,44 @@ export function App() {
         <div className="flex min-h-0 flex-1 flex-col">
           <div ref={chatScrollRef} className="relative min-h-0 flex-1 overflow-y-auto">
             {messages.length === 0 ? (
-              <div className="flex min-h-full flex-col items-center justify-center gap-12 px-4 py-8 sm:px-6">
-                <div className="flex max-w-5xl flex-col items-center gap-8 text-center">
+              <div className="flex min-h-full flex-col items-center justify-start gap-4 px-4 py-5 sm:gap-5 sm:px-6 sm:py-6">
+                <div className="flex max-w-5xl flex-col items-center gap-2.5 text-center sm:gap-3">
                   <p className="playground-text-hero-label font-bold text-playground-ink">
                     mittwald Playground
                   </p>
                   <h1 className="playground-text-hero max-w-5xl text-playground-ink">
-                    Bereit loszulegen?
+                    {activeUseCase ? activeUseCase.title : "Bereit loszulegen?"}
                   </h1>
                   <p className="playground-text-subtitle max-w-4xl font-medium text-playground-ink">
-                    Stelle eine Frage oder nutze + für ein Bild. Nur in diesem Browser gespeichert.
+                    {activeUseCase
+                      ? activeUseCase.description
+                      : `${PLAYGROUND_USE_CASES.length} Use Cases für Agenturen — oder stelle eine eigene Frage.`}
                   </p>
                 </div>
+                {activeUseCase ? (
+                  <PlaygroundUseCaseGuide
+                    useCase={activeUseCase}
+                    onBack={clearUseCase}
+                    speechEnabled={speechToText?.enabled}
+                    recording={voiceRecording.active}
+                    transcribeProgress={speechTranscribeStatus}
+                    onStartRecording={
+                      activeUseCase.prefersSpeech
+                        ? () => speechInputRef.current?.startRecording()
+                        : undefined
+                    }
+                  />
+                ) : (
+                  <PlaygroundUseCaseCards
+                    cases={PLAYGROUND_USE_CASES}
+                    activeId={activeUseCaseId}
+                    disabled={busy || speechBusy}
+                    onSelect={activateUseCase}
+                  />
+                )}
               </div>
             ) : (
-              <div className="mx-auto w-full max-w-playground space-y-6 px-4 py-8">
+              <div className="mx-auto w-full max-w-playground space-y-5 px-4 py-6">
                 {messages.map((m, i) => (
                   <ChatMessageRow
                     key={i}
@@ -1678,6 +1867,7 @@ export function App() {
                       m.content === ""
                     }
                     webSearchProviderLabel={providerLabel(webSearchConfig)}
+                    activeUseCaseId={activeUseCaseId}
                     onImageOpen={openImageLightbox}
                   />
                 ))}
@@ -1724,6 +1914,29 @@ export function App() {
                 {appError.message}
               </div>
             ) : null}
+            {activeUseCase && messages.length > 0 ? (
+              <div
+                className="mx-auto mb-2 flex max-w-playground flex-wrap items-center justify-between gap-2 rounded-2xl border border-playground-border bg-playground-sidebar px-4 py-2"
+                role="status"
+              >
+                <span className="playground-text-small flex items-center gap-2 font-medium text-playground-ink">
+                  <span className="text-base" aria-hidden>
+                    {activeUseCase.icon}
+                  </span>
+                  <span>
+                    Use Case: <span className="font-bold">{activeUseCase.title}</span>
+                    <span className="text-playground-muted"> · {activeUseCase.modelLabel}</span>
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="playground-text-tiny font-medium text-playground-muted underline decoration-playground-border underline-offset-2 hover:text-playground-ink"
+                  onClick={clearUseCase}
+                >
+                  Use Case beenden
+                </button>
+              </div>
+            ) : null}
             {imagePreview && (
               <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
                 <ChatImagePreviewThumb src={imagePreview} onOpen={openImageLightbox} />
@@ -1732,101 +1945,81 @@ export function App() {
                 </button>
               </div>
             )}
-            <div
-              className={`mx-auto w-full max-w-playground ${isMobileLayout ? "" : "flex items-center gap-4"}`}
-            >
-              {!isMobileLayout ? (
-                <ModelSettingsDock
-                open={showModelSettings}
-                onOpenChange={setShowModelSettings}
-                busy={busy}
-                buttonClassName="flex h-6 w-6 shrink-0 items-center justify-center text-playground-ink transition hover:text-playground-muted disabled:opacity-40"
-                modelId={model}
-                onReapplyPreset={() => applyPreset(model)}
-                temperature={temperature}
-                setTemperature={setTemperature}
-                topP={topP}
-                setTopP={setTopP}
-                topK={topK}
-                setTopK={setTopK}
-                presencePenalty={presencePenalty}
-                setPresencePenalty={setPresencePenalty}
-                maxTokens={maxTokens}
-                setMaxTokens={setMaxTokens}
-                extraBody={extraBody}
-                setExtraBody={setExtraBody}
-                gptOssReasoning={gptOssReasoning}
-                setGptOssReasoning={setGptOssReasoning}
-                qwenVisionOcr={qwenVisionOcr}
-                setQwenVisionOcr={setQwenVisionOcr}
-                systemPrompt={systemPrompt}
-                setSystemPrompt={setSystemPrompt}
-                webSearchConfig={webSearchConfig}
-                webSearchDefaultEnabled={webSearchDefaultEnabled}
-                onWebSearchDefaultChange={(enabled) => {
-                  if (!enabled) setWebSearchDefaultEnabled(false);
-                  else requestEnableWebSearch("default");
-                }}
-                webSearchConsentGranted={webSearchConsentGranted}
-                onRevokeWebSearchConsent={revokeWebSearchConsent}
-              />
-              ) : null}
-              <div className="min-w-0 flex-1">
-                <WebSearchModeChip
-                  config={webSearchConfig}
-                  active={activeThreadWebSearch}
-                  searching={webSearchBusy}
-                  disabled={busy || voiceRecording.active || speechTranscribing}
-                  onDeactivate={() => setActiveThreadWebSearch(false)}
-                />
-                <div className={isMobileLayout ? "" : "flex items-center gap-4"}>
+            <div className="mx-auto w-full max-w-playground">
+              <div
+                className={`flex gap-2 sm:gap-4 ${
+                  composerTall ? "items-end" : "items-center"
+                }`}
+              >
                 <div
-                  className={`playground-surface-glass flex h-14 min-w-0 gap-2 rounded-full border border-transparent py-1.5 pl-5 pr-1.5 sm:h-16 sm:gap-2 sm:py-2 sm:pl-5 sm:pr-2 ${
-                    isMobileLayout ? "" : "flex-1"
-                  } ${voiceRecording.active ? "items-center" : "items-center"} ${
-                    activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-400/30" : ""
+                  className={`flex shrink-0 items-center justify-center ${
+                    isMobileLayout ? "h-11 w-9" : "h-14 w-14"
                   }`}
-                  onPasteCapture={handleComposerPasteCapture}
                 >
-                  {isMobileLayout ? (
-                    <ModelSettingsDock
-                      open={showModelSettings}
-                      onOpenChange={setShowModelSettings}
-                      busy={busy}
-                      modelId={model}
-                      onReapplyPreset={() => applyPreset(model)}
-                      temperature={temperature}
-                      setTemperature={setTemperature}
-                      topP={topP}
-                      setTopP={setTopP}
-                      topK={topK}
-                      setTopK={setTopK}
-                      presencePenalty={presencePenalty}
-                      setPresencePenalty={setPresencePenalty}
-                      maxTokens={maxTokens}
-                      setMaxTokens={setMaxTokens}
-                      extraBody={extraBody}
-                      setExtraBody={setExtraBody}
-                      gptOssReasoning={gptOssReasoning}
-                      setGptOssReasoning={setGptOssReasoning}
-                      qwenVisionOcr={qwenVisionOcr}
-                      setQwenVisionOcr={setQwenVisionOcr}
-                      systemPrompt={systemPrompt}
-                      setSystemPrompt={setSystemPrompt}
-                      webSearchConfig={webSearchConfig}
-                      webSearchDefaultEnabled={webSearchDefaultEnabled}
-                      onWebSearchDefaultChange={(enabled) => {
-                        if (!enabled) setWebSearchDefaultEnabled(false);
-                        else requestEnableWebSearch("default");
-                      }}
-                      webSearchConsentGranted={webSearchConsentGranted}
-                      onRevokeWebSearchConsent={revokeWebSearchConsent}
-                      panelMode="fixed"
-                      buttonClassName="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
-                    />
-                  ) : null}
+                  <ModelSettingsDock
+                    open={showModelSettings}
+                    onOpenChange={setShowModelSettings}
+                    busy={busy}
+                    panelMode={isMobileLayout ? "fixed" : "docked"}
+                    buttonClassName={
+                      isMobileLayout
+                        ? "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-playground-ink transition hover:bg-playground-muted/5 hover:text-playground-muted disabled:opacity-40"
+                        : "flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-playground-ink transition hover:bg-playground-muted/5 hover:text-playground-muted disabled:opacity-40"
+                    }
+                    modelId={model}
+                    onReapplyPreset={() => applyPreset(model)}
+                    temperature={temperature}
+                    setTemperature={setTemperature}
+                    topP={topP}
+                    setTopP={setTopP}
+                    topK={topK}
+                    setTopK={setTopK}
+                    presencePenalty={presencePenalty}
+                    setPresencePenalty={setPresencePenalty}
+                    maxTokens={maxTokens}
+                    setMaxTokens={setMaxTokens}
+                    extraBody={extraBody}
+                    setExtraBody={setExtraBody}
+                    gptOssReasoning={gptOssReasoning}
+                    setGptOssReasoning={setGptOssReasoning}
+                    qwenVisionOcr={qwenVisionOcr}
+                    setQwenVisionOcr={setQwenVisionOcr}
+                    systemPrompt={systemPrompt}
+                    setSystemPrompt={setSystemPrompt}
+                    webSearchConfig={webSearchConfig}
+                    webSearchDefaultEnabled={webSearchDefaultEnabled}
+                    onWebSearchDefaultChange={(enabled) => {
+                      if (!enabled) setWebSearchDefaultEnabled(false);
+                      else requestEnableWebSearch("default");
+                    }}
+                    webSearchConsentGranted={webSearchConsentGranted}
+                    onRevokeWebSearchConsent={revokeWebSearchConsent}
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <WebSearchModeChip
+                    config={webSearchConfig}
+                    active={activeThreadWebSearch}
+                    searching={webSearchBusy}
+                    disabled={busy || voiceRecording.active || speechTranscribing}
+                    onDeactivate={() => setActiveThreadWebSearch(false)}
+                  />
+                  <div
+                    className={`playground-surface-glass flex w-full min-w-0 border border-transparent ${
+                      isMobileLayout
+                        ? "min-h-11 gap-1 py-1 pl-2.5 pr-1.5"
+                        : "min-h-12 gap-1.5 py-1.5 pl-4 pr-1.5 sm:min-h-14 sm:gap-2 sm:py-2 sm:pr-2"
+                    } ${
+                      composerTall ? "items-end rounded-[28px]" : "items-center rounded-full"
+                    } ${
+                      activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-400/30" : ""
+                    }`}
+                    onPasteCapture={handleComposerPasteCapture}
+                  >
                   <label
-                    className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-playground-ink hover:bg-playground-muted/5 sm:h-10 sm:w-10 ${
+                    className={`flex shrink-0 cursor-pointer items-center justify-center rounded-full text-playground-ink hover:bg-playground-muted/5 ${
+                      isMobileLayout ? "h-7 w-7" : "h-8 w-8 sm:h-9 sm:w-9"
+                    } ${
                       voiceRecording.active || speechTranscribing
                         ? "pointer-events-none opacity-40"
                         : ""
@@ -1851,7 +2044,31 @@ export function App() {
                     searching={webSearchBusy}
                     disabled={busy || voiceRecording.active || speechTranscribing}
                     onToggle={toggleThreadWebSearch}
+                    compact={isMobileLayout}
                   />
+                  {showSpeechInComposer ? (
+                    <SpeechInputButton
+                      ref={speechInputRef}
+                      disabled={busy}
+                      language={speechToText.language}
+                      maxAudioBytes={speechToText.maxAudioBytes}
+                      longRecording={Boolean(activeUseCase?.prefersLongSpeech)}
+                      onTranscript={handleSpeechTranscript}
+                      onTranscriptSegment={handleSpeechTranscriptSegment}
+                      onTranscribeProgress={handleSpeechTranscribeProgress}
+                      onError={setAppError}
+                      rateLimits={playgroundRateLimits}
+                      onBusyChange={setSpeechBusy}
+                      onRecordingChange={handleVoiceRecordingChange}
+                      className={
+                        voiceRecording.active
+                          ? "sr-only"
+                          : isMobileLayout
+                            ? "h-7 w-7"
+                            : "h-8 w-8 sm:h-9 sm:w-9"
+                      }
+                    />
+                  ) : null}
                   {voiceRecording.active ? (
                     <SpeechWaveform stream={voiceRecording.stream} />
                   ) : speechTranscribing ? (
@@ -1859,13 +2076,13 @@ export function App() {
                   ) : (
                     <textarea
                       ref={inputRef}
-                      className="playground-composer-input max-h-52 min-h-[40px] flex-1 resize-none self-center overflow-hidden bg-transparent py-2 text-playground-ink outline-none placeholder:text-playground-muted sm:min-h-[44px] sm:py-2.5"
+                      className={`playground-composer-input min-w-0 max-h-52 flex-1 resize-none overflow-hidden bg-transparent text-left text-playground-ink outline-none placeholder:text-playground-muted ${
+                        composerTall
+                          ? "py-1.5 leading-normal"
+                          : `playground-composer-input--single ${isMobileLayout ? "min-h-9" : "min-h-10"}`
+                      } ${composerTall ? "self-stretch" : "self-center"}`}
                       rows={1}
-                      placeholder={
-                        isMobileLayout
-                          ? "Nachricht…"
-                          : "Stelle irgendeine Frage (Bild: einfügen oder +)"
-                      }
+                      placeholder={composerPlaceholder}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
                       disabled={busy || speechBusy || webSearchBusy}
@@ -1877,93 +2094,49 @@ export function App() {
                       }}
                     />
                   )}
-                  {isMobileLayout ? (
-                    <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 sm:pb-0.5">
-                      {speechToText?.enabled ? (
-                        <SpeechInputButton
-                          ref={speechInputRef}
-                          disabled={busy}
-                          language={speechToText.language}
-                          maxAudioBytes={speechToText.maxAudioBytes}
-                          onTranscript={handleSpeechTranscript}
-                          onError={setAppError}
-                          rateLimits={playgroundRateLimits}
-                          onBusyChange={setSpeechBusy}
-                          onRecordingChange={handleVoiceRecordingChange}
-                          className={
-                            voiceRecording.active
-                              ? "sr-only"
-                              : "h-8 w-8 sm:h-9 sm:w-9"
-                          }
-                        />
-                      ) : null}
-                      {voiceRecording.active ? (
-                        <VoiceRecordingControls
-                          disabled={busy}
-                          onCancel={() =>
-                            speechInputRef.current?.stopRecording({ skipTranscribe: true })
-                          }
-                          onConfirm={() => speechInputRef.current?.stopRecording()}
-                        />
-                      ) : busy ? (
-                        <button
-                          type="button"
-                          onClick={stop}
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white text-xs font-medium text-neutral-800 hover:bg-neutral-50 sm:h-9 sm:w-9 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-                          title="Stoppen"
-                        >
-                          ■
-                        </button>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => void send()}
-                          disabled={!canSend}
-                          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-playground-send text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35 sm:h-16 sm:w-16"
-                          title="Senden"
-                        >
-                          <ArrowUpIcon className="h-5 w-5 sm:h-6 sm:w-6" />
-                        </button>
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-                {!isMobileLayout ? (
-                  <div className="flex shrink-0 items-center">
-                    {voiceRecording.active ? (
-                      <VoiceRecordingControls
-                        disabled={busy}
-                        onCancel={() =>
-                          speechInputRef.current?.stopRecording({ skipTranscribe: true })
-                        }
-                        onConfirm={() => speechInputRef.current?.stopRecording()}
-                      />
-                    ) : busy ? (
-                      <button
-                        type="button"
-                        onClick={stop}
-                        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border border-playground-border bg-playground-sidebar text-sm font-medium text-playground-ink hover:bg-playground-muted/5"
-                        title="Stoppen"
-                      >
-                        ■
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => void send()}
-                        disabled={!canSend}
-                        className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-playground-send text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"
-                        title="Senden"
-                      >
-                        <ArrowUpIcon className="h-6 w-6" />
-                      </button>
-                    )}
                   </div>
-                ) : null}
+                </div>
+                <div
+                  className={`flex shrink-0 items-center justify-center ${
+                    isMobileLayout ? "h-11 w-11" : "h-14 w-14"
+                  }`}
+                >
+                  {voiceRecording.active ? (
+                    <VoiceRecordingControls
+                      disabled={busy}
+                      onCancel={() =>
+                        speechInputRef.current?.stopRecording({ skipTranscribe: true })
+                      }
+                      onConfirm={() => speechInputRef.current?.stopRecording()}
+                    />
+                  ) : busy ? (
+                    <button
+                      type="button"
+                      onClick={stop}
+                      className={`flex shrink-0 items-center justify-center rounded-full border border-playground-border bg-playground-sidebar font-medium text-playground-ink hover:bg-playground-muted/5 ${
+                        isMobileLayout ? "h-10 w-10 text-xs" : "h-14 w-14 text-sm"
+                      }`}
+                      title="Stoppen"
+                    >
+                      ■
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void send()}
+                      disabled={!canSend}
+                      className={`flex shrink-0 items-center justify-center rounded-full bg-playground-send text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35 ${
+                        isMobileLayout ? "h-10 w-10" : "h-14 w-14"
+                      }`}
+                      title={sendButtonTitle}
+                    >
+                      <ArrowUpIcon className={isMobileLayout ? "h-4 w-4" : "h-5 w-5"} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
-            <div className="mx-auto mt-6 max-w-playground px-2 text-center">
+            <div className="mx-auto mt-4 max-w-playground px-2 text-center">
               <p className="playground-text-tiny font-medium text-playground-ink">
                 {sessionCo2Grams > 0 ? (
                   <>

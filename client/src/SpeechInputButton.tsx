@@ -1,15 +1,16 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from "react";
 import {
   appErrorFromUnknown,
-  ensureOkApiResponse,
   plainAppError,
   type AppUiError,
   type PlaygroundRateLimits,
 } from "./apiErrors";
-import { blobToBase64, blobToWav16 } from "./blobToWav";
+import { WHISPER_CHUNK_MAX_SECONDS } from "./blobToWav";
+import { transcribeAudioBlob, type TranscribeProgress } from "./speechTranscription";
 
 export type SpeechInputHandle = {
   stopRecording: (options?: { skipTranscribe?: boolean }) => void;
+  startRecording: () => void;
 };
 
 type Props = {
@@ -18,11 +19,18 @@ type Props = {
   maxAudioBytes?: number;
   className?: string;
   onTranscript: (text: string) => void;
+  /** Wird bei Langaufnahme nach jedem transkribierten Abschnitt aufgerufen. */
+  onTranscriptSegment?: (segment: string, fullText: string) => void;
   onError: (error: AppUiError) => void;
   rateLimits?: PlaygroundRateLimits | null;
   onBusyChange?: (busy: boolean) => void;
   onRecordingChange?: (recording: boolean, stream: MediaStream | null) => void;
+  /** Besprechungen >20 min: automatische Segment-Rotation + Chunk-Transkription. */
+  longRecording?: boolean;
+  onTranscribeProgress?: (progress: TranscribeProgress | null) => void;
 };
+
+const SEGMENT_ROTATE_MS = WHISPER_CHUNK_MAX_SECONDS * 1000;
 
 function MicIcon({ className }: { className?: string }) {
   return (
@@ -60,6 +68,15 @@ function pickRecorderMime(): string | undefined {
   return undefined;
 }
 
+function formatElapsed(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
 export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function SpeechInputButton(
   {
     disabled = false,
@@ -67,19 +84,32 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
     maxAudioBytes = 25 * 1024 * 1024,
     className,
     onTranscript,
+    onTranscriptSegment,
     onError,
     rateLimits = null,
     onBusyChange,
     onRecordingChange,
+    longRecording = false,
+    onTranscribeProgress,
   },
   ref,
 ) {
   const [recording, setRecording] = useState(false);
   const [transcribing, setTranscribing] = useState(false);
+  const [elapsedMs, setElapsedMs] = useState(0);
   const recorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
   const skipTranscribeRef = useRef(false);
+  const rotatingRef = useRef(false);
+  const stillRecordingRef = useRef(false);
+  const segmentStartedRef = useRef(0);
+  const rotateTimerRef = useRef<number | null>(null);
+  const elapsedTimerRef = useRef<number | null>(null);
+  const mimeRef = useRef<string | undefined>(undefined);
+  const segmentTextsRef = useRef<string[]>([]);
+  const transcribeQueueRef = useRef<Promise<void>>(Promise.resolve());
+  const segmentIndexRef = useRef(0);
 
   const setBusy = useCallback(
     (busy: boolean) => {
@@ -93,41 +123,69 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
     streamRef.current = null;
   }, []);
 
+  const clearTimers = useCallback(() => {
+    if (rotateTimerRef.current != null) {
+      window.clearInterval(rotateTimerRef.current);
+      rotateTimerRef.current = null;
+    }
+    if (elapsedTimerRef.current != null) {
+      window.clearInterval(elapsedTimerRef.current);
+      elapsedTimerRef.current = null;
+    }
+  }, []);
+
   useEffect(() => {
     return () => {
       recorderRef.current?.stop();
+      clearTimers();
       stopStream();
     };
-  }, [stopStream]);
+  }, [clearTimers, stopStream]);
+
+  const transcribeOptions = useCallback(
+    () => ({
+      language,
+      maxAudioBytes,
+      rateLimits,
+      onProgress: onTranscribeProgress,
+    }),
+    [language, maxAudioBytes, onTranscribeProgress, rateLimits],
+  );
+
+  const enqueueSegmentTranscription = useCallback(
+    (blob: Blob, segmentNo: number) => {
+      transcribeQueueRef.current = transcribeQueueRef.current
+        .then(async () => {
+          onTranscribeProgress?.({ chunk: segmentNo, total: segmentNo, phase: "segment" });
+          const text = await transcribeAudioBlob(blob, transcribeOptions());
+          segmentTextsRef.current.push(text);
+          const full = segmentTextsRef.current.join("\n\n");
+          onTranscriptSegment?.(text, full);
+        })
+        .catch((e) => {
+          onError(appErrorFromUnknown(e, rateLimits));
+        });
+    },
+    [onError, onTranscriptSegment, onTranscribeProgress, rateLimits, transcribeOptions],
+  );
 
   const transcribeBlob = useCallback(
     async (raw: Blob) => {
       setTranscribing(true);
       setBusy(true);
+      onTranscribeProgress?.({ chunk: 1, total: 1, phase: "chunk" });
       try {
-        const wav = await blobToWav16(raw);
-        if (wav.size > maxAudioBytes) {
-          throw new Error("Aufnahme ist zu lang. Bitte kürzer sprechen (max. ca. 25 MB).");
-        }
-        const audio = await blobToBase64(wav);
-        const res = await fetch("/api/audio/transcriptions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ audio, language }),
-        });
-        await ensureOkApiResponse(res, rateLimits);
-        const data = (await res.json()) as { text?: string };
-        const text = typeof data.text === "string" ? data.text.trim() : "";
-        if (!text) throw new Error("Keine Sprache erkannt.");
+        const text = await transcribeAudioBlob(raw, transcribeOptions());
         onTranscript(text);
       } catch (e) {
         onError(appErrorFromUnknown(e, rateLimits));
       } finally {
         setTranscribing(false);
         setBusy(false);
+        onTranscribeProgress?.(null);
       }
     },
-    [language, maxAudioBytes, onError, onTranscript, rateLimits, setBusy],
+    [onError, onTranscript, onTranscribeProgress, rateLimits, setBusy, transcribeOptions],
   );
 
   const notifyRecording = useCallback(
@@ -137,9 +195,88 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
     [onRecordingChange],
   );
 
+  const startSegmentRecorder = useCallback(() => {
+    const stream = streamRef.current;
+    if (!stream) return;
+    const mime = mimeRef.current;
+    chunksRef.current = [];
+    segmentStartedRef.current = Date.now();
+    const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
+    recorderRef.current = rec;
+    rec.ondataavailable = (e) => {
+      if (e.data.size > 0) chunksRef.current.push(e.data);
+    };
+    rec.onstop = () => {
+      if (skipTranscribeRef.current) {
+        skipTranscribeRef.current = false;
+        chunksRef.current = [];
+        return;
+      }
+      const blob = new Blob(chunksRef.current, {
+        type: rec.mimeType || mime || "audio/webm",
+      });
+      chunksRef.current = [];
+
+      if (blob.size < 200) return;
+
+      if (longRecording && rotatingRef.current) {
+        rotatingRef.current = false;
+        segmentIndexRef.current += 1;
+        enqueueSegmentTranscription(blob, segmentIndexRef.current);
+        if (stillRecordingRef.current) startSegmentRecorder();
+        return;
+      }
+
+      if (longRecording) {
+        setTranscribing(true);
+        setBusy(true);
+        segmentIndexRef.current += 1;
+        enqueueSegmentTranscription(blob, segmentIndexRef.current);
+        void transcribeQueueRef.current
+          .then(() => {
+            const full = segmentTextsRef.current.join("\n\n");
+            if (full.trim()) onTranscript(full);
+          })
+          .finally(() => {
+            setTranscribing(false);
+            setBusy(false);
+            onTranscribeProgress?.(null);
+            segmentTextsRef.current = [];
+          });
+        return;
+      }
+
+      void transcribeBlob(blob);
+    };
+    rec.onerror = () => {
+      stillRecordingRef.current = false;
+      clearTimers();
+      stopStream();
+      setRecording(false);
+      setElapsedMs(0);
+      notifyRecording(false, null);
+      onError(plainAppError("Aufnahme fehlgeschlagen."));
+    };
+    rec.start(1000);
+  }, [
+    clearTimers,
+    enqueueSegmentTranscription,
+    longRecording,
+    notifyRecording,
+    onError,
+    onTranscript,
+    onTranscribeProgress,
+    setBusy,
+    stopStream,
+    transcribeBlob,
+  ]);
+
   const stopRecording = useCallback(
     (options?: { skipTranscribe?: boolean }) => {
       const rec = recorderRef.current;
+      stillRecordingRef.current = false;
+      clearTimers();
+      setElapsedMs(0);
       if (!rec || rec.state === "inactive") {
         setRecording(false);
         notifyRecording(false, null);
@@ -149,11 +286,10 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
       rec.stop();
       setRecording(false);
       notifyRecording(false, null);
+      if (options?.skipTranscribe) stopStream();
     },
-    [notifyRecording],
+    [clearTimers, notifyRecording, stopStream],
   );
-
-  useImperativeHandle(ref, () => ({ stopRecording }), [stopRecording]);
 
   const startRecording = useCallback(async () => {
     if (disabled || transcribing || recording) return;
@@ -164,37 +300,30 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
-      chunksRef.current = [];
+      segmentTextsRef.current = [];
+      segmentIndexRef.current = 0;
+      transcribeQueueRef.current = Promise.resolve();
       const mime = pickRecorderMime();
-      const rec = mime ? new MediaRecorder(stream, { mimeType: mime }) : new MediaRecorder(stream);
-      recorderRef.current = rec;
-      rec.ondataavailable = (e) => {
-        if (e.data.size > 0) chunksRef.current.push(e.data);
-      };
-      rec.onstop = () => {
-        stopStream();
-        if (skipTranscribeRef.current) {
-          skipTranscribeRef.current = false;
-          chunksRef.current = [];
-          return;
-        }
-        const blob = new Blob(chunksRef.current, {
-          type: rec.mimeType || mime || "audio/webm",
-        });
-        chunksRef.current = [];
-        if (blob.size < 200) {
-          onError(plainAppError("Aufnahme zu kurz."));
-          return;
-        }
-        void transcribeBlob(blob);
-      };
-      rec.onerror = () => {
-        stopStream();
-        setRecording(false);
-        notifyRecording(false, null);
-        onError(plainAppError("Aufnahme fehlgeschlagen."));
-      };
-      rec.start(250);
+      mimeRef.current = mime;
+      stillRecordingRef.current = true;
+      startSegmentRecorder();
+
+      const recordingStarted = Date.now();
+      elapsedTimerRef.current = window.setInterval(() => {
+        setElapsedMs(Date.now() - recordingStarted);
+      }, 1000);
+
+      if (longRecording) {
+        rotateTimerRef.current = window.setInterval(() => {
+          const rec = recorderRef.current;
+          if (!rec || rec.state !== "recording" || !stillRecordingRef.current) return;
+          if (Date.now() - segmentStartedRef.current >= SEGMENT_ROTATE_MS) {
+            rotatingRef.current = true;
+            rec.stop();
+          }
+        }, 5000);
+      }
+
       setRecording(true);
       notifyRecording(true, stream);
     } catch (e) {
@@ -208,7 +337,21 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
             : "Mikrofon konnte nicht gestartet werden.";
       onError(plainAppError(msg));
     }
-  }, [disabled, notifyRecording, onError, recording, stopStream, transcribeBlob, transcribing]);
+  }, [
+    disabled,
+    longRecording,
+    notifyRecording,
+    onError,
+    recording,
+    startSegmentRecorder,
+    stopStream,
+    transcribing,
+  ]);
+
+  useImperativeHandle(ref, () => ({ stopRecording, startRecording }), [
+    stopRecording,
+    startRecording,
+  ]);
 
   const handleClick = () => {
     if (recording) stopRecording();
@@ -217,10 +360,14 @@ export const SpeechInputButton = forwardRef<SpeechInputHandle, Props>(function S
 
   const busy = transcribing;
   const title = recording
-    ? "Aufnahme stoppen"
+    ? longRecording
+      ? `Aufnahme stoppen (${formatElapsed(elapsedMs)})`
+      : "Aufnahme stoppen"
     : transcribing
       ? "Wird transkribiert…"
-      : "Spracheingabe (Whisper)";
+      : longRecording
+        ? "Besprechung aufnehmen (Whisper, Auto-Chunks)"
+        : "Spracheingabe (Whisper)";
 
   return (
     <button
