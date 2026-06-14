@@ -11,6 +11,7 @@ export type PlaygroundUseCaseId =
   | "product-backlog"
   | "bug-ticket"
   | "feature-request"
+  | "feature-requests-feed"
   | "meeting-protocol"
   | "dev-debug"
   | "invoice-ocr"
@@ -40,6 +41,8 @@ export type PlaygroundUseCase = {
   formatWebSearchUserMessage?: (input: string) => string;
   /** Feste Suchzeilen — überspringen LLM-Verdichtung (z. B. datumsbezogene Sport-Suche). */
   webSearchDirectQueries?: (input: string) => string[];
+  /** Beim Senden zuerst öffentliche mittwald Feature Requests von GitHub laden. */
+  prefersMittwaldFeatureRequests?: boolean;
   sendButtonLabel?: string;
   prefersSpeech?: boolean;
   /** Langaufnahme: Whisper-Chunks alle ~14 min (Besprechungen >20 min). */
@@ -165,6 +168,7 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "complex-analysis",
   "bug-ticket",
   "feature-request",
+  "feature-requests-feed",
   "meeting-protocol",
   "dev-debug",
   "invoice-ocr",
@@ -620,6 +624,45 @@ Ausgabe — nur kopierbare Codeblöcke:
 
 Die drei Abschnitts-Überschriften im Codeblock **wörtlich** wie oben (mit ** für Fettdruck). Fließtext darunter in normalen Absätzen.`;
 
+export const FEATURE_REQUESTS_FEED_SYSTEM_PROMPT = `Du bist Redakteur für den öffentlichen mittwald Feature Tracker auf GitHub (Repository mittwald/feature-requests).
+
+Aufgabe: Die **10 zuletzt erstellten Feature Requests** aus den geladenen GitHub-Daten übersichtlich aufbereiten — für Team-Updates oder schnellen Überblick.
+
+Regeln:
+- Nutze **nur** die mitgelieferte Issue-Liste (Nummer, Titel, Status, Datum, URL, bodyPreview).
+- Keine erfundenen Issues — keine Issues außerhalb der Liste.
+- Sprache: **Deutsch**, sachlich, für Agentur- und Hosting-Nutzer verständlich.
+- Status: „offen“ oder „geschlossen“ aus den Daten übernehmen.
+- Links nur aus den URL-Zeilen der Treffer.
+
+Ausgabe in dieser Reihenfolge:
+
+## Die 10 neuesten Feature Requests
+Nummerierte Liste (neueste zuerst): **#Nummer — Titel** — Status — Erstellungsdatum — [GitHub-Link](URL)
+Darunter 1 kurzer Satz Zusammenfassung aus bodyPreview (wenn vorhanden).
+
+## Kurzüberblick
+3–4 Sätze: Welche Themen dominieren (z. B. mStudio, AI Hosting, Container)? Wie viele offen vs. geschlossen?
+
+## Auffälligkeiten
+Bullet-Liste (max. 5): wiederkehrende Wünsche, hohe Kommentarzahl, oder Labels — nur wenn in den Daten erkennbar.
+
+## Copy & Paste
+
+**Slack-Update (5 Zeilen)**
+\`\`\`
+…
+\`\`\`
+
+**3 Headlines für intern**
+\`\`\`
+1. …
+2. …
+3. …
+\`\`\`
+
+Wenn der Nutzer einen Schwerpunkt nennt (z. B. „AI Hosting“, „mStudio“), filtere die Liste mental und priorisiere passende Issues.`;
+
 export const MEETING_PROTOCOL_SYSTEM_PROMPT = `Du bist ein erfahrener Protokollführer — für Agenturen, Unternehmen und private Gespräche gleichermaßen.
 
 Aufgabe: Aus Besprechungs-Transkripten (Rohtext, ggf. in Abschnitten [Abschnitt 1/2 …]) ein passendes Protokoll erstellen. **Format, Ton und Schwerpunkte leitest du aus dem Gesprächsinhalt ab** — nicht pauschal „Business“.
@@ -1052,6 +1095,34 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
       `--- Briefing ---\n${text.trim()}\n--- Ende Briefing ---`,
     sendButtonLabel: "Issue erstellen",
     prefersImage: true,
+    copyableOutput: true,
+  },
+  {
+    id: "feature-requests-feed",
+    category: "delivery",
+    icon: "📋",
+    title: "Feature Requests (Feed)",
+    subtitle: "mittwald · GitHub",
+    description:
+      "Die 10 zuletzt eingereichten Feature Requests aus github.com/mittwald/feature-requests — live von GitHub, kompakt aufbereitet.",
+    modelId: MODEL_MINISTRAL,
+    modelLabel: "Ministral 3 14B",
+    systemPrompt: FEATURE_REQUESTS_FEED_SYSTEM_PROMPT,
+    starterInput:
+      "Zeige die 10 neuesten Feature Requests im mittwald Feature Tracker — mit Status, Datum und Kurzbeschreibung.",
+    composerPlaceholder:
+      "Optional: Schwerpunkt — z. B. „AI Hosting“, „mStudio“, „Container“ …",
+    steps: [
+      "„Aktualisieren“ — lädt die 10 neuesten Issues von GitHub.",
+      "Optional Schwerpunkt eingeben oder vorgefüllte Anfrage anpassen.",
+      "Übersicht kopieren — Slack-Update oder einzelne Links zu GitHub.",
+    ],
+    formatSubmissionMessage: (text) =>
+      `Bereite die geladenen mittwald Feature Requests als Übersicht auf.\n` +
+      `Priorität: neueste zuerst, Status und Links korrekt aus den GitHub-Daten.\n\n` +
+      `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`,
+    sendButtonLabel: "Aktualisieren",
+    prefersMittwaldFeatureRequests: true,
     copyableOutput: true,
   },
   {

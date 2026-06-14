@@ -55,6 +55,11 @@ import {
   sumCo2GramsFromAssistantMessages,
 } from "./inferenceFootprint";
 import { SessionCo2Footprint } from "./SessionCo2Footprint";
+import {
+  fetchMittwaldFeatureRequests,
+  formatMittwaldFeatureRequestsContext,
+  type MittwaldFeatureRequestsResponse,
+} from "./mittwaldFeatureRequests";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 import { WebSearchGlobeToggle, WebSearchModeChip } from "./WebSearchComposerControl";
 import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
@@ -150,6 +155,7 @@ export type ChatMessage = {
   content: string | ContentPart[];
   usage?: TokenMeter;
   webSearch?: WebSearchResponse;
+  mittwaldFeatureRequests?: MittwaldFeatureRequestsResponse;
   compare?: ModelComparePayload;
 };
 
@@ -484,6 +490,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   message,
   streaming,
   webSearchPending,
+  featureRequestsPending,
   webSearchProviderLabel,
   activeUseCaseId,
   onImageOpen,
@@ -491,6 +498,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   message: ChatMessage;
   streaming: boolean;
   webSearchPending?: boolean;
+  featureRequestsPending?: boolean;
   webSearchProviderLabel?: string;
   activeUseCaseId?: PlaygroundUseCaseId | null;
   onImageOpen: (src: string, alt: string) => void;
@@ -499,6 +507,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
     return (
       <div className="flex w-full justify-end">
         <div className="flex w-full max-w-full flex-col items-end gap-1">
+          {message.mittwaldFeatureRequests &&
+          message.mittwaldFeatureRequests.issues.length > 0 ? (
+            <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+              GitHub · {message.mittwaldFeatureRequests.issues.length} Feature Requests (
+              {message.mittwaldFeatureRequests.repo})
+            </p>
+          ) : null}
           {message.webSearch && message.webSearch.results.length > 0 ? (
             <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
               Websuche ({message.webSearch.provider}) · {message.webSearch.results.length} Treffer
@@ -516,6 +531,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
     isCopyableUseCase(activeUseCaseId) &&
     !streaming &&
     !webSearchPending &&
+    !featureRequestsPending &&
     assistantPlain.length > 0;
 
   return (
@@ -534,6 +550,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
                 <span className="text-neutral-400 dark:text-neutral-500"> · {webSearchProviderLabel}</span>
               ) : null}
               …
+            </p>
+          ) : featureRequestsPending ? (
+            <p className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400" role="status">
+              <span
+                className="inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-emerald-500 border-t-transparent dark:border-emerald-400"
+                aria-hidden
+              />
+              Lade Feature Requests von GitHub …
             </p>
           ) : (
             renderMessageContent(message.content, streaming, onImageOpen)
@@ -633,6 +657,7 @@ export function App() {
     () => Boolean(initial.webSearchDefaultEnabled),
   );
   const [webSearchBusy, setWebSearchBusy] = useState(false);
+  const [featureRequestsBusy, setFeatureRequestsBusy] = useState(false);
   const [webSearchConsentOpen, setWebSearchConsentOpen] = useState(false);
   const [webSearchConsentGranted, setWebSearchConsentGranted] = useState(() =>
     hasWebSearchConsent(),
@@ -722,7 +747,7 @@ export function App() {
   /** Clipboard-Bild wie in ChatGPT (Capture: greift vor Textfeld, verhindert Müll-Einfügen bei Screenshots). */
   const handleComposerPasteCapture = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
-      if (busy || speechBusy || webSearchBusy || voiceRecording.active) {
+      if (busy || speechBusy || webSearchBusy || featureRequestsBusy || voiceRecording.active) {
         return;
       }
       const items = e.clipboardData?.items;
@@ -740,7 +765,7 @@ export function App() {
         return;
       }
     },
-    [adjustInputHeight, busy, speechBusy, webSearchBusy, voiceRecording.active],
+    [adjustInputHeight, busy, speechBusy, webSearchBusy, featureRequestsBusy, voiceRecording.active],
   );
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -844,7 +869,7 @@ export function App() {
       return;
     }
 
-    if (busy || webSearchBusy) {
+    if (busy || webSearchBusy || featureRequestsBusy) {
       // Während des Streams / Websuche: sofort ans Ende — kein smooth, sonst kämpft die Animation
       // mit wachsendem Inhalt und der Text „springt“.
       const id = requestAnimationFrame(() => {
@@ -857,7 +882,7 @@ export function App() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
     return () => cancelAnimationFrame(id);
-  }, [messages, busy, webSearchBusy]);
+  }, [messages, busy, webSearchBusy, featureRequestsBusy]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -1064,6 +1089,7 @@ export function App() {
       contentOk &&
       !busy &&
       !webSearchBusy &&
+      !featureRequestsBusy &&
       !voiceRecording.active &&
       !speechTranscribing &&
       !ocrPipelineBusy
@@ -1075,6 +1101,7 @@ export function App() {
     activeUseCase?.briefingFields,
     busy,
     webSearchBusy,
+    featureRequestsBusy,
     voiceRecording.active,
     speechTranscribing,
     ocrPipelineBusy,
@@ -1144,11 +1171,11 @@ export function App() {
 
   const changeModel = useCallback(
     (modelId: string) => {
-      if (busy || webSearchBusy) stop();
+      if (busy || webSearchBusy || featureRequestsBusy) stop();
       if (modelId !== model) setModel(modelId);
       applyPreset(modelId);
     },
-    [applyPreset, busy, model, stop, webSearchBusy],
+    [applyPreset, busy, model, stop, webSearchBusy, featureRequestsBusy],
   );
 
   useEffect(() => {
@@ -1399,7 +1426,8 @@ export function App() {
       ? imageFileRef.current !== null
       : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
-    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy)) return;
+    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy))
+      return;
     if (sendLockRef.current) return;
 
     sendLockRef.current = true;
@@ -1856,13 +1884,58 @@ export function App() {
 
     const isolateWebSearch = useCaseIsolatesWebSearchContext(activeUseCase);
 
-    if (useWebSearch) {
+    const wantsMittwaldFeatureRequests =
+      activeUseCase?.prefersMittwaldFeatureRequests &&
+      typeof userContent === "string" &&
+      text.length > 0 &&
+      !file;
+
+    let mittwaldFeatureRequestsPayload: MittwaldFeatureRequestsResponse | undefined;
+
+    if (wantsMittwaldFeatureRequests || useWebSearch) {
       const optimisticUser: ChatMessage = { role: "user", content: userContent };
       setMessages([
         ...messagesBeforeSend,
         optimisticUser,
         { role: "assistant", content: "" },
       ]);
+    }
+
+    if (wantsMittwaldFeatureRequests) {
+      setFeatureRequestsBusy(true);
+      try {
+        mittwaldFeatureRequestsPayload = await fetchMittwaldFeatureRequests(
+          ctrl.signal,
+          playgroundRateLimits,
+        );
+      } catch (e) {
+        setFeatureRequestsBusy(false);
+        setMessages(messagesBeforeSend);
+        if (isAbortError(e)) throw e;
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        return;
+      }
+      setFeatureRequestsBusy(false);
+      if (mittwaldFeatureRequestsPayload.issues.length === 0) {
+        setMessages(messagesBeforeSend);
+        setAppError({
+          kind: "plain",
+          message: "Feature Requests: keine Issues von GitHub geladen. Bitte erneut versuchen.",
+        });
+        return;
+      }
+    }
+
+    if (useWebSearch) {
+      if (!wantsMittwaldFeatureRequests) {
+        const optimisticUser: ChatMessage = { role: "user", content: userContent };
+        setMessages([
+          ...messagesBeforeSend,
+          optimisticUser,
+          { role: "assistant", content: "" },
+        ]);
+      }
       setWebSearchBusy(true);
       try {
         webSearchPayload = await fetchWebSearch(
@@ -1905,6 +1978,9 @@ export function App() {
       role: "user",
       content: userContent,
       ...(webSearchPayload ? { webSearch: webSearchPayload } : {}),
+      ...(mittwaldFeatureRequestsPayload
+        ? { mittwaldFeatureRequests: mittwaldFeatureRequestsPayload }
+        : {}),
     };
     const nextThread = [...messagesBeforeSend, userMessage];
 
@@ -1950,19 +2026,20 @@ export function App() {
       apiMessages.push({ role: "system", content: systemPrompt.trim() });
     }
     for (const m of threadForApi) {
-      if (
-        webSearchPayload &&
-        m.role === "user" &&
-        m === userMessage &&
-        typeof m.content === "string"
-      ) {
-        apiMessages.push({
-          role: "user",
-          content: `${m.content}\n\n${formatWebSearchContext(webSearchPayload)}`,
-        });
-      } else {
-        apiMessages.push(m);
+      if (m.role === "user" && m === userMessage && typeof m.content === "string") {
+        let enriched = m.content;
+        if (mittwaldFeatureRequestsPayload) {
+          enriched = `${enriched}\n\n${formatMittwaldFeatureRequestsContext(mittwaldFeatureRequestsPayload)}`;
+        }
+        if (webSearchPayload) {
+          enriched = `${enriched}\n\n${formatWebSearchContext(webSearchPayload)}`;
+        }
+        if (enriched !== m.content) {
+          apiMessages.push({ role: "user", content: enriched });
+          continue;
+        }
       }
+      apiMessages.push(m);
     }
 
     const { messages: trimmedApiMessages, trimmedCount } = trimMessagesForApi(
@@ -2364,7 +2441,7 @@ export function App() {
               value={model}
               onChange={(e) => changeModel(e.target.value)}
               title={
-                busy || webSearchBusy
+                busy || webSearchBusy || featureRequestsBusy
                   ? "Modell wechseln (bricht die laufende Anfrage ab)"
                   : isModelCompareUseCase
                     ? "Modell A"
@@ -2397,7 +2474,7 @@ export function App() {
                   className="playground-text-small max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-8 font-bold text-playground-muted outline-none hover:bg-playground-muted/5 focus-visible:ring-2 focus-visible:ring-playground-border sm:max-w-[min(100%,14rem)]"
                   value={compareModelB}
                   onChange={(e) => setCompareModelB(e.target.value)}
-                  disabled={busy || webSearchBusy}
+                  disabled={busy || webSearchBusy || featureRequestsBusy}
                   title="Modell B"
                 >
                   {models.length === 0 ? (
@@ -2537,6 +2614,13 @@ export function App() {
                       streaming={busy && m.role === "assistant" && i === messages.length - 1}
                       webSearchPending={
                         webSearchBusy &&
+                        m.role === "assistant" &&
+                        i === messages.length - 1 &&
+                        typeof m.content === "string" &&
+                        m.content === ""
+                      }
+                      featureRequestsPending={
+                        featureRequestsBusy &&
                         m.role === "assistant" &&
                         i === messages.length - 1 &&
                         typeof m.content === "string" &&
@@ -2690,7 +2774,7 @@ export function App() {
                             placeholder={composerPlaceholder}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            disabled={busy || speechBusy || webSearchBusy || ocrPipelineBusy}
+                            disabled={busy || speechBusy || webSearchBusy || featureRequestsBusy || ocrPipelineBusy}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
@@ -2880,7 +2964,7 @@ export function App() {
                       placeholder={composerPlaceholder}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      disabled={busy || speechBusy || webSearchBusy || ocrPipelineBusy}
+                      disabled={busy || speechBusy || webSearchBusy || featureRequestsBusy || ocrPipelineBusy}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();

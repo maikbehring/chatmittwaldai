@@ -17,6 +17,7 @@ import {
   shouldSkipChatRateLimit,
 } from "./playgroundBonus.js";
 import { getWebSearchConfig, searchWeb, searchWebMulti } from "./webSearch.js";
+import { fetchMittwaldFeatureRequests } from "./mittwaldFeatureRequests.js";
 import {
   pickWebSearchQueryModel,
   synthesizeGoogleSearchQuery,
@@ -396,6 +397,35 @@ async function main() {
     skip: shouldSkipPublicRateLimit,
     handler: createRateLimitHandler("webSearch"),
   });
+
+  const featureRequestsLimiter = rateLimit({
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX_MODELS,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: shouldSkipPublicRateLimit,
+    handler: createRateLimitHandler("models"),
+  });
+
+  app.get(
+    "/api/mittwald/feature-requests",
+    featureRequestsLimiter,
+    async (req, res) => {
+      try {
+        const limit = Number(req.query?.limit) || 10;
+        const data = await fetchMittwaldFeatureRequests({ limit });
+        res.json(data);
+      } catch (e) {
+        console.error(e);
+        return jsonError(
+          res,
+          502,
+          "feature_requests_failed",
+          e instanceof Error ? e.message : "Feature Requests konnten nicht geladen werden.",
+        );
+      }
+    },
+  );
 
   app.post(
     "/api/rate-limit/continue-testing",

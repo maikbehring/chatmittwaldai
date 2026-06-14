@@ -122,6 +122,24 @@ export function PlaygroundUseCaseGuide({
         </p>
       ) : null}
 
+      {useCase.id === "feature-requests-feed" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-2.5 font-medium text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+          <span className="mr-1.5" aria-hidden>
+            📋
+          </span>
+          Live aus{" "}
+          <a
+            href="https://github.com/mittwald/feature-requests"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            github.com/mittwald/feature-requests
+          </a>
+          {" "}— die 10 zuletzt erstellten Issues (öffentliche GitHub-API).
+        </p>
+      ) : null}
+
       {useCase.id === "feature-request" ? (
         <p className="playground-text-small mb-3 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-2.5 font-medium text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
           <span className="mr-1.5" aria-hidden>
