@@ -10,7 +10,7 @@ export type ModelSettingsDockProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy: boolean;
-  /** Panel über dem Button (Desktop) vs. fixiert über der Eingabezeile (Mobile). */
+  /** Panel unter dem Button (Header) vs. fixiert über der Eingabezeile (Mobile-Legacy). */
   panelMode?: "docked" | "fixed";
   buttonClassName?: string;
   modelId: string;
@@ -152,7 +152,7 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
   const panelClassName =
     panelMode === "fixed"
       ? "fixed inset-x-3 bottom-[max(5.75rem,calc(env(safe-area-inset-bottom)+4.75rem))] z-50 max-h-[min(58vh,26rem)] w-auto overflow-y-auto rounded-xl border border-neutral-200 bg-white p-3 text-xs shadow-xl dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-black/40"
-      : "absolute bottom-full left-0 z-50 mb-2 w-[min(calc(100vw-2rem),20rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-xl border border-neutral-200 bg-white p-3 text-xs shadow-xl dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-black/40";
+      : "absolute left-0 top-full z-50 mt-2 w-[min(calc(100vw-2rem),20rem)] max-h-[min(70vh,28rem)] overflow-y-auto rounded-xl border border-neutral-200 bg-white p-3 text-xs shadow-xl dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-black/40";
 
   return (
     <div ref={rootRef} className="relative shrink-0 self-center">

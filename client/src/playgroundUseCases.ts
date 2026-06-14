@@ -1,12 +1,17 @@
-import { MODEL_DEVSTRAL, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
+import { MODEL_DEVSTRAL, MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
 
 export type PlaygroundUseCaseId =
   | "alt-tags"
   | "seo-meta"
+  | "linkedin-post"
+  | "current-research"
+  | "complex-analysis"
   | "product-backlog"
   | "bug-ticket"
   | "meeting-protocol"
-  | "dev-debug";
+  | "dev-debug"
+  | "invoice-ocr"
+  | "model-compare";
 
 export type PlaygroundUseCaseCategory = "content" | "delivery" | "development";
 
@@ -23,6 +28,8 @@ export type PlaygroundUseCase = {
   composerPlaceholder: string;
   /** Vorausgefüllter Eingabetext beim Start (optional). */
   starterInput?: string;
+  /** Strukturiertes Briefing im Guide (z. B. LinkedIn — Voice pro Feld). */
+  briefingFields?: PlaygroundBriefingField[];
   steps: string[];
   /** Wrappt die Nutzereingabe vor dem Senden (z. B. PM-Auswertung). */
   formatSubmissionMessage?: (input: string) => string;
@@ -33,9 +40,59 @@ export type PlaygroundUseCase = {
   recordButtonLabel?: string;
   /** Hinweis: Screenshot/Bild per + anhängen. */
   prefersImage?: boolean;
+  /** PDF oder Bild per + — z. B. Rechnungs-OCR (PDF wird clientseitig gerendert). */
+  prefersDocument?: boolean;
   /** Kopier-Buttons über Assistenten-Antworten (Codeblöcke). */
   copyableOutput?: boolean;
+  /** Zwei Modelle parallel vergleichen (Modell A = Header, B = zweites Dropdown). */
+  prefersModelCompare?: boolean;
+  /** Websuche beim Start des Use Cases automatisch aktivieren (Globus). */
+  prefersWebSearch?: boolean;
+  /** Standard Modell B beim Start des Vergleichs. */
+  defaultCompareModelB?: string;
 };
+
+export type PlaygroundBriefingField = {
+  id: string;
+  label: string;
+  placeholder?: string;
+};
+
+export const LINKEDIN_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
+  { id: "thema", label: "Thema", placeholder: "Worum geht der Post?" },
+  { id: "kernbotschaft", label: "Kernbotschaft (1 Satz)", placeholder: "Was soll hängen bleiben?" },
+  { id: "zielgruppe", label: "Zielgruppe", placeholder: "z. B. Marketing-Leads im Mittelstand" },
+  {
+    id: "beitragstyp",
+    label: "Beitragstyp",
+    placeholder: "Meinung / Case / Tipps / Story / Recruiting",
+  },
+  { id: "cta", label: "CTA (kurze Frage am Ende, per Du)", placeholder: "z. B. Was blockiert euch noch?" },
+];
+
+export function emptyBriefingValues(fields: PlaygroundBriefingField[]): Record<string, string> {
+  return Object.fromEntries(fields.map((f) => [f.id, ""]));
+}
+
+export function composeBriefingText(
+  fields: PlaygroundBriefingField[],
+  values: Record<string, string>,
+): string {
+  return fields
+    .map((f) => {
+      const v = values[f.id]?.trim() ?? "";
+      return v ? `${f.label}: ${v}` : `${f.label}:`;
+    })
+    .join("\n");
+}
+
+export function hasBriefingContent(
+  fields: PlaygroundBriefingField[] | undefined,
+  values: Record<string, string>,
+): boolean {
+  if (!fields?.length) return false;
+  return fields.some((f) => (values[f.id]?.trim() ?? "").length > 0);
+}
 
 export const USE_CASE_CATEGORY_LABELS: Record<PlaygroundUseCaseCategory, string> = {
   content: "Content & SEO",
@@ -46,9 +103,13 @@ export const USE_CASE_CATEGORY_LABELS: Record<PlaygroundUseCaseCategory, string>
 export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "alt-tags",
   "seo-meta",
+  "linkedin-post",
+  "current-research",
+  "complex-analysis",
   "bug-ticket",
   "meeting-protocol",
   "dev-debug",
+  "invoice-ocr",
 ];
 
 export function isCopyableUseCase(id: PlaygroundUseCaseId | null | undefined): boolean {
@@ -128,6 +189,171 @@ mittwald Playground — KI für Agenturen testen
 \`\`\`
 
 Wenn der Nutzer nur groben Kontext liefert, leite sinnvolle Snippets ab. Frage nur nach, wenn Seitentyp oder Zielgruppe völlig unklar sind.`;
+
+export const LINKEDIN_POST_SYSTEM_PROMPT = `Du schreibst LinkedIn-Posts auf Deutsch — persönlich, im Du, mit echter Erzählung wenn das Briefing es verlangt. Keine PR-Agentur, keine KI-Floskeln.
+
+## Stil (Pflicht)
+- **Anrede:** Immer **Du** („du/dein/dir“). **Nie Sie/Ihnen/Ihr.**
+- **Erzählung vs. Floskeln:** Persönliche Geschichten, echte Momente und konkrete Details aus dem Briefing sind **erwünscht**. Verboten sind leere Buzzwords und Pressetext — nicht die emotionale Tiefe.
+- **Konkret:** Namen, Daten, Orte, Handlungen nur aus dem Briefing — nichts erfinden.
+- **Whitespace:** Kurze Absätze (1–3 Sätze), Leerzeile dazwischen — mobil lesbar.
+- **Emojis:** 0–3, optional. Hashtags: **max. 4**, spezifisch, am Ende.
+- **CTA:** Wenn im Briefing leer: passende Du-Frage aus Kontext ableiten.
+
+## Länge — nach Beitragstyp (wichtig)
+| Typ | Ziel Zeichen | Zeilen ca. |
+|-----|--------------|------------|
+| **Story** | **1.100–1.600** (min. 1.000) | 16–22 |
+| Meinung / Case | 900–1.300 | 14–18 |
+| Tipps / Recruiting / Ankündigung | 800–1.100 | 12–16 |
+
+**Story ist keine Kurzmeldung.** Nimm dir Raum für einen Bogen: Anfang → was es bedeutet hat → was sich ändert und warum → Hoffnung oder Perspektive → Einladung/CTA.
+
+## Verboten
+Sie-Anrede. Außerdem: „In der heutigen digitalen Welt“, „Es ist kein Geheimnis“, „Game-Changer“, „disruptiv“, „ganzheitlich“, „Synergien“, „Transformation“, „Mehr denn je“, „Am Ende des Tages“, „Der Schlüssel zum Erfolg“, leere Superlative.
+
+Keine Strategie-Erklärung in der Ausgabe. Kein Fazit, das nur die Hook wiederholt.
+
+## Hook
+Zeile 1–2 vor „mehr anzeigen“: emotionaler Einstieg, konkrete News oder Bild — darf ruhig **länger** sein, wenn es die Story trägt.
+
+## Beitragstyp — Story (besonders wichtig)
+Struktur mit **Substanz**, nicht Stichpunkte:
+1. **Einstieg** — Situation oder Nachricht (konkret: Name, Datum).
+2. **Was es war** — 2–3 Sätze: Herz, Aufwand, Bedeutung (aus Kernbotschaft).
+3. **Wendepunkt** — warum sich etwas ändert; ehrlich, ohne Drama-Übertreibung.
+4. **Was jetzt** — Termin, Ort, Einladung (Fakten aus Briefing).
+5. **Perspektive** — Hoffnung, Weitergabe, offenes Ende (aus Kernbotschaft).
+6. **CTA** — echte Du-Frage oder Einladung zum Dialog.
+
+Andere Typen:
+- **Meinung:** Hook → 3 Argumente mit Beispielen → Frage.
+- **Case Study:** Ergebnis → Ausgangslage → Weg → Ergebnis → Learning → Frage.
+- **Tipp-Liste:** bis 4 Punkte, je 2 Sätze mit Nutzen.
+- **Recruiting / Ankündigung:** emotionaler Nutzen für Leser, dann Fakten.
+
+## Ausgabe
+
+**LinkedIn-Beitrag**
+\`\`\`
+[Vollständiger Post — erzählerisch wo Story, Du, Leerzeilen, Hashtags]
+\`\`\`
+(Zeichen: …)
+
+**Variante — kompakter**
+\`\`\`
+[Gleiche Story, verdichtet — 700–900 Zeichen, Kern bleibt]
+\`\`\`
+
+**Hook B**
+\`\`\`
+[Alternative Zeile 1–2]
+\`\`\`
+
+**Erstkommentar** — nur bei Link im Briefing:
+\`\`\`
+[1–2 Sätze, Du]
+\`\`\`
+
+Briefing dünn → sinnvolle Annahmen; bei Story trotzdem erzählerisch ausholen.`;
+
+export const CURRENT_RESEARCH_SYSTEM_PROMPT = `Du bist ein erfahrener Research-Analyst und Content-Stratege für Web- und Digitalagenturen.
+
+Aufgabe: Aktuelle Informationen aus Websuche-Treffern aufbereiten — für Pitches, Kundenbriefings, Blog-Ideen oder Wettbewerbsanalysen.
+
+Wichtig:
+- Die Websuche wurde bereits durchgeführt; Treffer stehen dir im Kontext (Titel, URL, Snippet).
+- Nutze **nur** diese Treffer und die Nutzerfrage — kein erfundenes „Live-Wissen“ ohne Quelle.
+- Wenn Treffer leer oder widersprüchlich: ehrlich sagen, was fehlt, und sinnvolle Nachfragen stellen.
+- Datum/Uhrzeit aus dem Kontext beachten — „aktuell“ und „neu“ nur mit Bezug zu Treffern und heutigem Datum.
+- Sprache: Deutsch, sachlich, für Agentur-Teams verständlich.
+- Unterscheide **Fakt** (mit Quelle) vs. **Einordnung** (deine Analyse).
+- URLs aus den Treffern nennen — keine erfundenen Links.
+
+Ausgabe in dieser Reihenfolge:
+
+## Kurzfassung
+3–5 Sätze: Kernaussage für den Pitch oder das Briefing.
+
+## Fakten & Quellen
+Bullet-Liste: Fakt — Quelle (Titel oder Domain, URL wenn im Treffer).
+
+## Einordnung für die Agentur
+Was bedeutet das für Angebot, Positionierung oder Content? 2–4 Sätze.
+
+## Offene Punkte
+Was ist unklar oder braucht vertiefte Recherche?
+
+## Ausgabeformat (Copy & Paste)
+Kopierbare Felder mit Fettschrift-Label und eigenem Codeblock:
+
+**Pitch-Kurztext (3 Sätze)**
+\`\`\`
+…
+\`\`\`
+
+**Bullet-Liste fürs Kundenbriefing**
+\`\`\`
+- …
+\`\`\`
+
+**Blog-/LinkedIn-Hook**
+\`\`\`
+…
+\`\`\`
+
+Wenn der Nutzer nur ein Stichwort nennt (z. B. Wettbewerber, Technologie, Branche), leite eine sinnvolle Recherche-Richtung ab — frage nur nach, wenn Ziel (Pitch vs. Blog vs. intern) völlig unklar ist.`;
+
+export const COMPLEX_ANALYSIS_SYSTEM_PROMPT = `Du bist ein erfahrener Senior-Berater für Web- und Digitalagenturen — mit Fokus auf Vertrieb, Projektleitung und technische Machbarkeit.
+
+Aufgabe: Komplexe Unterlagen (RFP-Auszüge, Kundenmails, Anforderungslisten, Vertragsklauseln, Lastenhefte) strukturiert analysieren — für Go/No-Go, Angebotserstellung und Klärungsgespräche.
+
+Regeln:
+- Sprache: Deutsch, professionell, für PM, Vertrieb und Tech-Leads gleichermaßen verständlich.
+- Arbeite nur mit dem gelieferten Material — nichts erfinden.
+- Unterscheide klar: **Fakt** (aus Text) vs. **Annahme** vs. **Risiko** — jeweils kennzeichnen.
+- Keine Tech-Stack-Vorgaben, außer der Kunde fordert sie explizit — bei Machbarkeit allgemein bleiben (Scope, Integrationen, Daten, SLAs).
+- Widersprüche im Material explizit benennen.
+- Fehlende Infos in „Offene Punkte“ — nicht durch Raten füllen.
+- Denke Schritt für Schritt intern durch; in der Antwort kompakt und handlungsorientiert bleiben.
+
+Ausgabe in dieser Reihenfolge:
+
+## Kurzfassung
+3–5 Sätze: Worum geht es, was ist die Kerneinschätzung?
+
+## Go/No-Go-Einschätzung
+Ampel (Grün / Gelb / Rot) mit 2–4 Sätzen Begründung — aus Agentursicht (Scope, Risiko, Passung).
+
+## Risiken & Annahmen
+Priorisierte Bullet-Liste (hoch → niedrig).
+
+## Offene Punkte & Rückfragen
+Was muss vor Angebot oder Kick-off geklärt werden?
+
+## Nächste Schritte
+Konkrete 3–5 Aktionen für das Team.
+
+## Ausgabeformat (Copy & Paste)
+Kopierbare Felder mit Fettschrift-Label und eigenem Codeblock:
+
+**Go/No-Go (1 Absatz)**
+\`\`\`
+…
+\`\`\`
+
+**Rückfragen an den Kunden**
+\`\`\`
+1. …
+2. …
+\`\`\`
+
+**Internes Briefing (Bullet-Liste)**
+\`\`\`
+- …
+\`\`\`
+
+Wenn nur ein kurzer Auszug vorliegt, arbeite damit — markiere Lücken. Frage nur nach, wenn der Analysetyp (Angebot vs. Vertrag vs. Machbarkeit) völlig unklar ist.`;
 
 export const PRODUCT_BACKLOG_SYSTEM_PROMPT = `Du bist ein erfahrener Product Owner / Product Manager in einer Web- und Digitalagentur.
 
@@ -354,6 +580,69 @@ fix(scope): …
 
 Wenn kein Code nötig: leeren Code-Fix-Block weglassen, stattdessen in Fix-Schritten beschreiben.`;
 
+export const INVOICE_OCR_SYSTEM_PROMPT = `Du bist ein erfahrener Buchhaltungs- und OCR-Assistent in einer Agentur.
+
+Aufgabe: Aus OCR-Rohtext einer Rechnung (bereits per GLM-OCR erkannt) strukturierte Rechnungsdaten extrahieren.
+
+Wichtig:
+- Nur Fakten aus dem OCR-Text — nichts erfinden.
+- Fehlende oder unleserliche Felder: null oder „[nicht erkannt]“.
+- Unterscheide: **Leistungserbringer** (Rechnungssteller) vs. **Empfänger/Kunde** vs. **Vermittler** (z. B. Plattform).
+- Beträge und Währung exakt wie im Text; deutsche Formatierung beibehalten, wo sinnvoll.
+- Bei mehrseitigen OCR-Texten: alle Seiten zusammenführen.
+
+Ausgabe in dieser Reihenfolge:
+
+## Kurzfassung
+2–3 Sätze: Was für eine Rechnung, von wem, Gesamtbetrag.
+
+## Rechnungsdaten
+Markdown-Tabelle mit Spalten **Feld** | **Wert** — mindestens:
+Rechnungsnummer, Rechnungsdatum, Leistungserbringer, Empfänger/Kunde, Vermittler (falls vorhanden), Nettobetrag, MwSt., Bruttobetrag, Gesamtbetrag, Währung, Zahlungsart, Leistungsbeschreibung.
+
+## Positionen
+Bullet-Liste oder Tabelle, wenn im OCR-Text erkennbar.
+
+## Hinweise & Unsicherheiten
+Offene Punkte, widersprüchliche Werte, fehlende Kopfzeilen.
+
+## Ausgabeformat (Copy & Paste)
+Kopierbare Felder mit Fettschrift-Label und eigenem Codeblock:
+
+**Rechnungsdaten (JSON)**
+\`\`\`json
+{
+  "rechnungsnummer": null,
+  "rechnungsdatum": null,
+  "leistungserbringer": { "name": null, "adresse": null },
+  "empfaenger": { "name": null, "adresse": null },
+  "vermittler": { "name": null, "adresse": null },
+  "positionen": [],
+  "nettobetrag": null,
+  "mwst": null,
+  "bruttobetrag": null,
+  "gesamtbetrag": null,
+  "waehrung": "EUR",
+  "zahlungsart": null,
+  "hinweise": []
+}
+\`\`\`
+
+**Kurztext für Buchhaltung**
+\`\`\`
+…
+\`\`\`
+
+Das JSON nur mit Werten aus dem OCR-Text befüllen.`;
+
+export const MODEL_COMPARE_SYSTEM_PROMPT = `Du antwortest sachlich und klar auf Deutsch.
+
+Regeln:
+- Gleiche Frage wie das andere Modell im Vergleich — keine Meta-Kommentare zum Vergleich selbst.
+- Keine Einleitung wie „Hier ist meine Antwort“ — direkt zum Inhalt.
+- Strukturiert wo sinnvoll (Listen, kurze Absätze).
+- Bei Unsicherheit transparent kennzeichnen.`;
+
 export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
   {
     id: "alt-tags",
@@ -395,6 +684,81 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
       "Generieren — Snippets per Kopieren-Button ins CMS übernehmen.",
     ],
     sendButtonLabel: "Meta-Daten generieren",
+    copyableOutput: true,
+  },
+  {
+    id: "linkedin-post",
+    category: "content",
+    icon: "💼",
+    title: "LinkedIn-Beitrag",
+    subtitle: "Social · B2B Content",
+    description:
+      "Posts im Du mit echter Erzählung — Stories 1.100–1.600 Zeichen, persönlich ohne PR-BlaBla, kompakte Variante zum Kopieren.",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B",
+    systemPrompt: LINKEDIN_POST_SYSTEM_PROMPT,
+    composerPlaceholder:
+      "Optional: Ergänzungen zum Briefing …",
+    briefingFields: LINKEDIN_BRIEFING_FIELDS,
+    steps: [
+      "Briefing-Felder ausfüllen — Feld anklicken, dann per Mikro im Eingabefeld einsprechen.",
+      "Optional: Bild per + für eine kurze Bildzeile im Post.",
+      "„Beitrag erstellen“ — Hauptpost + kompakte Variante kopieren.",
+    ],
+    formatSubmissionMessage: (text) =>
+      `Schreibe einen LinkedIn-Post. Beitragstyp aus dem Briefing beachten — bei **Story**: 1.100–1.600 Zeichen, erzählerischer Bogen (min. 6 Absätze), nicht nur Stichpunkte. Sonst 800–1.300 Zeichen.\n` +
+      `Immer Du — nie Sie. Persönlich und erzählerisch, keine PR-Floskeln, keine Strategie-Erklärung in der Ausgabe.\n` +
+      `Ausgabe: Hauptpost, kompakte Variante (700–900 Zeichen), Hook B, Erstkommentar nur bei Link im Briefing.\n\n` +
+      `--- Briefing ---\n${text.trim()}\n--- Ende Briefing ---`,
+    sendButtonLabel: "Beitrag erstellen",
+    prefersImage: true,
+    copyableOutput: true,
+  },
+  {
+    id: "current-research",
+    category: "content",
+    icon: "🌐",
+    title: "Aktuelle Recherche",
+    subtitle: "Websuche + Qwen",
+    description:
+      "Wettbewerber, Trends oder Fakten live recherchieren — Qwen fasst Treffer für Pitch, Briefing oder Content zusammen.",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B + Websuche",
+    systemPrompt: CURRENT_RESEARCH_SYSTEM_PROMPT,
+    composerPlaceholder:
+      "Thema oder Frage — z. B. „Was macht Wettbewerber X?“ oder „Aktuelle TYPO3-Trends?“ …",
+    steps: [
+      "Recherchefrage eingeben (Firma, Produkt, Technologie, Branche).",
+      "Websuche startet automatisch (Globus aktiv) — Treffer werden vor der Antwort geladen.",
+      "Ergebnis mit Fakten & Quellen — Pitch-Text oder Bullet-Liste per Kopieren-Button übernehmen.",
+    ],
+    sendButtonLabel: "Recherchieren",
+    prefersWebSearch: true,
+    copyableOutput: true,
+  },
+  {
+    id: "complex-analysis",
+    category: "delivery",
+    icon: "🧠",
+    title: "Komplexe Analyse",
+    subtitle: "Reasoning · gpt-oss",
+    description:
+      "RFP, Kundenmail oder Anforderungsliste → Risiken, Go/No-Go und Rückfragen. gpt-oss mit Reasoning für tiefe Auswertung.",
+    modelId: MODEL_GPT_OSS,
+    modelLabel: "gpt-oss 120B",
+    systemPrompt: COMPLEX_ANALYSIS_SYSTEM_PROMPT,
+    composerPlaceholder:
+      "RFP-Auszug, Kundenmail oder Anforderungsliste einfügen — optional Kontext (Budget, Deadline) …",
+    steps: [
+      "Unterlagen einfügen (RFP, Mail, Lastenheft, Vertragsauszug).",
+      "Reasoning-Stufe im Zahnrad wählen (medium empfohlen, high für tiefe Analysen).",
+      "„Analysieren“ — Go/No-Go, Risiken und Rückfragen per Kopieren-Button übernehmen.",
+    ],
+    formatSubmissionMessage: (text) =>
+      `Bitte analysiere die folgenden Unterlagen strukturiert (Go/No-Go, Risiken, offene Punkte, nächste Schritte).\n` +
+      `Nur Inhalte aus dem Material — Annahmen und Lücken klar kennzeichnen.\n\n` +
+      `--- Unterlagen ---\n${text.trim()}\n--- Ende Unterlagen ---`,
+    sendButtonLabel: "Analysieren",
     copyableOutput: true,
   },
   {
@@ -502,6 +866,50 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     sendButtonLabel: "Fehler analysieren",
     prefersImage: true,
     copyableOutput: true,
+  },
+  {
+    id: "invoice-ocr",
+    category: "delivery",
+    icon: "🧾",
+    title: "Rechnung OCR",
+    subtitle: "GLM-OCR + Struktur",
+    description:
+      "PDF-Rechnung hochladen — GLM-OCR erkennt Text, Qwen strukturiert Felder (Nr., Absender, Beträge) zum Kopieren.",
+    modelId: MODEL_QWEN_35,
+    modelLabel: "Qwen3.5 122B + GLM-OCR",
+    systemPrompt: INVOICE_OCR_SYSTEM_PROMPT,
+    composerPlaceholder:
+      "Rechnungs-PDF per + hochladen — optional Hinweise (z. B. erwarteter Absender) …",
+    steps: [
+      "Rechnungs-PDF oder Scan per + anhängen (PDF wird im Browser gerendert, nicht direkt an GLM-OCR gesendet).",
+      "Optional: Hinweise ergänzen (z. B. „Freenow-Taxirechnung“).",
+      "„Rechnung extrahieren“ — zuerst GLM-OCR (Rohtext), dann strukturierte Felder mit Kopieren-Buttons.",
+    ],
+    sendButtonLabel: "Rechnung extrahieren",
+    prefersDocument: true,
+    copyableOutput: true,
+  },
+  {
+    id: "model-compare",
+    category: "development",
+    icon: "⚖️",
+    title: "Modelle vergleichen",
+    subtitle: "A/B · Side-by-Side",
+    description:
+      "Gleicher Prompt an zwei Modelle — Antworten nebeneinander mit Token-Verbrauch. Ideal zum Modell-Tuning.",
+    modelId: MODEL_MINISTRAL,
+    modelLabel: "Ministral vs. Qwen3.6",
+    defaultCompareModelB: MODEL_QWEN_36,
+    systemPrompt: MODEL_COMPARE_SYSTEM_PROMPT,
+    composerPlaceholder: "Gleiche Frage an Modell A und B — optional Bild per + für Vision …",
+    steps: [
+      "Modell A (Header links) und Modell B (Header rechts) wählen.",
+      "Prompt eingeben — optional Bild für Vision-Modelle.",
+      "„Vergleichen“ — beide Modelle antworten parallel (zählt als 2 Chat-Anfragen).",
+    ],
+    sendButtonLabel: "Vergleichen",
+    prefersModelCompare: true,
+    prefersImage: true,
   },
 ];
 

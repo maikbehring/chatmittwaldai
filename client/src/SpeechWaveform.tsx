@@ -1,21 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 
-const BAR_COUNT = 52;
+const BAR_COUNT_DEFAULT = 52;
+const BAR_COUNT_COMPACT = 28;
 
 type Props = {
   stream: MediaStream | null;
+  /** Weniger Balken — z. B. schmale Composer-Leiste auf Mobile. */
+  compact?: boolean;
   className?: string;
 };
 
 /** Wellenform über die volle Eingabebreite (Pegel-Balken gleichmäßig verteilt). */
-export function SpeechWaveform({ stream, className = "" }: Props) {
-  const [levels, setLevels] = useState<number[]>(() => Array(BAR_COUNT).fill(0.15));
+export function SpeechWaveform({ stream, compact = false, className = "" }: Props) {
+  const barCount = compact ? BAR_COUNT_COMPACT : BAR_COUNT_DEFAULT;
+  const [levels, setLevels] = useState<number[]>(() =>
+    Array(barCount).fill(0.15),
+  );
   const rafRef = useRef<number>(0);
   const ctxRef = useRef<AudioContext | null>(null);
 
   useEffect(() => {
+    setLevels(Array(barCount).fill(0.15));
     if (!stream) {
-      setLevels(Array(BAR_COUNT).fill(0.15));
       return;
     }
 
@@ -34,13 +40,13 @@ export function SpeechWaveform({ stream, className = "" }: Props) {
       source.connect(analyser);
 
       const bins = new Uint8Array(analyser.frequencyBinCount);
-      const step = Math.max(1, Math.floor(bins.length / BAR_COUNT));
+      const step = Math.max(1, Math.floor(bins.length / barCount));
 
       const tick = () => {
         if (cancelled) return;
         analyser.getByteFrequencyData(bins);
         const next: number[] = [];
-        for (let i = 0; i < BAR_COUNT; i++) {
+        for (let i = 0; i < barCount; i++) {
           const idx = Math.min(i * step, bins.length - 1);
           const norm = bins[idx] / 255;
           next.push(0.12 + norm * 0.88);
@@ -59,18 +65,18 @@ export function SpeechWaveform({ stream, className = "" }: Props) {
       void ctx.close().catch(() => undefined);
       ctxRef.current = null;
     };
-  }, [stream]);
+  }, [stream, barCount]);
 
   return (
     <div
-      className={`flex min-h-[44px] w-full min-w-0 flex-1 items-center gap-[2px] px-2 ${className}`}
+      className={`flex min-h-[36px] min-w-0 flex-1 items-center gap-px overflow-hidden px-1 sm:min-h-[44px] sm:gap-[2px] sm:px-2 ${className}`}
       role="img"
       aria-label="Sprache wird aufgenommen"
     >
       {levels.map((level, i) => (
         <span
           key={i}
-          className={`voice-wave-bar mx-auto min-w-[2px] max-w-[4px] flex-1 rounded-full bg-neutral-700 dark:bg-neutral-300 ${stream ? "" : "voice-wave-bar-idle"}`}
+          className={`voice-wave-bar mx-auto min-w-0 max-w-[3px] flex-1 rounded-full bg-neutral-700 dark:bg-neutral-300 sm:max-w-[4px] ${stream ? "" : "voice-wave-bar-idle"}`}
           style={{
             height: `${Math.round(6 + level * 22)}px`,
             opacity: 0.4 + level * 0.6,

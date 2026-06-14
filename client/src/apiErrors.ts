@@ -8,6 +8,12 @@ export type PlaygroundRateLimits = {
   webSearch: number;
 };
 
+export type PlaygroundBonusChatConfig = {
+  enabled: boolean;
+  requestsPerGrant: number;
+  maxGrantsPerWindow: number;
+};
+
 export type RateLimitScope = "chat" | "models" | "transcribe" | "webSearch";
 
 export type AppUiError =
@@ -109,8 +115,20 @@ function looksLikeRateLimitMessage(message: string): boolean {
     m.includes("rate limit") ||
     m.includes("rate_limited") ||
     m.includes("too many requests") ||
+    m.includes("429") ||
     m.includes("zu viele") ||
     (m.includes("limit") && m.includes("erreicht"))
+  );
+}
+
+function looksLikePayloadTooLargeMessage(message: string): boolean {
+  const m = message.toLowerCase();
+  return (
+    m.includes("payloadtoolarge") ||
+    m.includes("payload_too_large") ||
+    m.includes("entity too large") ||
+    m.includes("request entity too large") ||
+    m.includes("anfrage zu groß")
   );
 }
 
@@ -119,6 +137,12 @@ export function appErrorFromApiResponse(
   body: ApiErrorJson,
   rateLimits?: PlaygroundRateLimits | null,
 ): AppUiError {
+  if (res.status === 413 || body.error?.code === "payload_too_large") {
+    const msg =
+      body.error?.message ??
+      "Anfrage zu groß. Bild oder PDF verkleinern oder MAX_BODY_BYTES in der Server-Konfiguration erhöhen.";
+    return { kind: "plain", message: msg };
+  }
   if (res.status === 429 || body.error?.code === "rate_limited") {
     const scope = body.error?.scope;
     const maxRequests =
@@ -213,7 +237,54 @@ export function appErrorFromUnknown(
         waitMinutes: rateLimits?.windowMinutes ?? 15,
       };
     }
+    if (looksLikePayloadTooLargeMessage(e.message)) {
+      return {
+        kind: "plain",
+        message:
+          "Anfrage zu groß für den Server. Bild/PDF verkleinern oder MAX_BODY_BYTES in .env erhöhen (z. B. 10485760 für 10 MB).",
+      };
+    }
     return { kind: "plain", message: extractUserFacingApiError(e.message) };
   }
   return plainAppError("Unbekannter Fehler.");
+}
+
+export function isAbortError(e: unknown): boolean {
+  if (e instanceof DOMException && e.name === "AbortError") return true;
+  return e instanceof Error && e.name === "AbortError";
+}
+
+/** Fehler aus Send/Stream — Abort durch Nutzer wird ignoriert (kein UI-Fehler). */
+export function appErrorFromSendFailure(
+  e: unknown,
+  rateLimits?: PlaygroundRateLimits | null,
+): AppUiError | null {
+  if (isAbortError(e)) return null;
+  return appErrorFromUnknown(e, rateLimits);
+}
+
+import { playgroundApiHeaders } from "./playgroundSessionApiKey";
+
+export async function grantBonusChatRequests(): Promise<{
+  granted: number;
+  remaining: number;
+}> {
+  const res = await fetch("/api/rate-limit/continue-testing", {
+    method: "POST",
+    headers: playgroundApiHeaders({ "Content-Type": "application/json" }),
+  });
+  const body = (await res.json().catch(() => ({}))) as {
+    granted?: number;
+    remaining?: number;
+    error?: { message?: string };
+  };
+  if (!res.ok) {
+    throw new Error(
+      body.error?.message ?? "Test-Erweiterung konnte nicht aktiviert werden.",
+    );
+  }
+  return {
+    granted: body.granted ?? 0,
+    remaining: body.remaining ?? 0,
+  };
 }

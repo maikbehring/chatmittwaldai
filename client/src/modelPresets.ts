@@ -21,6 +21,8 @@ export const MODEL_DEVSTRAL = "Devstral-Small-2-24B-Instruct-2512";
 export const MODEL_GPT_OSS = "gpt-oss-120b";
 export const MODEL_QWEN_35 = "Qwen3.5-122B-A10B-FP8";
 export const MODEL_QWEN_36 = "Qwen3.6-35B-A3B-FP8";
+/** Dediziertes OCR-Modell (mittwald) — Texterkennung aus Dokumenten/Bildern. */
+export const MODEL_GLM_OCR = "GLM-OCR";
 
 export function getInferencePreset(modelId: string): InferencePresetSlice {
   switch (modelId) {

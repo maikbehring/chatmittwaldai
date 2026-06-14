@@ -2,6 +2,7 @@ import {
   ensureOkApiResponse,
   type PlaygroundRateLimits,
 } from "./apiErrors";
+import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 import { blobToBase64, blobToWav16Chunks } from "./blobToWav";
 
 export type TranscribeProgress = {
@@ -18,7 +19,7 @@ async function transcribeWavBlob(
   const audio = await blobToBase64(wav);
   const res = await fetch("/api/audio/transcriptions", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: playgroundApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ audio, language }),
   });
   await ensureOkApiResponse(res, rateLimits);

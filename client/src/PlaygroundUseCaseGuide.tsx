@@ -1,5 +1,7 @@
 import type { PlaygroundUseCase } from "./playgroundUseCases";
+import { MODEL_GPT_OSS } from "./modelPresets";
 import { WHISPER_CHUNK_MAX_SECONDS } from "./blobToWav";
+import { OCR_MAX_PAGES } from "./pdfToOcrImages";
 
 type Props = {
   useCase: PlaygroundUseCase;
@@ -8,6 +10,10 @@ type Props = {
   speechEnabled?: boolean;
   recording?: boolean;
   transcribeProgress?: string | null;
+  briefingValues?: Record<string, string>;
+  activeBriefingFieldId?: string | null;
+  onBriefingChange?: (id: string, value: string) => void;
+  onBriefingFieldFocus?: (id: string) => void;
 };
 
 export function PlaygroundUseCaseGuide({
@@ -17,6 +23,10 @@ export function PlaygroundUseCaseGuide({
   speechEnabled,
   recording,
   transcribeProgress,
+  briefingValues = {},
+  activeBriefingFieldId = null,
+  onBriefingChange,
+  onBriefingFieldFocus,
 }: Props) {
   const chunkMin = Math.round(WHISPER_CHUNK_MAX_SECONDS / 60);
 
@@ -59,7 +69,38 @@ export function PlaygroundUseCaseGuide({
         </p>
       ) : null}
 
-      {useCase.prefersImage ? (
+      {useCase.prefersModelCompare ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2.5 font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <span className="mr-1.5" aria-hidden>
+            ⚖️
+          </span>
+          <strong>Modell A</strong> und <strong>Modell B</strong> im Header wählen — gleicher Prompt, Antworten
+          nebeneinander. Ein Vergleich zählt als <strong>2 Chat-Anfragen</strong> (Rate-Limit).
+        </p>
+      ) : null}
+
+      {useCase.prefersWebSearch ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-sky-200/80 bg-sky-50/80 px-3 py-2.5 font-medium text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+          <span className="mr-1.5" aria-hidden>
+            🌐
+          </span>
+          <strong>Websuche</strong> ist für diesen Use Case automatisch aktiv (Globus im Eingabefeld). Beim ersten
+          Mal erscheint ein Einwilligungs-Dialog — Treffer werden vor der KI-Antwort geladen.
+        </p>
+      ) : null}
+
+      {useCase.modelId === MODEL_GPT_OSS ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-violet-200/80 bg-violet-50/80 px-3 py-2.5 font-medium text-violet-950 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
+          <span className="mr-1.5" aria-hidden>
+            🧠
+          </span>
+          <strong>Reasoning</strong> steuert die Analyse-Tiefe — im Header über das{" "}
+          <strong className="text-playground-ink">Zahnrad</strong> (low / medium / high). Standard: medium; high für
+          umfangreiche Unterlagen.
+        </p>
+      ) : null}
+
+      {useCase.prefersImage && !useCase.prefersDocument ? (
         <p className="playground-text-small mb-3 rounded-xl border border-playground-border bg-playground-main px-3 py-2.5 font-medium text-playground-muted">
           <span className="mr-1.5" aria-hidden>
             📎
@@ -67,6 +108,57 @@ export function PlaygroundUseCaseGuide({
           Screenshot oder Bild per <strong className="text-playground-ink">+</strong> im Eingabefeld
           anhängen — das Modell wertet es mit aus.
         </p>
+      ) : null}
+
+      {useCase.prefersDocument ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-violet-200/80 bg-violet-50/80 px-3 py-2.5 font-medium text-violet-950 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
+          <span className="mr-1.5" aria-hidden>
+            📄
+          </span>
+          <strong>PDF oder Bild</strong> per <strong className="text-playground-ink">+</strong> anhängen.
+          PDFs werden im Browser in Bilder umgewandelt (bessere Kopfzeilen-Erkennung als PDF-Upload direkt an
+          GLM-OCR). Bis {OCR_MAX_PAGES} Seiten.
+        </p>
+      ) : null}
+
+      {useCase.id === "linkedin-post" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-[#0A66C2]/20 bg-[#0A66C2]/5 px-3 py-2.5 font-medium text-playground-ink dark:border-[#0A66C2]/35 dark:bg-[#0A66C2]/10">
+          <span className="mr-1.5" aria-hidden>
+            💼
+          </span>
+          <strong>Immer Du:</strong> Stories mit Erzähltiefe (~1.100–1.600 Zeichen). Feld anklicken, dann{" "}
+          <strong className="text-playground-ink">🎙</strong> im Eingabefeld — Sprache landet im aktiven Feld.
+        </p>
+      ) : null}
+
+      {useCase.briefingFields && useCase.briefingFields.length > 0 && onBriefingChange && onBriefingFieldFocus ? (
+        <div className="mb-4 space-y-3 rounded-xl border border-playground-border bg-playground-main p-3 sm:p-4">
+          <p className="playground-text-tiny font-bold uppercase tracking-wide text-playground-muted">
+            Briefing
+          </p>
+          {useCase.briefingFields.map((field) => {
+            const active = activeBriefingFieldId === field.id;
+            return (
+              <label key={field.id} className="block">
+                <span className="playground-text-small mb-1 block font-semibold text-playground-ink">
+                  {field.label}
+                </span>
+                <textarea
+                  value={briefingValues[field.id] ?? ""}
+                  onChange={(e) => onBriefingChange(field.id, e.target.value)}
+                  onFocus={() => onBriefingFieldFocus(field.id)}
+                  placeholder={field.placeholder}
+                  rows={field.id === "kernbotschaft" || field.id === "cta" ? 2 : 1}
+                  className={`playground-text-small w-full resize-none rounded-xl border bg-playground-sidebar px-3 py-2 font-medium text-playground-ink outline-none transition placeholder:text-playground-muted/70 ${
+                    active
+                      ? "border-playground-send ring-2 ring-playground-send/25"
+                      : "border-playground-border focus:border-playground-send/50"
+                  }`}
+                />
+              </label>
+            );
+          })}
+        </div>
       ) : null}
 
       {useCase.copyableOutput ? (
