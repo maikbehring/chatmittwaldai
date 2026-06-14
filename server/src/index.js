@@ -129,11 +129,22 @@ function normalizeOriginValue(value) {
 }
 
 /** Gleicher Host wie Request (Frontend + API hinter einem Reverse-Proxy). */
+function getRequestHost(req) {
+  if (TRUST_PROXY) {
+    const forwarded = req.get("x-forwarded-host");
+    if (forwarded) return forwarded.split(",")[0].trim();
+  }
+  return req.get("host") ?? "";
+}
+
 function originMatchesRequestHost(req, origin) {
-  const host = req.get("host");
+  const host = getRequestHost(req);
   if (!host || !origin) return false;
   try {
-    return new URL(origin).host === host;
+    const originUrl = new URL(origin);
+    if (originUrl.host === host) return true;
+    // nginx-Host oft ohne Port, Origin mit Standard-Port (https → kein :443)
+    return originUrl.hostname === host.split(":")[0];
   } catch {
     return false;
   }
@@ -281,12 +292,12 @@ async function main() {
     return false;
   }
 
-  app.use((req, res, next) => {
+  app.use("/api", (req, res, next) => {
     cors({
       origin(originHeader, callback) {
         if (!originHeader) return callback(null, true);
         if (isAllowedRequestOrigin(req, originHeader)) return callback(null, true);
-        callback(new Error("Origin ist nicht erlaubt."));
+        callback(null, false);
       },
       credentials: true,
     })(req, res, next);
