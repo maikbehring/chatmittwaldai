@@ -10,3 +10,7 @@ client/dist
 
 # Lokale Test-PDFs (z. B. Rechnungs-OCR im Workspace-Root)
 /*.pdf
+
+# Lokale Railpack-Artefakte (mw experimental deploy)
+railpack-info.json
+railpack-plan.json

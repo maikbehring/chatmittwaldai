@@ -185,7 +185,6 @@ node_modules
 data
 .env
 .env.*
-!.env.production
 ```
 
 ---

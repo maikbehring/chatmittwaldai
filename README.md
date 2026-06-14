@@ -1,12 +1,13 @@
 # Mittwald KI-Playground (Beta)
 
-Ein **öffentlicher Test-Chat** für [mittwald AI-Hosting](https://www.mittwald.de/mstudio/ai-hosting): mehrere Sprachmodelle ausprobieren, Bilder senden, Spracheingabe nutzen — ohne eigenen API-Key im Browser.
+Ein **öffentlicher Test-Chat** für [mittwald AI-Hosting](https://www.mittwald.de/mstudio/ai-hosting): mehrere Sprachmodelle ausprobieren, Bilder senden, Spracheingabe nutzen — **ohne Login**, wie bei einer Demo-Instanz von ChatGPT.
 
 - **OpenAI-kompatible API** von mittwald (`https://llm.aihosting.mittwald.de/v1`)
 - **Chatverlauf nur im Browser** (localStorage), nicht auf dem Server
 - **API-Key nur serverseitig** — Besucher brauchen keinen eigenen Key
+- **Rate-Limits** schützen vor Missbrauch (konfigurierbar in `.env`)
 
-> **Beta:** Funktionen und Modellangebot können sich ändern. Für produktive Kundenumgebungen die Checkliste unten beachten.
+> **Beta:** Funktionen und Modellangebot können sich ändern. Für öffentliche Test-Instanzen: Modell-Allowlist und Rate-Limits bewusst setzen — siehe [Öffentlich betreiben](#öffentlich-betreiben-öffentlicher-test-ohne-login).
 
 Repository: [github.com/maikbehring/chatmittwaldai](https://github.com/maikbehring/chatmittwaldai)
 
@@ -16,8 +17,8 @@ Repository: [github.com/maikbehring/chatmittwaldai](https://github.com/maikbehri
 
 | Zielgruppe | Nutzung |
 |------------|---------|
-| **Interessierte / Tester** | Lokal oder auf einer gehosteten Instanz chatten — kein Setup außer der URL (wenn jemand die Instanz betreibt). |
-| **Entwickler & Admins** | Repo klonen, mit eigenem mittwald API-Key betreiben (lokal oder öffentlich). |
+| **Interessierte / Tester** | URL öffnen und kurz ausprobieren — kein Account, kein eigener API-Key. |
+| **Entwickler & Admins** | Repo klonen, mit eigenem mittwald API-Key betreiben (lokal oder auf mittwald Container Hosting). |
 | **mittwald-Kunden** | Eigene Playground-Instanz als Demo für AI-Hosting; Modellliste und Limits per Konfiguration steuern. |
 
 ---
@@ -25,14 +26,15 @@ Repository: [github.com/maikbehring/chatmittwaldai](https://github.com/maikbehri
 ## Funktionen (Überblick)
 
 - **Mehrere Chats** in der Sidebar (Verlauf pro Thread im Browser, „Neuer Chat“)
-- Chat mit Streaming-Antworten (Markdown, Code)
-- Modellauswahl inkl. Modellübersicht und Einstellungen (Temperatur, System-Prompt, …)
-- **Websuche** (optional, pro Chat): Globus am Eingabefeld (ChatGPT-Stil), einmalige Einwilligung, Ladeanzeige im Chat — Standard **DuckDuckGo**; optional **Google** via [SerpAPI](https://serpapi.com/) oder Serper
-- **Footer-Links** (Impressum, Datenschutz, …) per `.env` konfigurierbar — wichtig für öffentliche Instanzen
-- **Bilder** im Chat (Vision-Modelle) mit Lightbox
+- **Use Cases** — vorgefertigte Workflows (Alt-Tags, SEO, LinkedIn, Recherche, OCR, Modellvergleich, …) mit Briefing-Feldern und Spracheingabe
+- Chat mit Streaming-Antworten (Markdown, Code, Kopieren-Buttons)
+- Modellauswahl inkl. Modellübersicht, **Modellvergleich** und Einstellungen (Temperatur, System-Prompt, …)
+- **Websuche** (optional, pro Chat): Globus am Eingabefeld, einmalige Einwilligung — Standard **DuckDuckGo**; optional **Google** via [SerpAPI](https://serpapi.com/) oder Serper
+- **Footer-Links** (Impressum, Datenschutz, …) per `.env` konfigurierbar
+- **Bilder** im Chat (Vision-Modelle) und **PDF-Rechnungs-OCR** (GLM-OCR + Qwen)
 - **Spracheingabe** (Whisper über mittwald, z. B. `whisper-large-v3-turbo`)
-- Geschätzte **Token-Statistik** und **CO₂-Hinweis** pro Antwort (Orientierungswerte, keine Bilanzierung)
-- Dark Mode, Tastatur: **Enter** senden, **Shift+Enter** Zeilenumbruch
+- Geschätzte **Token-Statistik** und **CO₂-Hinweis** pro Antwort (Orientierungswerte)
+- Dark Mode, mobile UX, Tastatur: **Enter** senden, **Shift+Enter** Zeilenumbruch
 
 ---
 
@@ -87,6 +89,36 @@ npm run start    # Server + statisches Frontend
 
 Standard-Port: **8787** (`PORT` in `.env`). Für öffentliche URLs: Reverse-Proxy mit TLS davor; `TRUST_PROXY=1` setzen, wenn Client-IPs für Rate-Limits wichtig sind.
 
+### Deploy auf mittwald Container Hosting
+
+Für eine öffentliche URL (z. B. `https://ki-playground.mittwald.app`) liegt im Repo ein **`Dockerfile`** — Build und Start in einem Prozess (Express + `client/dist`).
+
+**Kurzablauf:**
+
+1. **AI Hosting** + **Container Hosting** (Server-Projekt) im mStudio
+2. **Registry** anlegen, **API-Token** für die CLI holen
+3. `.env.production` anlegen (Secrets, **kein** `PORT`) — siehe [.env.example](./.env.example)
+4. Deploy:
+
+```bash
+export MITTWALD_API_TOKEN="…"
+export DOCKER_DEFAULT_PLATFORM=linux/amd64   # Pflicht auf Apple Silicon
+
+mw experimental deploy \
+  --project-id <PROJECT_ID> \
+  --env-file .env.production \
+  --uri-prefix ki-playground \
+  --wait
+```
+
+5. Im mStudio **Ports: 80 → 3000** (intern lauscht die App auf 3000)
+6. `CORS_ORIGIN` = exakte HTTPS-URL(s) der Instanz
+7. Healthcheck: `https://<prefix>.mittwald.app/api/health`
+
+Ausführliche Anleitung, Fehlerbehebung (502, Origin, Registry): **[docs/mittwald-deploy.md](./docs/mittwald-deploy.md)**
+
+Weitere Doku: [Rechnungs-OCR-Ablauf](./docs/rechnung-ocr-ablauf.md) · [Security Hardening](./docs/Security-Hardening-2026-05-27.md)
+
 ---
 
 ## Konfiguration
@@ -95,12 +127,13 @@ Alle Variablen sind in [.env.example](./.env.example) dokumentiert. Wichtigste:
 
 | Variable | Beschreibung |
 |----------|----------------|
-| `MITTWALD_AI_API_KEY` | **Pflicht** — Key aus dem mStudio |
+| `MITTWALD_AI_API_KEY` | **Pflicht** — Key aus dem mStudio (Server → mittwald KI; **nicht** der Zugangsschutz für Besucher) |
 | `PLAYGROUND_ALLOWED_MODELS` | Kommagetrennte Modell-IDs; nur diese erscheinen im UI. Für öffentliche Instanzen **unbedingt** setzen und bewusst kürzen. |
 | `PLAYGROUND_BRAND_TITLE` | Anzeigename (optional) |
 | `PLAYGROUND_LINK_*_URL` / `*_LABEL` | Footer- & Sidebar-Links (Impressum, Datenschutz, …) — siehe [Footer- & Rechts-Links](#footer--rechts-links-per-env) |
-| `CORS_ORIGIN` | Erlaubte Browser-Origins (z. B. `https://playground.example.com`). In Produktion **nicht** `*`. |
-| `PLAYGROUND_APP_API_KEY` | Optionaler zusätzlicher Zugriffsschutz: erwartet Header `x-playground-api-key` auf kostenintensiven POST-Routen |
+| `CORS_ORIGIN` | Erlaubte Browser-Origins (z. B. `https://ki-playground.mittwald.app`). In Produktion **nicht** `*`; `http` und `https` getrennt eintragen wenn nötig. |
+| `TRUST_PROXY` | `1` hinter nginx/Reverse-Proxy (Rate-Limits, Origin-Check) |
+| `PLAYGROUND_APP_API_KEY` | Optional — nur für **interne** Instanzen; für öffentliche Demos **ohne Login** in der Regel **nicht** setzen |
 | `REQUIRE_ORIGIN_CHECK` | Standard `1`: erzwingt Origin-Check auf kostenintensiven POST-Routen (mit `0` deaktivierbar) |
 | `RATE_LIMIT_*` | Schutz vor Missbrauch (global, Chat, Modellliste, Transkription, Websuche) |
 | `PLAYGROUND_MAX_MESSAGES` | Max. Nachrichten pro Request (Standard: 60) |
@@ -116,13 +149,11 @@ Alle Variablen sind in [.env.example](./.env.example) dokumentiert. Wichtigste:
 
 ### Zugriffsschutz für kostenintensive API-Routen
 
-Die Endpunkte `POST /api/chat/completions`, `POST /api/audio/transcriptions` und `POST /api/web/search` können optional zusätzlich geschützt werden:
+Für einen **öffentlichen Test ohne Login** (ChatGPT-ähnlich) reichen **Rate-Limits** und **Modell-Allowlist** — `PLAYGROUND_APP_API_KEY` ist dafür **nicht** nötig.
 
-- Setze `PLAYGROUND_APP_API_KEY` in der Server-Umgebung.
-- Sende im Client bei den genannten Routen den Header `x-playground-api-key`.
-- Bei fehlendem/falschem Key antwortet der Server mit `401 unauthorized`.
+Optional (z. B. interne Instanzen): `PLAYGROUND_APP_API_KEY` setzen; dann muss der Client den Header `x-playground-api-key` mitschicken (`401` bei Fehlen).
 
-Zusätzlich erzwingt der Server standardmäßig einen `Origin`-Check für diese Routen (`REQUIRE_ORIGIN_CHECK=1`).
+Zusätzlich erzwingt der Server standardmäßig einen `Origin`-Check für Chat-, Transkriptions- und Websuche-Routen (`REQUIRE_ORIGIN_CHECK=1`). Hinter einem Reverse-Proxy mit `TRUST_PROXY=1` gilt auch der Host-Match der Request-URL.
 
 Wichtig für Produktion:
 
@@ -199,16 +230,20 @@ Alle Variablen sind auch auskommentiert in [.env.example](./.env.example) aufgef
 
 ---
 
-## Öffentlich betreiben (Checkliste)
+## Öffentlich betreiben (öffentlicher Test ohne Login)
 
-Wenn der Playground **für alle** erreichbar sein soll (nicht nur lokal):
+Wenn der Playground **für alle** erreichbar sein soll — wie eine Demo zum Ausprobieren:
 
-1. **Allowlist** — `PLAYGROUND_ALLOWED_MODELS` auf die Modelle begrenzen, die ihr anbieten wollt.
-2. **CORS** — nur die echte Playground-URL erlauben.
-3. **Rate-Limits** — an erwartete Last und Kosten anpassen (`RATE_LIMIT_MAX_CHAT`, `RATE_LIMIT_MAX_WEB_SEARCH`, Fenster in ms).
-4. **TLS** — HTTPS über Reverse-Proxy (nginx, Caddy, …).
-5. **Rechtliches** — eigene Seiten für Datenschutz/Impressum anlegen und per `PLAYGROUND_LINK_IMPRESSUM_URL`, `PLAYGROUND_LINK_PRIVACY_URL` usw. in `.env` verlinken; UI-Hinweise ersetzen keine AGB.
-6. **Logging** — keine Chat-Inhalte in App-Logs schreiben (der Playground speichert keine Chats serverseitig; Infrastruktur-Logs separat prüfen).
+1. **Rate-Limits** — niedrig halten (z. B. `RATE_LIMIT_MAX_CHAT=5` pro 15 Minuten); das ist der Hauptschutz, kein Login nötig.
+2. **Allowlist** — `PLAYGROUND_ALLOWED_MODELS` auf Demo-taugliche Modelle begrenzen.
+3. **CORS** — `CORS_ORIGIN` auf die echte HTTPS-URL setzen (`TRUST_PROXY=1` am Proxy).
+4. **Deploy** — mittwald Container Hosting mit `Dockerfile` und `.env.production` (Secrets **nicht** ins Image); siehe [Deploy auf mittwald](#deploy-auf-mittwald-container-hosting).
+5. **Port-Mapping** — im mStudio **80 → 3000**; kein `PORT` in `.env.production`.
+6. **Rechtliches** — Impressum/Datenschutz verlinken (`PLAYGROUND_LINK_*`); UI-Hinweis „Test-Playground“ bleibt sichtbar.
+7. **Kosten** — Verbrauch im mStudio AI Hosting beobachten; bei Bedarf Limits weiter senken.
+8. **Logging** — keine Chat-Inhalte in App-Logs; API-Keys nie committen oder in Issues posten.
+
+`PLAYGROUND_APP_API_KEY` ist für **interne** Zugänge gedacht, nicht für öffentliche Schnupper-Demos.
 
 ---
 
@@ -243,15 +278,17 @@ Vision: Bilder nur als `data:image/…` Base64 im Request.
 
 | Symptom | Lösung |
 |---------|--------|
-| `MITTWALD_AI_API_KEY` fehlt / 401 | Key in `.env` setzen, Server neu starten |
+| `MITTWALD_AI_API_KEY` fehlt / 401 | Key in `.env` / `.env.production` setzen, neu deployen |
+| **502 Bad Gateway** (mittwald) | Port-Mapping im mStudio: **80 → 3000**; kein `PORT=8787` in Produktion |
+| **Origin ist nicht erlaubt** | `CORS_ORIGIN` = exakte Browser-URL (`https://…`); `TRUST_PROXY=1`; Redeploy |
 | Keine Modelle im Dropdown | API erreichbar? `PLAYGROUND_ALLOWED_MODELS` prüfen (exakte IDs) |
-| `EADDRINUSE` Port 8787 | Alten Prozess beenden: `lsof -nP -iTCP:8787 -sTCP:LISTEN` → `kill <PID>` oder anderen `PORT` in `.env` |
-| `Vite: command not found` | Im Projektroot `npm install` ausführen, nicht nur im `client/`-Ordner |
-| Mikrofon funktioniert nicht | Browser-Berechtigung; HTTPS in Produktion (localhost ist Ausnahme) |
-| CORS-Fehler in Produktion | `CORS_ORIGIN` auf die öffentliche Frontend-URL setzen |
-| Websuche liefert keine Treffer / Fehler | Rate-Limit prüfen; bei SerpAPI/Serper Key und `WEB_SEARCH_PROVIDER`; DuckDuckGo kann blockieren — SerpAPI nutzen |
-| Websuche lässt sich nicht aktivieren | Einwilligungs-Dialog bestätigen; ggf. unter Modell-Einstellungen erneut einwilligen oder localStorage-Eintrag `mittwald-ai-playground-web-search-consent-v1` löschen |
-| Falsches „heute“ bei Terminen | Server neu starten; Datum wird als Systemhinweis (Europe/Berlin) mitgeschickt — Modell sollte Websuche-Treffer nutzen |
+| `EADDRINUSE` Port 8787 | Alten Prozess beenden: `lsof -nP -iTCP:8787 -sTCP:LISTEN` → `kill <PID>` |
+| `Vite: command not found` | Im Projektroot `npm install` ausführen |
+| Docker-Build schlägt fehl | `Dockerfile` im Root; auf Mac: `DOCKER_DEFAULT_PLATFORM=linux/amd64` |
+| Mikrofon funktioniert nicht | Browser-Berechtigung; HTTPS in Produktion |
+| CORS-Fehler in Produktion | `CORS_ORIGIN` auf öffentliche URL; http **und** https wenn beides genutzt wird |
+| Websuche liefert keine Treffer | Rate-Limit; SerpAPI-Key und `WEB_SEARCH_PROVIDER` prüfen |
+| Websuche lässt sich nicht aktivieren | Einwilligungs-Dialog; localStorage `mittwald-ai-playground-web-search-consent-v1` löschen |
 
 ---
 
@@ -267,8 +304,8 @@ Verbesserungen und Pull Requests sind willkommen.
 
 - **[AI Hosting buchen & Tarife](https://www.mittwald.de/mstudio/ai-hosting)** — Produktseite (Starter, Pro, Business, …)
 - [Entwickler-Dokumentation](https://developer.mittwald.de/de/docs/v2/platform/aihosting/)
-- [OpenAI-kompatible API](https://developer.mittwald.de/de/docs/v2/platform/aihosting/api-compatibility/)
-- [Datenschutz AI-Hosting](https://developer.mittwald.de/de/docs/v2/platform/aihosting/access-and-usage/data-protection/)
+- [Container Deploy (CLI)](https://developer.mittwald.de/de/docs/v2/cli/reference/experimental/) — `mw experimental deploy`
+- [Deploy-Anleitung im Repo](./docs/mittwald-deploy.md)
 
 ---
 
