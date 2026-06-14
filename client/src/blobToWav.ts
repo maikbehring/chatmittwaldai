@@ -11,6 +11,56 @@ export async function blobToWav16(blob: Blob): Promise<Blob> {
   }
 }
 
+/** Whisper-Limit ~20 min — Chunks mit Sicherheitsmarge (Sekunden). */
+export const WHISPER_CHUNK_MAX_SECONDS = 14 * 60;
+
+function sliceAudioBuffer(
+  ctx: AudioContext,
+  buffer: AudioBuffer,
+  startFrame: number,
+  length: number,
+): AudioBuffer {
+  const sliced = ctx.createBuffer(buffer.numberOfChannels, length, buffer.sampleRate);
+  for (let c = 0; c < buffer.numberOfChannels; c++) {
+    sliced.getChannelData(c).set(buffer.getChannelData(c).subarray(startFrame, startFrame + length));
+  }
+  return sliced;
+}
+
+/** Teilt Audio in WAV-Chunks ≤ maxChunkSeconds (für Whisper-Transkription). */
+export async function blobToWav16Chunks(
+  blob: Blob,
+  maxChunkSeconds = WHISPER_CHUNK_MAX_SECONDS,
+): Promise<Blob[]> {
+  const ctx = new AudioContext();
+  try {
+    const arrayBuf = await blob.arrayBuffer();
+    const audioBuffer = await ctx.decodeAudioData(arrayBuf.slice(0));
+    const maxFrames = Math.floor(maxChunkSeconds * audioBuffer.sampleRate);
+    if (audioBuffer.length <= maxFrames) {
+      return [new Blob([encodeWav16(audioBuffer)], { type: "audio/wav" })];
+    }
+    const chunks: Blob[] = [];
+    for (let start = 0; start < audioBuffer.length; start += maxFrames) {
+      const length = Math.min(maxFrames, audioBuffer.length - start);
+      const sliced = sliceAudioBuffer(ctx, audioBuffer, start, length);
+      chunks.push(new Blob([encodeWav16(sliced)], { type: "audio/wav" }));
+    }
+    return chunks;
+  } finally {
+    await ctx.close();
+  }
+}
+
+export function getBlobDurationSeconds(blob: Blob): Promise<number> {
+  const ctx = new AudioContext();
+  return blob
+    .arrayBuffer()
+    .then((buf) => ctx.decodeAudioData(buf.slice(0)))
+    .then((audioBuffer) => audioBuffer.duration)
+    .finally(() => void ctx.close());
+}
+
 function encodeWav16(audioBuffer: AudioBuffer): ArrayBuffer {
   const numChannels = audioBuffer.numberOfChannels;
   const sampleRate = audioBuffer.sampleRate;

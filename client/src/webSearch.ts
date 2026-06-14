@@ -1,4 +1,5 @@
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
+import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 
 /** Server kürzt ohnehin — großzügig für LLM-Verdichtung. */
@@ -88,7 +89,7 @@ export async function fetchWebSearch(
 
   const res = await fetch("/api/web/search", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: playgroundApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),
     signal,
   });

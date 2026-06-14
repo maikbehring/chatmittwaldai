@@ -11,11 +11,20 @@ import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import { getPlaygroundLinks } from "./playgroundLinks.js";
 import { createRateLimitHandler, getRateLimitConfig } from "./rateLimit.js";
+import {
+  getBonusChatConfig,
+  grantBonusChat,
+  shouldSkipChatRateLimit,
+} from "./playgroundBonus.js";
 import { getWebSearchConfig, searchWeb } from "./webSearch.js";
 import {
   pickWebSearchQueryModel,
   synthesizeGoogleSearchQuery,
 } from "./webSearchQuerySynthesis.js";
+import {
+  resolveUpstreamApiKey,
+  shouldSkipPublicRateLimit,
+} from "./sessionApiKey.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "../..");
@@ -26,6 +35,7 @@ dotenv.config({ path: path.join(repoRoot, ".env") });
 dotenv.config({ path: path.join(serverRoot, ".env"), override: true });
 
 const PORT = Number(process.env.PORT || 8787);
+const HOST = process.env.HOST || "0.0.0.0";
 const API_KEY = process.env.MITTWALD_AI_API_KEY;
 const BASE_URL = (
   process.env.MITTWALD_AI_BASE_URL || "https://llm.aihosting.mittwald.de/v1"
@@ -34,7 +44,12 @@ const ALLOWED_MODELS = (process.env.PLAYGROUND_ALLOWED_MODELS || "")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
-const MAX_BODY_BYTES = Number(process.env.MAX_BODY_BYTES || 524288);
+/** Intern für Playground-Pipelines (z. B. Rechnungs-OCR), nicht im Modell-Dropdown. */
+const INTERNAL_PLAYGROUND_MODELS = new Set(["GLM-OCR"]);
+const MAX_BODY_BYTES = Math.min(
+  Math.max(Number(process.env.MAX_BODY_BYTES || 10 * 1024 * 1024), 512 * 1024),
+  25 * 1024 * 1024,
+);
 const BRAND_TITLE = process.env.PLAYGROUND_BRAND_TITLE || "Mittwald KI-Playground";
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 const TRUST_PROXY = process.env.TRUST_PROXY === "1";
@@ -113,6 +128,17 @@ function normalizeOriginValue(value) {
   }
 }
 
+/** Gleicher Host wie Request (Frontend + API hinter einem Reverse-Proxy). */
+function originMatchesRequestHost(req, origin) {
+  const host = req.get("host");
+  if (!host || !origin) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
+  }
+}
+
 /** Versucht, aus einer Upstream-JSON-Fehlerantwort eine kurze Meldung zu lesen. */
 function summarizeUpstreamError(raw) {
   const slice = String(raw ?? "").trim().slice(0, 4000);
@@ -180,7 +206,11 @@ function sanitizeChatBody(body) {
   if (!out.model || typeof out.model !== "string") {
     return { error: "model fehlt oder ist ungültig." };
   }
-  if (ALLOWED_MODELS.length && !ALLOWED_MODELS.includes(out.model)) {
+  if (
+    ALLOWED_MODELS.length &&
+    !ALLOWED_MODELS.includes(out.model) &&
+    !INTERNAL_PLAYGROUND_MODELS.has(out.model)
+  ) {
     return { error: "Dieses Modell ist für diesen Playground nicht freigegeben." };
   }
   const msgErr = validateMessages(out.messages);
@@ -235,19 +265,39 @@ async function main() {
   );
 
   const corsOpts = parseCorsOrigins(CORS_ORIGIN);
-  app.use(
-    cors(
-      corsOpts === true
-        ? { origin: true }
-        : { origin: corsOpts, credentials: true },
-    ),
-  );
+  const sensitiveAllowedOrigins = parseCorsOrigins(CORS_ORIGIN);
+  const allowedOriginSet =
+    sensitiveAllowedOrigins === true
+      ? null
+      : new Set(sensitiveAllowedOrigins.map((origin) => normalizeOriginValue(origin)));
+
+  function isAllowedRequestOrigin(req, origin) {
+    if (!origin) return false;
+    if (TRUST_PROXY && originMatchesRequestHost(req, origin)) return true;
+    if (corsOpts === true) return true;
+    if (allowedOriginSet instanceof Set && allowedOriginSet.has(normalizeOriginValue(origin))) {
+      return true;
+    }
+    return false;
+  }
+
+  app.use((req, res, next) => {
+    cors({
+      origin(originHeader, callback) {
+        if (!originHeader) return callback(null, true);
+        if (isAllowedRequestOrigin(req, originHeader)) return callback(null, true);
+        callback(new Error("Origin ist nicht erlaubt."));
+      },
+      credentials: true,
+    })(req, res, next);
+  });
 
   const chatLimiter = rateLimit({
     windowMs: RATE_WINDOW_MS,
     max: RATE_MAX_CHAT,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: (req) => shouldSkipPublicRateLimit(req) || shouldSkipChatRateLimit(req.ip),
     handler: createRateLimitHandler("chat"),
   });
 
@@ -256,6 +306,7 @@ async function main() {
     max: RATE_MAX_MODELS,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: shouldSkipPublicRateLimit,
     handler: createRateLimitHandler("models"),
   });
 
@@ -264,6 +315,7 @@ async function main() {
     max: RATE_MAX_TRANSCRIBE,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: shouldSkipPublicRateLimit,
     handler: createRateLimitHandler("transcribe"),
   });
 
@@ -272,14 +324,9 @@ async function main() {
     max: RATE_MAX_GLOBAL,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: shouldSkipPublicRateLimit,
     handler: createRateLimitHandler("global"),
   });
-
-  const sensitiveAllowedOrigins = parseCorsOrigins(CORS_ORIGIN);
-  const allowedOriginSet =
-    sensitiveAllowedOrigins === true
-      ? null
-      : new Set(sensitiveAllowedOrigins.map((origin) => normalizeOriginValue(origin)));
 
   function requireApiKey(req, res, next) {
     if (!APP_API_KEY) return next();
@@ -293,23 +340,12 @@ async function main() {
   function requireAllowedOrigin(req, res, next) {
     if (!REQUIRE_ORIGIN_CHECK) return next();
     if (sensitiveAllowedOrigins === true) return next();
-    if (!(allowedOriginSet instanceof Set) || allowedOriginSet.size === 0) {
-      return jsonError(
-        res,
-        500,
-        "origin_policy_error",
-        "Origin-Policy ist nicht korrekt konfiguriert.",
-      );
-    }
     const origin = req.get("origin");
     if (!origin) {
       return jsonError(res, 403, "origin_required", "Origin-Header fehlt.");
     }
-    const normalizedOrigin = normalizeOriginValue(origin);
-    if (!allowedOriginSet.has(normalizedOrigin)) {
-      return jsonError(res, 403, "origin_forbidden", "Origin ist nicht erlaubt.");
-    }
-    return next();
+    if (isAllowedRequestOrigin(req, origin)) return next();
+    return jsonError(res, 403, "origin_forbidden", "Origin ist nicht erlaubt.");
   }
 
   app.use("/api", globalLimiter);
@@ -332,6 +368,9 @@ async function main() {
       webSearch: getWebSearchConfig(),
       links: getPlaygroundLinks(),
       rateLimits: RATE_LIMITS,
+      bonusChat: getBonusChatConfig(),
+      maxBodyBytes: MAX_BODY_BYTES,
+      userSessionApiKey: true,
       aiHostingUrl:
         process.env.PLAYGROUND_LINK_AI_HOSTING_URL?.trim() || DEFAULT_AI_HOSTING_URL,
       selfHostRepoUrl: SELF_HOST_REPO_URL,
@@ -343,8 +382,31 @@ async function main() {
     max: RATE_MAX_WEB_SEARCH,
     standardHeaders: true,
     legacyHeaders: false,
+    skip: shouldSkipPublicRateLimit,
     handler: createRateLimitHandler("webSearch"),
   });
+
+  app.post(
+    "/api/rate-limit/continue-testing",
+    requireApiKey,
+    requireAllowedOrigin,
+    express.json({ limit: 4096 }),
+    (req, res) => {
+      const result = grantBonusChat(req.ip);
+      if (!result.ok) {
+        return jsonError(
+          res,
+          429,
+          result.code,
+          `Test-Erweiterung wurde in diesem Zeitfenster bereits genutzt (noch ${result.remaining} Bonus-Anfragen übrig).`,
+        );
+      }
+      res.json({
+        granted: result.granted,
+        remaining: result.remaining,
+      });
+    },
+  );
 
   app.post(
     "/api/web/search",
@@ -364,7 +426,7 @@ async function main() {
         const model = pickWebSearchQueryModel(process.env.WEB_SEARCH_QUERY_MODEL ?? "", ALLOWED_MODELS);
         try {
           q = await synthesizeGoogleSearchQuery({
-            apiKey: API_KEY,
+            apiKey: resolveUpstreamApiKey(req, API_KEY),
             baseUrl: BASE_URL,
             model,
             userMessage,
@@ -447,7 +509,7 @@ async function main() {
       try {
         upstream = await fetch(`${BASE_URL}/audio/transcriptions`, {
           method: "POST",
-          headers: { Authorization: `Bearer ${API_KEY}` },
+          headers: { Authorization: `Bearer ${resolveUpstreamApiKey(req, API_KEY)}` },
           body: form,
         });
       } catch (e) {
@@ -524,7 +586,7 @@ async function main() {
       upstream = await fetch(`${BASE_URL}/chat/completions`, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${API_KEY}`,
+          Authorization: `Bearer ${resolveUpstreamApiKey(req, API_KEY)}`,
           "Content-Type": "application/json",
           Accept: "text/event-stream",
         },
@@ -572,6 +634,24 @@ async function main() {
     }
   });
 
+  app.use((err, req, res, next) => {
+    if (res.headersSent) {
+      next(err);
+      return;
+    }
+    if (err?.type === "entity.too.large" || err?.name === "PayloadTooLargeError") {
+      const mb = Math.round(MAX_BODY_BYTES / (1024 * 1024));
+      jsonError(
+        res,
+        413,
+        "payload_too_large",
+        `Anfrage zu groß (max. ${mb} MB). Bild/PDF verkleinern oder MAX_BODY_BYTES in .env erhöhen.`,
+      );
+      return;
+    }
+    next(err);
+  });
+
   const staticDir = path.join(__dirname, "../../client/dist");
   if (fs.existsSync(staticDir)) {
     app.use(express.static(staticDir, { index: false, maxAge: "1h" }));
@@ -588,8 +668,8 @@ async function main() {
     res.status(404).type("text/plain").send("Not found");
   });
 
-  const server = app.listen(PORT, () => {
-    console.log(`Playground-Server läuft auf http://localhost:${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`Playground-Server läuft auf http://${HOST}:${PORT}`);
     if (fs.existsSync(staticDir)) {
       console.log(`Statische Dateien: ${staticDir}`);
     } else {

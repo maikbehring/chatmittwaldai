@@ -7,11 +7,38 @@ import {
   MODEL_GPT_OSS,
   MODEL_DEVSTRAL,
   MODEL_MINISTRAL,
+  MODEL_QWEN_36,
   type GptOssReasoning,
 } from "./modelPresets";
+import { PlaygroundUseCaseCards } from "./PlaygroundUseCaseCards";
+import { PlaygroundUseCaseGuide } from "./PlaygroundUseCaseGuide";
+import { ModelCompareMessageRow } from "./ModelCompareMessageRow";
+import {
+  buildCompareApiMessages,
+  buildCompareChatBody,
+  inferenceParamsForCompareModel,
+  type ModelComparePayload,
+} from "./modelCompare";
+import {
+  fileToOcrPageImages,
+  ocrAttachmentLabel,
+} from "./pdfToOcrImages";
+import {
+  buildInvoiceStructureUserMessage,
+  extractTextWithGlmOcr,
+} from "./invoiceOcr";
+import {
+  composeBriefingText,
+  emptyBriefingValues,
+  getUseCaseById,
+  hasBriefingContent,
+  isCopyableUseCase,
+  PLAYGROUND_USE_CASES,
+  useCaseIsolatesWebSearchContext,
+  type PlaygroundUseCaseId,
+} from "./playgroundUseCases";
+import type { TranscribeProgress } from "./speechTranscription";
 import { ModelSettingsDock } from "./ModelSettingsDock";
-import { SettingsGlossaryOverlay } from "./SettingsGlossaryOverlay";
-import { ModelsOverviewOverlay } from "./ModelsOverviewOverlay";
 import { ChatImageAttachment, ChatImagePreviewThumb } from "./ChatImageAttachment";
 import { SpeechInputButton, type SpeechInputHandle } from "./SpeechInputButton";
 import { SpeechTranscribingIndicator } from "./SpeechTranscribingIndicator";
@@ -33,7 +60,15 @@ import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
 import { DeleteAllChatsDialog } from "./DeleteAllChatsDialog";
 import { ClearBrowserCacheDialog } from "./ClearBrowserCacheDialog";
 import {
+  clearSessionApiKey,
+  hasSessionApiKey,
+  playgroundApiHeaders,
+  setSessionApiKey,
+} from "./playgroundSessionApiKey";
+import {
   clearPlaygroundBrowserStorage,
+  isBonusChatGrantUsed,
+  markBonusChatGrantUsed,
   PLAYGROUND_THEME_STORAGE_KEY,
 } from "./playgroundBrowserStorage";
 import {
@@ -41,17 +76,12 @@ import {
   hasWebSearchConsent,
   setWebSearchConsent,
 } from "./webSearchConsent";
-import {
-  PlaygroundLinksFooter,
-  PlaygroundLinksInline,
-  PlaygroundLinksSidebar,
-} from "./PlaygroundExternalLinks";
-import {
-  legalFooterLinks,
-  sidebarMenuLinks,
-  withDefaultBugLink,
-  type PlaygroundLink,
-} from "./playgroundLinks";
+import { CopyTextButton, extractCopySections } from "./CopyTextButton";
+import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
+import { MittwaldLogo } from "./MittwaldLogo";
+import { PlaygroundSidebarCta } from "./PlaygroundSidebarCta";
+import { ArrowUpIcon, MenuIcon, PenIcon } from "./playgroundIcons";
+import { mainFooterLinks, withDefaultBugLink, type PlaygroundLink } from "./playgroundLinks";
 import {
   createEmptyThread,
   deriveThreadTitle,
@@ -61,13 +91,16 @@ import {
   type ChatThread,
 } from "./chatStorage";
 import {
+  appErrorFromSendFailure,
   appErrorFromUnknown,
+  isAbortError,
   ensureOkApiResponse,
+  grantBonusChatRequests,
   type AppUiError,
+  type PlaygroundBonusChatConfig,
   type PlaygroundRateLimits,
 } from "./apiErrors";
 import { RateLimitNotice } from "./RateLimitNotice";
-import { GITHUB_REPO_URL } from "./repoLinks";
 import { useIsMobileLayout } from "./useMobileLayout";
 import {
   buildWebSearchChatExcerpt,
@@ -116,6 +149,7 @@ export type ChatMessage = {
   content: string | ContentPart[];
   usage?: TokenMeter;
   webSearch?: WebSearchResponse;
+  compare?: ModelComparePayload;
 };
 
 const DEFAULT_MODEL = MODEL_MINISTRAL;
@@ -214,10 +248,10 @@ async function streamChatCompletion(
 ): Promise<TokenMeter | null> {
   const res = await fetch("/api/chat/completions", {
     method: "POST",
-    headers: {
+    headers: playgroundApiHeaders({
       "Content-Type": "application/json",
       Accept: "text/event-stream",
-    },
+    }),
     body: JSON.stringify(body),
     signal,
   });
@@ -270,17 +304,6 @@ async function streamChatCompletion(
     }
   }
   return lastUsage;
-}
-
-function BetaBadge() {
-  return (
-    <span
-      className="shrink-0 rounded border border-amber-500/70 bg-amber-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-950 dark:border-amber-500/50 dark:bg-amber-950/60 dark:text-amber-100"
-      title="Öffentliche Beta — Funktion und Modelle können sich ändern."
-    >
-      Beta
-    </span>
-  );
 }
 
 function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
@@ -351,7 +374,7 @@ function renderUserMessageContent(
 ) {
   if (typeof content === "string") {
     return (
-      <div className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed">
+      <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
         {content}
       </div>
     );
@@ -360,10 +383,7 @@ function renderUserMessageContent(
     <div className="space-y-2">
       {content.map((part, j) =>
         part.type === "text" ? (
-          <div
-            key={j}
-            className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed"
-          >
+          <div key={j} className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
             {part.text}
           </div>
         ) : (
@@ -387,7 +407,7 @@ function renderMessageContent(
   if (typeof content === "string") {
     if (streaming) {
       return (
-        <div className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink">
+        <div className="playground-text-chat max-w-none whitespace-pre-wrap break-words text-playground-muted">
           {content}
         </div>
       );
@@ -401,7 +421,7 @@ function renderMessageContent(
           streaming ? (
             <div
               key={j}
-              className="max-w-none whitespace-pre-wrap break-words text-[15px] leading-relaxed text-ink"
+              className="playground-text-chat max-w-none whitespace-pre-wrap break-words text-playground-muted"
             >
               {part.text}
             </div>
@@ -421,39 +441,87 @@ function renderMessageContent(
   );
 }
 
+function assistantMessagePlainText(content: string | ContentPart[]): string {
+  if (typeof content === "string") return content;
+  return content
+    .filter((p): p is { type: "text"; text: string } => p.type === "text")
+    .map((p) => p.text)
+    .join("\n");
+}
+
+function UseCaseCopyActions({ content }: { content: string }) {
+  const sections = extractCopySections(content);
+  if (sections.length === 0) {
+    const plain = content.trim();
+    if (!plain) return null;
+    return (
+      <div className="mb-3 flex flex-wrap gap-2">
+        <CopyTextButton text={plain} label="Antwort kopieren" />
+      </div>
+    );
+  }
+  return (
+    <div className="mb-3 flex flex-wrap gap-2">
+      {sections.map((section, i) => (
+        <CopyTextButton
+          key={`${i}-${section.label}`}
+          text={section.text}
+          label={`${section.label} kopieren`}
+        />
+      ))}
+      {sections.length > 1 ? (
+        <CopyTextButton
+          text={sections.map((s) => s.text).join("\n\n")}
+          label="Alles kopieren"
+        />
+      ) : null}
+    </div>
+  );
+}
+
 const ChatMessageRow = memo(function ChatMessageRow({
   message,
   streaming,
   webSearchPending,
   webSearchProviderLabel,
+  activeUseCaseId,
   onImageOpen,
 }: {
   message: ChatMessage;
   streaming: boolean;
   webSearchPending?: boolean;
   webSearchProviderLabel?: string;
+  activeUseCaseId?: PlaygroundUseCaseId | null;
   onImageOpen: (src: string, alt: string) => void;
 }) {
   if (message.role === "user") {
     return (
       <div className="flex w-full justify-end">
-        <div className="flex max-w-[min(85%,28rem)] flex-col items-end gap-1">
-        {message.webSearch && message.webSearch.results.length > 0 ? (
+        <div className="flex w-full max-w-full flex-col items-end gap-1">
+          {message.webSearch && message.webSearch.results.length > 0 ? (
             <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
               Websuche ({message.webSearch.provider}) · {message.webSearch.results.length} Treffer
             </p>
           ) : null}
-        <div className="rounded-[1.25rem] bg-[#f4f4f4] px-4 py-3 text-[15px] leading-relaxed text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100">
+          <div className="playground-user-prompt-bubble playground-text-user-prompt">
             {renderUserMessageContent(message.content, onImageOpen)}
           </div>
         </div>
       </div>
     );
   }
+  const assistantPlain = assistantMessagePlainText(message.content).trim();
+  const showCopyActions =
+    isCopyableUseCase(activeUseCaseId) &&
+    !streaming &&
+    !webSearchPending &&
+    assistantPlain.length > 0;
+
   return (
     <div className="flex w-full justify-start">
       <div className="flex max-w-full flex-col items-start">
-        <div className="max-w-full text-[15px] leading-relaxed text-neutral-900 dark:text-neutral-100">
+        {showCopyActions ? <UseCaseCopyActions content={assistantPlain} /> : null}
+        <div className="playground-text-chat max-w-full text-playground-muted">
           {webSearchPending ? (
             <p className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400" role="status">
               <span
@@ -505,6 +573,9 @@ export function App() {
   const [maxMessages, setMaxMessages] = useState(DEFAULT_MAX_MESSAGES);
   const [contextTrimNotice, setContextTrimNotice] = useState<string | null>(null);
   const [speechBusy, setSpeechBusy] = useState(false);
+  const [speechTranscribeStatus, setSpeechTranscribeStatus] = useState<string | null>(null);
+  const [compareModelB, setCompareModelB] = useState(MODEL_QWEN_36);
+  const [ocrProgress, setOcrProgress] = useState<string | null>(null);
   const [voiceRecording, setVoiceRecording] = useState<{
     active: boolean;
     stream: MediaStream | null;
@@ -550,10 +621,12 @@ export function App() {
     return initialPreset.maxTokens;
   });
   const [systemPrompt, setSystemPrompt] = useState(() => initial.systemPrompt ?? "");
+  const [activeUseCaseId, setActiveUseCaseId] = useState<PlaygroundUseCaseId | null>(null);
+  const [briefingValues, setBriefingValues] = useState<Record<string, string>>({});
+  const activeUseCase = useMemo(() => getUseCaseById(activeUseCaseId), [activeUseCaseId]);
   const [playgroundLinks, setPlaygroundLinks] = useState<PlaygroundLink[]>([]);
   const footerLinks = useMemo(() => withDefaultBugLink(playgroundLinks), [playgroundLinks]);
-  const menuLinks = useMemo(() => sidebarMenuLinks(footerLinks), [footerLinks]);
-  const legalLinks = useMemo(() => legalFooterLinks(footerLinks), [footerLinks]);
+  const pageFooterLinks = useMemo(() => mainFooterLinks(footerLinks), [footerLinks]);
   const [webSearchConfig, setWebSearchConfig] = useState<WebSearchConfig | null>(null);
   const [webSearchDefaultEnabled, setWebSearchDefaultEnabled] = useState(
     () => Boolean(initial.webSearchDefaultEnabled),
@@ -579,12 +652,13 @@ export function App() {
   const [playgroundRateLimits, setPlaygroundRateLimits] = useState<PlaygroundRateLimits | null>(
     null,
   );
+  const [bonusChatConfig, setBonusChatConfig] = useState<PlaygroundBonusChatConfig | null>(null);
+  const [continueTestingBusy, setContinueTestingBusy] = useState(false);
+  const [bonusGrantUsed, setBonusGrantUsed] = useState(false);
+  const [sessionApiKeyActive, setSessionApiKeyActive] = useState(() => hasSessionApiKey());
   const [aiHostingUrl, setAiHostingUrl] = useState(DEFAULT_AI_HOSTING_URL);
-  const [selfHostRepoUrl, setSelfHostRepoUrl] = useState(GITHUB_REPO_URL);
-  const [showGlossary, setShowGlossary] = useState(false);
   const [deleteAllChatsOpen, setDeleteAllChatsOpen] = useState(false);
   const [clearBrowserCacheOpen, setClearBrowserCacheOpen] = useState(false);
-  const [showModelsOverview, setShowModelsOverview] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
@@ -603,6 +677,11 @@ export function App() {
   useEffect(() => {
     if (!isMobileLayout) setMobileSidebarOpen(false);
   }, [isMobileLayout]);
+
+  useEffect(() => {
+    if (!playgroundRateLimits) return;
+    setBonusGrantUsed(isBonusChatGrantUsed(playgroundRateLimits.windowMs));
+  }, [playgroundRateLimits]);
   const [themePreference, setThemePreference] = useState<ThemePreference>(() => readThemePreference());
   const [imageLightbox, setImageLightbox] = useState<{ src: string; alt: string } | null>(null);
   const openImageLightbox = useCallback((src: string, alt: string) => {
@@ -610,10 +689,13 @@ export function App() {
   }, []);
   const closeImageLightbox = useCallback(() => setImageLightbox(null), []);
   const abortRef = useRef<AbortController | null>(null);
+  const sendLockRef = useRef(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
   const speechInputRef = useRef<SpeechInputHandle | null>(null);
+  const activeBriefingFieldIdRef = useRef<string | null>(null);
+  const [activeBriefingFieldId, setActiveBriefingFieldId] = useState<string | null>(null);
   const inputValueRef = useRef(input);
   const imageFileRef = useRef(imageFile);
   inputValueRef.current = input;
@@ -624,10 +706,15 @@ export function App() {
   const adjustInputHeight = useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
+    const minHeight = isMobileLayout ? 36 : 40;
+    const isSingleLine = !el.value.includes("\n");
     el.style.height = "0px";
     const next = Math.min(el.scrollHeight, INPUT_MAX_HEIGHT_PX);
-    const minHeight = isMobileLayout ? 40 : 44;
-    el.style.height = `${Math.max(next, minHeight)}px`;
+    if (isSingleLine) {
+      el.style.height = `${minHeight}px`;
+    } else {
+      el.style.height = `${Math.max(next, minHeight)}px`;
+    }
     el.style.overflowY = el.scrollHeight > INPUT_MAX_HEIGHT_PX ? "auto" : "hidden";
   }, [isMobileLayout]);
 
@@ -798,7 +885,7 @@ export function App() {
   }, [themePreference]);
 
   useEffect(() => {
-    document.title = `${title} · Beta`;
+    document.title = title;
   }, [title]);
 
   useEffect(() => {
@@ -866,8 +953,8 @@ export function App() {
             title?: string;
             maxMessages?: number;
             rateLimits?: PlaygroundRateLimits;
+            bonusChat?: PlaygroundBonusChatConfig;
             aiHostingUrl?: string;
-            selfHostRepoUrl?: string;
             speechToText?: {
               enabled?: boolean;
               model?: string;
@@ -877,11 +964,9 @@ export function App() {
           };
           if (c.title) setTitle(c.title);
           if (c.rateLimits) setPlaygroundRateLimits(c.rateLimits);
+          if (c.bonusChat) setBonusChatConfig(c.bonusChat);
           if (typeof c.aiHostingUrl === "string" && c.aiHostingUrl.trim()) {
             setAiHostingUrl(c.aiHostingUrl.trim());
-          }
-          if (typeof c.selfHostRepoUrl === "string" && c.selfHostRepoUrl.trim()) {
-            setSelfHostRepoUrl(c.selfHostRepoUrl.trim());
           }
           if (typeof c.maxMessages === "number" && c.maxMessages >= 4) {
             setMaxMessages(c.maxMessages);
@@ -929,23 +1014,70 @@ export function App() {
       setImagePreview(null);
       return;
     }
+    const isPdf =
+      imageFile.type === "application/pdf" ||
+      imageFile.name.toLowerCase().endsWith(".pdf");
+    if (isPdf) {
+      setImagePreview(null);
+      return;
+    }
     const url = URL.createObjectURL(imageFile);
     setImagePreview(url);
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
 
+  const attachmentIsPdf = useMemo(() => {
+    if (!imageFile) return false;
+    return (
+      imageFile.type === "application/pdf" ||
+      imageFile.name.toLowerCase().endsWith(".pdf")
+    );
+  }, [imageFile]);
+
+  const isInvoiceOcrUseCase = activeUseCaseId === "invoice-ocr";
+  const isModelCompareUseCase = activeUseCaseId === "model-compare";
+  const ocrPipelineBusy = ocrProgress !== null;
+
   const speechTranscribing = speechBusy && !voiceRecording.active;
+
+  const composerPlaceholder = useMemo(() => {
+    if (activeUseCase) return activeUseCase.composerPlaceholder;
+    return isMobileLayout
+      ? "Nachricht…"
+      : "Stelle irgendeine Frage (Bild: einfügen oder +)";
+  }, [activeUseCase, isMobileLayout]);
+
+  const sendButtonTitle = activeUseCase?.sendButtonLabel ?? "Senden";
+
+  const composerTall = input.includes("\n");
+
+  const showSpeechInComposer = speechToText?.enabled;
 
   const canSend = useMemo(() => {
     const t = input.trim();
+    const hasFile = imageFile !== null;
+    const hasBriefing = hasBriefingContent(activeUseCase?.briefingFields, briefingValues);
+    const contentOk = isInvoiceOcrUseCase ? hasFile : hasBriefing || t.length > 0 || hasFile;
     return (
-      (t.length > 0 || imageFile !== null) &&
+      contentOk &&
       !busy &&
       !webSearchBusy &&
       !voiceRecording.active &&
-      !speechTranscribing
+      !speechTranscribing &&
+      !ocrPipelineBusy
     );
-  }, [input, imageFile, busy, webSearchBusy, voiceRecording.active, speechTranscribing]);
+  }, [
+    input,
+    imageFile,
+    briefingValues,
+    activeUseCase?.briefingFields,
+    busy,
+    webSearchBusy,
+    voiceRecording.active,
+    speechTranscribing,
+    ocrPipelineBusy,
+    isInvoiceOcrUseCase,
+  ]);
 
   const handleVoiceRecordingChange = useCallback((active: boolean, stream: MediaStream | null) => {
     setVoiceRecording({ active, stream });
@@ -953,8 +1085,22 @@ export function App() {
 
   const handleSpeechTranscript = useCallback(
     (text: string) => {
+      const briefingFields = activeUseCase?.briefingFields;
+      const fieldId = activeBriefingFieldIdRef.current;
+      if (briefingFields?.length && fieldId) {
+        setBriefingValues((prev) => {
+          const cur = prev[fieldId]?.trim() ?? "";
+          const next = !cur ? text : `${cur} ${text}`;
+          return { ...prev, [fieldId]: next };
+        });
+        return;
+      }
+
       setInput((prev) => {
-        const next = prev.trim() ? `${prev.trimEnd()} ${text}` : text;
+        const next =
+          activeUseCase?.prefersLongSpeech || !prev.trim()
+            ? text
+            : `${prev.trimEnd()} ${text}`;
         inputValueRef.current = next;
         return next;
       });
@@ -963,8 +1109,29 @@ export function App() {
         inputRef.current?.focus();
       });
     },
+    [activeUseCase?.briefingFields, activeUseCase?.prefersLongSpeech, adjustInputHeight],
+  );
+
+  const handleSpeechTranscriptSegment = useCallback(
+    (_segment: string, fullText: string) => {
+      setInput(fullText);
+      inputValueRef.current = fullText;
+      window.requestAnimationFrame(() => adjustInputHeight());
+    },
     [adjustInputHeight],
   );
+
+  const handleSpeechTranscribeProgress = useCallback((progress: TranscribeProgress | null) => {
+    if (!progress) {
+      setSpeechTranscribeStatus(null);
+      return;
+    }
+    if (progress.phase === "segment") {
+      setSpeechTranscribeStatus(`Transkribiere Besprechungs-Abschnitt ${progress.chunk} …`);
+      return;
+    }
+    setSpeechTranscribeStatus(`Transkribiere Teil ${progress.chunk} von ${progress.total} …`);
+  }, []);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();
@@ -975,12 +1142,69 @@ export function App() {
 
   const changeModel = useCallback(
     (modelId: string) => {
-      if (modelId === model) return;
       if (busy || webSearchBusy) stop();
-      setModel(modelId);
+      if (modelId !== model) setModel(modelId);
       applyPreset(modelId);
     },
     [applyPreset, busy, model, stop, webSearchBusy],
+  );
+
+  const clearUseCase = useCallback(() => {
+    setActiveUseCaseId(null);
+    setSystemPrompt("");
+    setBriefingValues({});
+    activeBriefingFieldIdRef.current = null;
+    setActiveBriefingFieldId(null);
+  }, []);
+
+  const handleBriefingChange = useCallback((id: string, value: string) => {
+    setBriefingValues((prev) => ({ ...prev, [id]: value }));
+  }, []);
+
+  const handleBriefingFieldFocus = useCallback((id: string) => {
+    activeBriefingFieldIdRef.current = id;
+    setActiveBriefingFieldId(id);
+  }, []);
+
+  const activateUseCase = useCallback(
+    (id: PlaygroundUseCaseId) => {
+      const uc = getUseCaseById(id);
+      if (!uc) return;
+      stop();
+      setAppError(null);
+      setContextTrimNotice(null);
+      setActiveUseCaseId(id);
+      setMessages([]);
+      setImageFile(null);
+      if (uc.prefersWebSearch) {
+        requestEnableWebSearch("thread");
+      } else {
+        setActiveThreadWebSearch(false);
+      }
+      changeModel(uc.modelId);
+      if (uc.defaultCompareModelB) setCompareModelB(uc.defaultCompareModelB);
+      setSystemPrompt(uc.systemPrompt);
+      if (uc.briefingFields?.length) {
+        setBriefingValues(emptyBriefingValues(uc.briefingFields));
+        const firstId = uc.briefingFields[0]?.id ?? null;
+        activeBriefingFieldIdRef.current = firstId;
+        setActiveBriefingFieldId(firstId);
+        setInput("");
+        inputValueRef.current = "";
+      } else {
+        setBriefingValues({});
+        activeBriefingFieldIdRef.current = null;
+        setActiveBriefingFieldId(null);
+        const starter = uc.starterInput ?? "";
+        setInput(starter);
+        inputValueRef.current = starter;
+      }
+      window.requestAnimationFrame(() => {
+        adjustInputHeight();
+        inputRef.current?.focus();
+      });
+    },
+    [adjustInputHeight, changeModel, requestEnableWebSearch, setActiveThreadWebSearch, stop],
   );
 
   const newChat = useCallback(() => {
@@ -989,6 +1213,7 @@ export function App() {
     setContextTrimNotice(null);
     setInput("");
     setImageFile(null);
+    clearUseCase();
     const fresh = createEmptyThread(webSearchDefaultEnabled);
     const withCurrent = threads.map((t) =>
       t.id === activeThreadId
@@ -1007,7 +1232,15 @@ export function App() {
     setActiveThreadId(fresh.id);
     setMessages([]);
     closeMobileSidebar();
-  }, [activeThreadId, closeMobileSidebar, messages, stop, threads, webSearchDefaultEnabled]);
+  }, [activeThreadId, clearUseCase, closeMobileSidebar, messages, stop, threads, webSearchDefaultEnabled]);
+
+  const goToDashboard = useCallback(() => {
+    if (busy || speechBusy) return;
+    newChat();
+    window.requestAnimationFrame(() => {
+      chatScrollRef.current?.scrollTo({ top: 0, behavior: "smooth" });
+    });
+  }, [busy, newChat, speechBusy]);
 
   const selectThread = useCallback(
     (id: string) => {
@@ -1114,15 +1347,458 @@ export function App() {
     window.location.reload();
   }, [busy, closeMobileSidebar, stop]);
 
+  const handleSaveSessionApiKey = useCallback((key: string) => {
+    const trimmed = key.trim();
+    if (trimmed.length < 8) {
+      setAppError({
+        kind: "plain",
+        message: "Bitte einen gültigen mittwald API-Key eingeben.",
+      });
+      return;
+    }
+    setSessionApiKey(trimmed);
+    setSessionApiKeyActive(true);
+    setAppError(null);
+  }, []);
+
+  const handleClearSessionApiKey = useCallback(() => {
+    clearSessionApiKey();
+    setSessionApiKeyActive(false);
+  }, []);
+
+  const handleContinueTesting = useCallback(async () => {
+    setContinueTestingBusy(true);
+    try {
+      await grantBonusChatRequests();
+      const windowMs = playgroundRateLimits?.windowMs ?? 900_000;
+      markBonusChatGrantUsed(windowMs);
+      setBonusGrantUsed(true);
+      setAppError(null);
+    } catch (e) {
+      setAppError(appErrorFromUnknown(e, playgroundRateLimits));
+    } finally {
+      setContinueTestingBusy(false);
+    }
+  }, [playgroundRateLimits]);
+
   const send = useCallback(async (options?: { force?: boolean }) => {
     const textNow = inputValueRef.current.trim();
-    const hasContent = textNow.length > 0 || imageFileRef.current !== null;
+    const invoiceOcr = activeUseCaseId === "invoice-ocr";
+    const hasBriefing = hasBriefingContent(activeUseCase?.briefingFields, briefingValues);
+    const hasContent = invoiceOcr
+      ? imageFileRef.current !== null
+      : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
     if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy)) return;
-    setAppError(null);
-    const text = textNow;
+    if (sendLockRef.current) return;
+
+    sendLockRef.current = true;
+    try {
+    setAppError((prev) => (prev?.kind === "rate_limit" ? prev : null));
+    let text = textNow;
+    if (activeUseCase?.briefingFields?.length) {
+      const composed = composeBriefingText(activeUseCase.briefingFields, briefingValues);
+      text = textNow ? `${composed}\n\nZusatz:\n${textNow}` : composed;
+    }
     const file = imageFile;
     const messagesBeforeSend = messages;
+
+    if (activeUseCaseId === "model-compare") {
+      const modelA = model;
+      const modelB = compareModelB;
+      if (modelA === modelB) {
+        setAppError({
+          kind: "plain",
+          message: "Bitte zwei verschiedene Modelle wählen (A und B).",
+        });
+        return;
+      }
+
+      let userContent: string | ContentPart[];
+      if (file) {
+        const dataUrl = await encodeImageFile(file);
+        const parts: ContentPart[] = [];
+        const visionText = text.length > 0 ? text : "Beschreibe dieses Bild kurz.";
+        parts.push({ type: "text", text: visionText });
+        parts.push({ type: "image_url", image_url: { url: dataUrl } });
+        userContent = parts;
+      } else {
+        if (!text) return;
+        userContent = text;
+      }
+
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+
+      const userMessage: ChatMessage = { role: "user", content: userContent };
+      const nextThread = [...messagesBeforeSend, userMessage];
+      const compareAssistant: ChatMessage = {
+        role: "assistant",
+        content: "",
+        compare: {
+          modelA: { modelId: modelA, content: "" },
+          modelB: { modelId: modelB, content: "" },
+        },
+      };
+
+      setInput("");
+      setImageFile(null);
+      setMessages([...nextThread, compareAssistant]);
+      setBusy(true);
+
+      const hasVision =
+        Array.isArray(userContent) &&
+        userContent.some((p) => p.type === "image_url");
+
+      const appendCompareDelta = (side: "a" | "b", delta: string) => {
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (!last?.compare) return prev;
+          const slot = side === "a" ? "modelA" : "modelB";
+          const prevText =
+            typeof last.compare[slot].content === "string"
+              ? last.compare[slot].content
+              : assistantMessagePlainText(last.compare[slot].content);
+          const copy = prev.slice();
+          copy[copy.length - 1] = {
+            ...last,
+            compare: {
+              ...last.compare,
+              [slot]: {
+                ...last.compare[slot],
+                content: prevText + delta,
+              },
+            },
+          };
+          return copy;
+        });
+      };
+
+      const deltaBatchA = createRafStreamBatcher((chunk) => {
+        if (chunk.length > 0) appendCompareDelta("a", chunk);
+      });
+      const deltaBatchB = createRafStreamBatcher((chunk) => {
+        if (chunk.length > 0) appendCompareDelta("b", chunk);
+      });
+
+      const streamStart = performance.now();
+      let firstContentAt: number | null = null;
+
+      const runSide = async (side: "a" | "b", modelId: string) => {
+        const historyForApi = [...nextThread];
+        let apiMessages = buildCompareApiMessages({
+          history: historyForApi,
+          targetModelId: modelId,
+          modelAId: modelA,
+          modelBId: modelB,
+          systemPrompt,
+          gptOssReasoning,
+          todayContext: formatPlaygroundTodayContext(),
+        });
+
+        const { messages: trimmed, trimmedCount } = trimMessagesForApi(apiMessages, maxMessages);
+        apiMessages = trimmed;
+        if (trimmedCount > 0) {
+          setContextTrimNotice(
+            `Langer Chatverlauf: ${trimmedCount} ältere Nachricht${trimmedCount === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}).`,
+          );
+        } else {
+          setContextTrimNotice(null);
+        }
+
+        const params = inferenceParamsForCompareModel(
+          modelId,
+          hasVision,
+          qwenVisionOcr,
+          maxTokens,
+        );
+        const body = buildCompareChatBody(modelId, apiMessages, params);
+        const batch = side === "a" ? deltaBatchA : deltaBatchB;
+
+        const usageSnap = await streamChatCompletion(
+          body,
+          (delta) => {
+            if (delta.length > 0) {
+              firstContentAt ??= performance.now();
+              batch.push(delta);
+            }
+          },
+          ctrl.signal,
+          playgroundRateLimits,
+        );
+        batch.flush();
+        return { side, usageSnap, modelId };
+      };
+
+      try {
+        const [resultA, resultB] = await Promise.all([
+          runSide("a", modelA),
+          runSide("b", modelB),
+        ]);
+
+        const streamEnd = performance.now();
+        const genSec =
+          firstContentAt != null
+            ? Math.max((streamEnd - firstContentAt) / 1000, 0.001)
+            : Math.max((streamEnd - streamStart) / 1000, 0.001);
+
+        const finalizeSide = (
+          side: "a" | "b",
+          usageSnap: TokenMeter | null,
+          modelId: string,
+        ) => {
+          const hasApiCounts =
+            usageSnap != null &&
+            (usageSnap.promptTokens != null || usageSnap.completionTokens != null);
+          const slot = side === "a" ? "modelA" : "modelB";
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (!last?.compare) return prev;
+            const content = last.compare[slot].content;
+            const len = assistantPlainTextLength(content);
+            const roughOutTok = Math.max(1, Math.ceil(len / 4));
+            let outputTokensPerSec: number | null = null;
+            const comp = usageSnap?.completionTokens;
+            if (typeof comp === "number") {
+              outputTokensPerSec = Math.round((comp / genSec) * 10) / 10;
+            } else if (len > 0) {
+              outputTokensPerSec = Math.round((roughOutTok / genSec) * 10) / 10;
+            }
+            const co2Grams = hasApiCounts
+              ? estimateInferenceCo2Grams(
+                  usageSnap?.promptTokens ?? 0,
+                  usageSnap?.completionTokens ?? 0,
+                  modelId,
+                )
+              : estimateInferenceCo2Grams(0, roughOutTok, modelId);
+            const copy = prev.slice();
+            copy[copy.length - 1] = {
+              ...last,
+              compare: {
+                ...last.compare!,
+                [slot]: {
+                  ...last.compare![slot],
+                  usage: {
+                    promptTokens: usageSnap?.promptTokens ?? null,
+                    completionTokens: usageSnap?.completionTokens ?? null,
+                    outputTokensPerSec,
+                    generationSeconds: genSec,
+                    co2Grams,
+                    source: hasApiCounts ? "api" : "heuristic",
+                  },
+                },
+              },
+            };
+            return copy;
+          });
+        };
+
+        finalizeSide("a", resultA.usageSnap as TokenMeter | null, modelA);
+        finalizeSide("b", resultB.usageSnap as TokenMeter | null, modelB);
+      } catch (e) {
+        deltaBatchA.cancel();
+        deltaBatchB.cancel();
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.compare) {
+            const emptyA = assistantMessagePlainText(last.compare.modelA.content).trim() === "";
+            const emptyB = assistantMessagePlainText(last.compare.modelB.content).trim() === "";
+            if (emptyA && emptyB) return prev.slice(0, -1);
+          }
+          return prev;
+        });
+      } finally {
+        setBusy(false);
+        abortRef.current = null;
+      }
+      return;
+    }
+
+    if (invoiceOcr) {
+      if (!file) {
+        setAppError({
+          kind: "plain",
+          message: "Bitte eine Rechnungs-PDF oder ein Bild per + anhängen.",
+        });
+        return;
+      }
+
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      const userNotes = text;
+      const fileLabel = ocrAttachmentLabel(file);
+
+      setInput("");
+      setImageFile(null);
+
+      const userDisplay =
+        userNotes.length > 0
+          ? `${userNotes}\n\n📎 ${fileLabel}`
+          : `Rechnung extrahieren: ${fileLabel}`;
+
+      const userMessage: ChatMessage = { role: "user", content: userDisplay };
+      const nextThread = [...messagesBeforeSend, userMessage];
+      setMessages([...nextThread, { role: "assistant", content: "" }]);
+      setBusy(true);
+      setOcrProgress("Dokument wird vorbereitet …");
+
+      const streamStart = performance.now();
+      let firstContentAt: number | null = null;
+      const deltaBatch = createRafStreamBatcher((chunk) => {
+        if (chunk.length > 0) firstContentAt ??= performance.now();
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+          const prevText = typeof last.content === "string" ? last.content : "";
+          const copy = prev.slice();
+          copy[copy.length - 1] = { role: "assistant", content: prevText + chunk };
+          return copy;
+        });
+      });
+
+      try {
+        const pages = await fileToOcrPageImages(file);
+        const ocrText = await extractTextWithGlmOcr(pages, {
+          signal: ctrl.signal,
+          rateLimits: playgroundRateLimits,
+          onProgress: setOcrProgress,
+          streamChat: streamChatCompletion,
+        });
+
+        setOcrProgress("Strukturierung (Qwen) …");
+
+        const structureUserText = buildInvoiceStructureUserMessage(
+          ocrText,
+          userNotes,
+          fileLabel,
+        );
+
+        let apiMessages: ApiMessage[] = [
+          { role: "system", content: formatPlaygroundTodayContext() },
+        ];
+        if (systemPrompt.trim().length > 0) {
+          apiMessages.push({ role: "system", content: systemPrompt.trim() });
+        }
+        for (const m of nextThread) {
+          apiMessages.push(
+            m === userMessage
+              ? { role: "user", content: structureUserText }
+              : m,
+          );
+        }
+
+        const { messages: trimmedApiMessages, trimmedCount } = trimMessagesForApi(
+          apiMessages,
+          maxMessages,
+        );
+        apiMessages = trimmedApiMessages;
+        if (trimmedCount > 0) {
+          setContextTrimNotice(
+            `Langer Chatverlauf: ${trimmedCount} ältere Nachricht${trimmedCount === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}). „Clear chat“ setzt den Verlauf zurück.`,
+          );
+        } else {
+          setContextTrimNotice(null);
+        }
+
+        const qwenPreset = getInferencePreset(model);
+        const body: Record<string, unknown> = {
+          model,
+          messages: apiMessages,
+          temperature: qwenPreset.temperature,
+          stream: true,
+          stream_options: { include_usage: true },
+        };
+        if (typeof qwenPreset.topP === "number") body.top_p = qwenPreset.topP;
+        if (typeof qwenPreset.topK === "number") body.top_k = qwenPreset.topK;
+        if (typeof qwenPreset.presencePenalty === "number") {
+          body.presence_penalty = qwenPreset.presencePenalty;
+        }
+        if (qwenPreset.extraBody) body.extra_body = qwenPreset.extraBody;
+        const cap = qwenPreset.maxTokens ?? 8192;
+        body.max_tokens = maxTokens === null ? cap : Math.min(maxTokens, cap);
+
+        const usageSnap = await streamChatCompletion(
+          body,
+          (delta) => {
+            if (delta.length > 0) deltaBatch.push(delta);
+          },
+          ctrl.signal,
+          playgroundRateLimits,
+        );
+        deltaBatch.flush();
+
+        const streamEnd = performance.now();
+        const genSec =
+          firstContentAt != null
+            ? Math.max((streamEnd - firstContentAt) / 1000, 0.001)
+            : Math.max((streamEnd - streamStart) / 1000, 0.001);
+        const hasApiCounts =
+          usageSnap != null &&
+          (usageSnap.promptTokens != null || usageSnap.completionTokens != null);
+
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+          const len = assistantPlainTextLength(last.content);
+          const roughOutTok = Math.max(1, Math.ceil(len / 4));
+          let outputTokensPerSec: number | null = null;
+          const comp = usageSnap?.completionTokens;
+          if (typeof comp === "number") {
+            outputTokensPerSec = Math.round((comp / genSec) * 10) / 10;
+          } else if (len > 0) {
+            outputTokensPerSec = Math.round((roughOutTok / genSec) * 10) / 10;
+          }
+          const co2Grams = hasApiCounts
+            ? estimateInferenceCo2Grams(
+                usageSnap?.promptTokens ?? 0,
+                usageSnap?.completionTokens ?? 0,
+                model,
+              )
+            : estimateInferenceCo2Grams(0, roughOutTok, model);
+          copy[copy.length - 1] = {
+            ...last,
+            usage: {
+              promptTokens: usageSnap?.promptTokens ?? null,
+              completionTokens: usageSnap?.completionTokens ?? null,
+              outputTokensPerSec,
+              generationSeconds: genSec,
+              co2Grams,
+              source: hasApiCounts ? "api" : "heuristic",
+            },
+          };
+          return copy;
+        });
+      } catch (e) {
+        deltaBatch.cancel();
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.content === "") {
+            return prev.slice(0, -1);
+          }
+          return prev;
+        });
+      } finally {
+        setBusy(false);
+        setOcrProgress(null);
+        abortRef.current = null;
+      }
+      return;
+    }
+
+    if (
+      activeUseCase?.formatSubmissionMessage &&
+      text.length > 0 &&
+      !file
+    ) {
+      text = activeUseCase.formatSubmissionMessage(text);
+    }
 
     let userContent: string | ContentPart[];
     if (file) {
@@ -1142,6 +1818,7 @@ export function App() {
 
     let webSearchPayload: WebSearchResponse | undefined;
     const wantsWebSearch =
+      !isModelCompareUseCase &&
       activeThreadWebSearch &&
       typeof userContent === "string" &&
       text.length > 0 &&
@@ -1158,6 +1835,8 @@ export function App() {
     setInput("");
     setImageFile(null);
 
+    const isolateWebSearch = useCaseIsolatesWebSearchContext(activeUseCase);
+
     if (useWebSearch) {
       const optimisticUser: ChatMessage = { role: "user", content: userContent };
       setMessages([
@@ -1170,7 +1849,9 @@ export function App() {
         webSearchPayload = await fetchWebSearch(
           {
             userMessage: text,
-            chatExcerpt: buildWebSearchChatExcerpt(messagesBeforeSend),
+            chatExcerpt: isolateWebSearch
+              ? ""
+              : buildWebSearchChatExcerpt(messagesBeforeSend),
             maxResults: webSearchConfig?.maxResults,
           },
           ctrl.signal,
@@ -1179,8 +1860,9 @@ export function App() {
       } catch (e) {
         setWebSearchBusy(false);
         setMessages(messagesBeforeSend);
-        if (e instanceof Error && e.name === "AbortError") throw e;
-        setAppError(appErrorFromUnknown(e, playgroundRateLimits));
+        if (isAbortError(e)) throw e;
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
         return;
       }
       setWebSearchBusy(false);
@@ -1231,6 +1913,8 @@ export function App() {
       }
     }
 
+    const threadForApi = isolateWebSearch ? [userMessage] : nextThread;
+
     let apiMessages: ApiMessage[] = [
       { role: "system", content: formatPlaygroundTodayContext() },
     ];
@@ -1241,7 +1925,7 @@ export function App() {
     } else if (systemPrompt.trim().length > 0) {
       apiMessages.push({ role: "system", content: systemPrompt.trim() });
     }
-    for (const m of nextThread) {
+    for (const m of threadForApi) {
       if (
         webSearchPayload &&
         m.role === "user" &&
@@ -1362,7 +2046,8 @@ export function App() {
       });
     } catch (e) {
       deltaBatch.cancel();
-      setAppError(appErrorFromUnknown(e, playgroundRateLimits));
+      const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+      if (sendErr) setAppError(sendErr);
       setMessages((prev) => {
         if (prev.length === 0) return prev;
         const last = prev[prev.length - 1];
@@ -1375,6 +2060,9 @@ export function App() {
       setBusy(false);
       setWebSearchBusy(false);
       abortRef.current = null;
+    }
+    } finally {
+      sendLockRef.current = false;
     }
   }, [
     canSend,
@@ -1397,6 +2085,10 @@ export function App() {
     activeThreadWebSearch,
     webSearchConfig,
     playgroundRateLimits,
+    activeUseCase,
+    briefingValues,
+    compareModelB,
+    activeUseCaseId,
     requestEnableWebSearch,
   ]);
 
@@ -1418,7 +2110,7 @@ export function App() {
   }, [voiceRecording.active]);
 
   return (
-    <div className="flex h-[100dvh] overflow-hidden bg-white text-neutral-900 antialiased dark:bg-neutral-950 dark:text-neutral-100">
+    <div className="flex h-[100dvh] overflow-hidden bg-playground-main text-playground-ink antialiased">
       {isMobileLayout && mobileSidebarOpen ? (
         <button
           type="button"
@@ -1428,22 +2120,28 @@ export function App() {
         />
       ) : null}
       <aside
-        className={`flex shrink-0 flex-col border-r border-neutral-200 bg-[#f9f9f9] transition-[width,transform] duration-200 ease-out dark:border-neutral-800 dark:bg-neutral-900 ${
+        className={`flex shrink-0 flex-col border-r border-playground-border bg-playground-sidebar px-2 transition-[width,transform] duration-200 ease-out ${
           isMobileLayout
-            ? `fixed inset-y-0 left-0 z-50 w-[min(100vw,280px)] max-w-[min(100vw,280px)] shadow-xl ${
+            ? `fixed inset-y-0 left-0 z-50 w-[min(100vw,329px)] max-w-[min(100vw,329px)] shadow-xl ${
                 mobileSidebarOpen
                   ? "translate-x-0"
                   : "pointer-events-none -translate-x-full"
               }`
             : sidebarCollapsed
               ? "w-[52px]"
-              : "w-[260px]"
+              : "w-[329px]"
         }`}
       >
-        <div className="flex h-12 shrink-0 items-center gap-1 border-b border-neutral-200/80 px-2 dark:border-neutral-800">
+        <div
+          className={`flex shrink-0 border-b border-playground-border ${
+            sidebarExpanded
+              ? "h-[56px] items-center gap-3 p-2.5"
+              : "items-center justify-center py-2.5"
+          }`}
+        >
           <button
             type="button"
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200/80 dark:text-neutral-400 dark:hover:bg-neutral-800"
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-playground-ink hover:bg-playground-muted/5"
             onClick={toggleSidebar}
             title={
               isMobileLayout
@@ -1462,31 +2160,45 @@ export function App() {
                 : "Sidebar umschalten"
             }
           >
-            <span className="text-lg leading-none">≡</span>
+            <MenuIcon />
           </button>
-          {sidebarExpanded && (
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <span className="truncate text-sm font-semibold tracking-tight dark:text-neutral-100">{title}</span>
-              <BetaBadge />
-            </div>
-          )}
+          {sidebarExpanded ? (
+            <button
+              type="button"
+              onClick={goToDashboard}
+              disabled={busy || speechBusy}
+              title="Zur Startseite"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-lg text-left transition hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              <MittwaldLogo size="md" className="text-playground-ink" />
+              <div className="min-w-0">
+                <p className="playground-text-body truncate font-bold leading-tight text-playground-ink">
+                  Playground
+                </p>
+              </div>
+            </button>
+          ) : null}
         </div>
 
         {sidebarExpanded ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden py-2">
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <button
               type="button"
               onClick={newChat}
               disabled={busy || speechBusy}
-              className="mx-2 mb-2 flex items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-200/70 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-100 dark:hover:bg-neutral-800/80"
+              className="flex items-center gap-3 rounded-lg p-3 hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40"
               title="Neuer Chat"
             >
-              <span className="text-base leading-none" aria-hidden>
-                ✎
+              <span
+                className="playground-surface-glass-strong flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-playground-ink"
+                aria-hidden
+              >
+                <PenIcon />
               </span>
-              Neuer Chat
+              <span className="playground-text-new-chat text-playground-muted">Neuer Chat</span>
             </button>
-            <p className="mb-1 px-3 text-[11px] font-medium text-neutral-500 dark:text-neutral-500">
+            <div className="flex min-h-0 flex-1 flex-col border-t border-playground-border py-3">
+            <p className="playground-text-small px-3 py-2 font-bold text-playground-ink">
               Aktuelle
             </p>
             <nav
@@ -1499,16 +2211,18 @@ export function App() {
                   <div
                     key={t.id}
                     className={`group mb-0.5 flex items-center rounded-lg ${
-                      active
-                        ? "bg-neutral-200/80 dark:bg-neutral-800"
-                        : "hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50"
+                      active ? "bg-playground-muted/[0.08]" : "hover:bg-playground-muted/5"
                     }`}
                   >
                     <button
                       type="button"
                       onClick={() => selectThread(t.id)}
                       disabled={busy}
-                      className="min-w-0 flex-1 overflow-hidden rounded-lg px-2.5 py-2 text-left text-[13px] text-neutral-700 disabled:cursor-not-allowed dark:text-neutral-200"
+                      className={`playground-text-body min-w-0 flex-1 overflow-hidden rounded-lg px-3 py-2 text-left disabled:cursor-not-allowed ${
+                        active
+                          ? "font-bold text-playground-ink"
+                          : "font-medium text-playground-muted"
+                      }`}
                       title={
                         t.webSearchEnabled
                           ? `${t.title} (Websuche aktiv)`
@@ -1538,6 +2252,7 @@ export function App() {
                 );
               })}
             </nav>
+            </div>
           </div>
         ) : null}
 
@@ -1564,9 +2279,9 @@ export function App() {
           </div>
         ) : null}
 
-        <div className="mt-auto shrink-0 space-y-1 border-t border-neutral-200/80 p-2 dark:border-neutral-800">
+        <div className="mt-auto shrink-0 space-y-0 border-t border-playground-border py-3">
           {sidebarExpanded ? (
-            <SessionCo2Footprint grams={sessionCo2Grams} className="px-2 pb-1" />
+            <SessionCo2Footprint grams={sessionCo2Grams} className="px-3 pb-2" />
           ) : (
             <SessionCo2Footprint grams={sessionCo2Grams} compact className="pb-1" />
           )}
@@ -1574,8 +2289,8 @@ export function App() {
             type="button"
             onClick={() => setDeleteAllChatsOpen(true)}
             disabled={busy || speechBusy}
-            className={`w-full rounded-md py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-red-950/40 dark:hover:text-red-400 ${
-              sidebarExpanded ? "px-2 text-left" : "px-0"
+            className={`playground-text-tiny w-full rounded-lg px-3 py-2 text-left font-medium text-playground-ink hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40 ${
+              sidebarExpanded ? "" : "px-0"
             }`}
             title="Alle Chats löschen"
             aria-label="Alle Chats löschen"
@@ -1586,30 +2301,24 @@ export function App() {
             type="button"
             onClick={() => setClearBrowserCacheOpen(true)}
             disabled={busy || speechBusy}
-            className={`w-full rounded-md py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-red-950/40 dark:hover:text-red-400 ${
-              sidebarExpanded ? "px-2 text-left" : "px-0"
+            className={`playground-text-tiny w-full rounded-lg px-3 py-2 text-left font-medium text-playground-ink hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40 ${
+              sidebarExpanded ? "" : "px-0"
             }`}
             title="Browsercache löschen"
             aria-label="Browsercache löschen"
           >
             {sidebarExpanded ? "Browsercache löschen" : "⌫"}
           </button>
-          {sidebarExpanded ? <PlaygroundLinksSidebar links={menuLinks} /> : null}
-          <button
-            type="button"
-            onClick={() => setShowGlossary(true)}
-            className={`w-full rounded-md py-1.5 text-[11px] font-medium text-neutral-600 hover:bg-neutral-200/70 dark:text-neutral-400 dark:hover:bg-neutral-800/70 ${
-              sidebarExpanded ? "px-2 text-left" : "px-0"
-            }`}
-            title="Begriffe erklärt"
-          >
-            {sidebarExpanded ? "Einfach erklärt" : "?"}
-          </button>
+          {sidebarExpanded ? (
+            <div className="flex justify-start px-1 pt-3">
+              <PlaygroundSidebarCta href={aiHostingUrl} />
+            </div>
+          ) : null}
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col bg-white dark:bg-neutral-950">
-        <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-neutral-200 px-2 sm:gap-3 sm:px-3 dark:border-neutral-800">
+      <div className="flex min-w-0 flex-1 flex-col bg-playground-main">
+        <div className="relative z-20 flex h-[56px] shrink-0 items-center justify-between gap-2 overflow-visible border-b border-playground-border px-3 sm:px-5">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
             {isMobileLayout ? (
               <button
@@ -1623,17 +2332,19 @@ export function App() {
               </button>
             ) : null}
             <label htmlFor="model-select" className="sr-only">
-              Modell
+              {isModelCompareUseCase ? "Modell A" : "Modell"}
             </label>
             <select
               id="model-select"
-              className="max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-2 text-sm font-semibold text-neutral-900 outline-none hover:bg-neutral-100 focus-visible:ring-2 focus-visible:ring-neutral-300 dark:text-neutral-100 dark:hover:bg-neutral-800/80 dark:focus-visible:ring-neutral-600 sm:max-w-[min(100%,28rem)]"
+              className="playground-text-small max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-8 font-bold text-playground-muted outline-none hover:bg-playground-muted/5 focus-visible:ring-2 focus-visible:ring-playground-border sm:max-w-[min(100%,14rem)]"
               value={model}
               onChange={(e) => changeModel(e.target.value)}
               title={
                 busy || webSearchBusy
                   ? "Modell wechseln (bricht die laufende Anfrage ab)"
-                  : "Modell"
+                  : isModelCompareUseCase
+                    ? "Modell A"
+                    : "Modell"
               }
             >
               {models.length === 0 ? (
@@ -1641,20 +2352,99 @@ export function App() {
               ) : (
                 models.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.id}
+                    {isModelCompareUseCase ? `A: ${m.id}` : m.id}
                   </option>
                 ))
               )}
             </select>
-            {isMobileLayout || sidebarCollapsed ? <BetaBadge /> : null}
+            {isModelCompareUseCase ? (
+              <>
+                <span
+                  className="playground-text-small shrink-0 px-0.5 font-bold text-playground-muted"
+                  aria-hidden
+                >
+                  vs
+                </span>
+                <label htmlFor="model-select-b" className="sr-only">
+                  Modell B
+                </label>
+                <select
+                  id="model-select-b"
+                  className="playground-text-small max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-8 font-bold text-playground-muted outline-none hover:bg-playground-muted/5 focus-visible:ring-2 focus-visible:ring-playground-border sm:max-w-[min(100%,14rem)]"
+                  value={compareModelB}
+                  onChange={(e) => setCompareModelB(e.target.value)}
+                  disabled={busy || webSearchBusy}
+                  title="Modell B"
+                >
+                  {models.length === 0 ? (
+                    <option value={compareModelB}>{compareModelB}</option>
+                  ) : (
+                    models.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        B: {m.id}
+                      </option>
+                    ))
+                  )}
+                </select>
+              </>
+            ) : null}
+            <ModelSettingsDock
+              open={showModelSettings}
+              onOpenChange={setShowModelSettings}
+              busy={busy}
+              panelMode="docked"
+              buttonClassName="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-playground-muted transition hover:bg-playground-muted/5 hover:text-playground-ink disabled:opacity-40"
+              modelId={model}
+              onReapplyPreset={() => applyPreset(model)}
+              temperature={temperature}
+              setTemperature={setTemperature}
+              topP={topP}
+              setTopP={setTopP}
+              topK={topK}
+              setTopK={setTopK}
+              presencePenalty={presencePenalty}
+              setPresencePenalty={setPresencePenalty}
+              maxTokens={maxTokens}
+              setMaxTokens={setMaxTokens}
+              extraBody={extraBody}
+              setExtraBody={setExtraBody}
+              gptOssReasoning={gptOssReasoning}
+              setGptOssReasoning={setGptOssReasoning}
+              qwenVisionOcr={qwenVisionOcr}
+              setQwenVisionOcr={setQwenVisionOcr}
+              systemPrompt={systemPrompt}
+              setSystemPrompt={setSystemPrompt}
+              webSearchConfig={webSearchConfig}
+              webSearchDefaultEnabled={webSearchDefaultEnabled}
+              onWebSearchDefaultChange={(enabled) => {
+                if (!enabled) setWebSearchDefaultEnabled(false);
+                else requestEnableWebSearch("default");
+              }}
+              webSearchConsentGranted={webSearchConsentGranted}
+              onRevokeWebSearchConsent={revokeWebSearchConsent}
+            />
           </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            {sessionApiKeyActive ? (
+              <span className="playground-text-tiny hidden items-center gap-1.5 font-semibold text-playground-muted sm:inline-flex">
+                Eigener API-Key
+                <button
+                  type="button"
+                  onClick={handleClearSessionApiKey}
+                  className="rounded px-1 hover:text-playground-ink"
+                  title="API-Key aus dieser Session entfernen"
+                  aria-label="API-Key entfernen"
+                >
+                  ×
+                </button>
+              </span>
+            ) : null}
             <label htmlFor="theme-select" className="sr-only">
               Design
             </label>
             <select
               id="theme-select"
-              className="max-w-[6.5rem] rounded-lg border border-neutral-200 bg-white px-1.5 py-1.5 text-xs text-neutral-800 shadow-sm outline-none focus:ring-2 focus:ring-neutral-300 sm:max-w-none sm:px-2 dark:border-neutral-700 dark:bg-neutral-900 dark:text-neutral-200 dark:focus:ring-neutral-600"
+              className="playground-theme-chevron playground-text-small max-w-[6.5rem] appearance-none rounded-lg border border-transparent bg-transparent bg-[length:1rem] bg-[right_0.25rem_center] bg-no-repeat py-1.5 pl-2 pr-7 font-bold text-playground-muted outline-none focus:ring-2 focus:ring-playground-border sm:max-w-none"
               value={themePreference}
               onChange={(e) => setThemePreference(e.target.value as ThemePreference)}
             >
@@ -1664,63 +2454,89 @@ export function App() {
             </select>
           </div>
         </div>
-        <div className="flex min-h-0 flex-1 flex-col">
+        <div className="relative flex min-h-0 flex-1 flex-col">
           <div ref={chatScrollRef} className="min-h-0 flex-1 overflow-y-auto">
             {messages.length === 0 ? (
-              <div className="flex h-full min-h-[50vh] flex-col items-center justify-center px-4 pb-32 sm:px-6 sm:pb-40">
-                <h1 className="text-center text-2xl font-semibold tracking-tight text-neutral-900 sm:text-3xl md:text-4xl dark:text-neutral-100">
-                  Bereit loszulegen?
-                </h1>
-                <p className="mt-3 max-w-md text-center text-sm text-neutral-500 dark:text-neutral-400">
-                  Stelle eine Frage oder nutze + für ein Bild. Nur in diesem Browser gespeichert.
-                </p>
-                <PlaygroundLinksInline
-                  links={menuLinks}
-                  className="mt-5 max-w-md text-center text-xs text-neutral-500 dark:text-neutral-400"
-                >
-                  <button
-                    type="button"
-                    className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                    onClick={() => setShowModelsOverview(true)}
-                  >
-                    Modellübersicht
-                  </button>
-                </PlaygroundLinksInline>
+              <div className="flex min-h-full flex-col items-center justify-start gap-4 px-4 py-5 sm:gap-5 sm:px-6 sm:py-6">
+                <div className="flex max-w-5xl flex-col items-center gap-2.5 text-center sm:gap-3">
+                  <p className="playground-text-hero-label font-bold text-playground-ink">
+                    mittwald Playground
+                  </p>
+                  <h1 className="playground-text-hero max-w-5xl text-playground-ink">
+                    {activeUseCase ? activeUseCase.title : "Bereit loszulegen?"}
+                  </h1>
+                  <p className="playground-text-subtitle max-w-4xl font-medium text-playground-ink">
+                    {activeUseCase
+                      ? activeUseCase.description
+                      : `${PLAYGROUND_USE_CASES.length} Use Cases für Agenturen — oder stelle eine eigene Frage.`}
+                  </p>
+                </div>
+                {activeUseCase ? (
+                  <PlaygroundUseCaseGuide
+                    useCase={activeUseCase}
+                    onBack={clearUseCase}
+                    speechEnabled={speechToText?.enabled}
+                    recording={voiceRecording.active}
+                    transcribeProgress={ocrProgress ?? speechTranscribeStatus}
+                    briefingValues={briefingValues}
+                    activeBriefingFieldId={activeBriefingFieldId}
+                    onBriefingChange={handleBriefingChange}
+                    onBriefingFieldFocus={handleBriefingFieldFocus}
+                    onStartRecording={
+                      activeUseCase.prefersSpeech
+                        ? () => speechInputRef.current?.startRecording()
+                        : undefined
+                    }
+                  />
+                ) : (
+                  <PlaygroundUseCaseCards
+                    cases={PLAYGROUND_USE_CASES}
+                    activeId={activeUseCaseId}
+                    disabled={busy || speechBusy}
+                    onSelect={activateUseCase}
+                  />
+                )}
               </div>
             ) : (
-              <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-8">
-                {messages.map((m, i) => (
-                  <ChatMessageRow
-                    key={i}
-                    message={m}
-                    streaming={busy && m.role === "assistant" && i === messages.length - 1}
-                    webSearchPending={
-                      webSearchBusy &&
-                      m.role === "assistant" &&
-                      i === messages.length - 1 &&
-                      typeof m.content === "string" &&
-                      m.content === ""
-                    }
-                    webSearchProviderLabel={providerLabel(webSearchConfig)}
-                    onImageOpen={openImageLightbox}
-                  />
-                ))}
+              <div className="mx-auto w-full max-w-playground space-y-5 px-4 py-6">
+                {messages.map((m, i) =>
+                  m.role === "assistant" && m.compare ? (
+                    <ModelCompareMessageRow
+                      key={i}
+                      compare={m.compare}
+                      streaming={busy && i === messages.length - 1}
+                    />
+                  ) : (
+                    <ChatMessageRow
+                      key={i}
+                      message={m}
+                      streaming={busy && m.role === "assistant" && i === messages.length - 1}
+                      webSearchPending={
+                        webSearchBusy &&
+                        m.role === "assistant" &&
+                        i === messages.length - 1 &&
+                        typeof m.content === "string" &&
+                        m.content === ""
+                      }
+                      webSearchProviderLabel={providerLabel(webSearchConfig)}
+                      activeUseCaseId={activeUseCaseId}
+                      onImageOpen={openImageLightbox}
+                    />
+                  ),
+                )}
                 <div ref={bottomRef} />
               </div>
             )}
           </div>
 
-          <div className="shrink-0 border-t border-transparent bg-gradient-to-t from-white via-white to-transparent px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-3 dark:from-neutral-950 dark:via-neutral-950 dark:to-transparent">
-            {contextTrimNotice && (
-              <div
-                className="mx-auto mb-2 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
-                role="status"
-              >
-                {contextTrimNotice}
-              </div>
-            )}
-            {appError?.kind === "rate_limit" ? (
-              <div className="mx-auto mb-2 max-w-3xl">
+          {appError?.kind === "rate_limit" ? (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center overflow-y-auto bg-neutral-900/30 px-4 py-6 backdrop-blur-[1px] dark:bg-black/45 sm:px-6"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="rate-limit-title"
+            >
+              <div className="pointer-events-auto w-full max-w-[907px]">
                 <RateLimitNotice
                   waitMinutes={appError.waitMinutes}
                   scope={appError.scope}
@@ -1729,10 +2545,27 @@ export function App() {
                   windowMinutes={appError.windowMinutes}
                   rateLimits={playgroundRateLimits}
                   aiHostingUrl={aiHostingUrl}
-                  selfHostRepoUrl={selfHostRepoUrl}
+                  bonusChat={bonusChatConfig}
+                  bonusGrantAvailable={!bonusGrantUsed}
+                  sessionApiKeyActive={sessionApiKeyActive}
+                  onSaveApiKey={handleSaveSessionApiKey}
+                  onClearApiKey={handleClearSessionApiKey}
+                  onContinueTesting={handleContinueTesting}
+                  continueTestingBusy={continueTestingBusy}
                 />
               </div>
-            ) : null}
+            </div>
+          ) : null}
+
+          <div className="playground-main-glow shrink-0 border-t border-transparent bg-gradient-to-t from-playground-main via-playground-main to-transparent px-2 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-2 sm:px-4 sm:pb-3">
+            {contextTrimNotice && (
+              <div
+                className="mx-auto mb-2 max-w-3xl rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100"
+                role="status"
+              >
+                {contextTrimNotice}
+              </div>
+            )}
             {appError?.kind === "plain" ? (
               <div
                 className="mx-auto mb-2 max-w-3xl rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900 dark:border-red-900/60 dark:bg-red-950/40 dark:text-red-100"
@@ -1741,106 +2574,208 @@ export function App() {
                 {appError.message}
               </div>
             ) : null}
-            {imagePreview && (
+            {activeUseCase && messages.length > 0 ? (
+              <div
+                className="mx-auto mb-2 flex max-w-playground flex-wrap items-center justify-between gap-2 rounded-2xl border border-playground-border bg-playground-sidebar px-4 py-2"
+                role="status"
+              >
+                <span className="playground-text-small flex items-center gap-2 font-medium text-playground-ink">
+                  <span className="text-base" aria-hidden>
+                    {activeUseCase.icon}
+                  </span>
+                  <span>
+                    Use Case: <span className="font-bold">{activeUseCase.title}</span>
+                    <span className="text-playground-muted">
+                      {" "}
+                      ·{" "}
+                      {isModelCompareUseCase
+                        ? `${model} vs ${compareModelB}`
+                        : activeUseCase.modelLabel}
+                    </span>
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className="playground-text-tiny font-medium text-playground-muted underline decoration-playground-border underline-offset-2 hover:text-playground-ink"
+                  onClick={clearUseCase}
+                >
+                  Use Case beenden
+                </button>
+              </div>
+            ) : null}
+            {imageFile && (
               <div className="mx-auto mb-2 flex max-w-3xl items-center gap-2 text-xs text-neutral-500 dark:text-neutral-400">
-                <ChatImagePreviewThumb src={imagePreview} onOpen={openImageLightbox} />
-                <button type="button" className="underline" onClick={() => setImageFile(null)} disabled={busy}>
-                  Bild entfernen
+                {imagePreview ? (
+                  <ChatImagePreviewThumb src={imagePreview} onOpen={openImageLightbox} />
+                ) : attachmentIsPdf ? (
+                  <span
+                    className="flex h-9 shrink-0 items-center rounded-lg bg-playground-muted/10 px-2.5 font-medium text-playground-ink ring-1 ring-playground-border"
+                    aria-hidden
+                  >
+                    PDF
+                  </span>
+                ) : null}
+                <span className="min-w-0 truncate text-playground-muted">{imageFile.name}</span>
+                <button type="button" className="shrink-0 underline" onClick={() => setImageFile(null)} disabled={busy}>
+                  Anhang entfernen
                 </button>
               </div>
             )}
-            <div
-              className={`mx-auto w-full max-w-3xl ${isMobileLayout ? "" : "flex items-end gap-1 sm:gap-1.5"}`}
-            >
-              {!isMobileLayout ? (
-                <ModelSettingsDock
-                open={showModelSettings}
-                onOpenChange={setShowModelSettings}
-                busy={busy}
-                modelId={model}
-                onReapplyPreset={() => applyPreset(model)}
-                temperature={temperature}
-                setTemperature={setTemperature}
-                topP={topP}
-                setTopP={setTopP}
-                topK={topK}
-                setTopK={setTopK}
-                presencePenalty={presencePenalty}
-                setPresencePenalty={setPresencePenalty}
-                maxTokens={maxTokens}
-                setMaxTokens={setMaxTokens}
-                extraBody={extraBody}
-                setExtraBody={setExtraBody}
-                gptOssReasoning={gptOssReasoning}
-                setGptOssReasoning={setGptOssReasoning}
-                qwenVisionOcr={qwenVisionOcr}
-                setQwenVisionOcr={setQwenVisionOcr}
-                systemPrompt={systemPrompt}
-                setSystemPrompt={setSystemPrompt}
-                webSearchConfig={webSearchConfig}
-                webSearchDefaultEnabled={webSearchDefaultEnabled}
-                onWebSearchDefaultChange={(enabled) => {
-                  if (!enabled) setWebSearchDefaultEnabled(false);
-                  else requestEnableWebSearch("default");
-                }}
-                webSearchConsentGranted={webSearchConsentGranted}
-                onRevokeWebSearchConsent={revokeWebSearchConsent}
-              />
-              ) : null}
-              <div className="min-w-0 flex-1">
-                <WebSearchModeChip
-                  config={webSearchConfig}
-                  active={activeThreadWebSearch}
-                  searching={webSearchBusy}
-                  disabled={busy || voiceRecording.active || speechTranscribing}
-                  onDeactivate={() => setActiveThreadWebSearch(false)}
-                />
-                <div
-                  className={`flex gap-1 rounded-[24px] border border-neutral-200 bg-white py-1.5 pl-1.5 pr-1.5 shadow-[0_2px_12px_rgba(0,0,0,0.08)] sm:gap-2 sm:rounded-[28px] sm:py-2 sm:pl-2 sm:pr-2 dark:border-neutral-700 dark:bg-neutral-900 dark:shadow-[0_2px_16px_rgba(0,0,0,0.35)] ${
-                    voiceRecording.active ? "items-center" : "items-center sm:items-end"
-                  } ${activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-800/80" : ""}`}
-                  onPasteCapture={handleComposerPasteCapture}
-                >
+            <div className="mx-auto w-full max-w-playground">
+              <div
+                className={`flex gap-2 sm:gap-4 ${
+                  isMobileLayout ? "items-end" : composerTall ? "items-end" : "items-center"
+                }`}
+              >
+                <div className="min-w-0 flex-1">
+                  <WebSearchModeChip
+                    config={webSearchConfig}
+                    active={activeThreadWebSearch}
+                    searching={webSearchBusy}
+                    disabled={busy || voiceRecording.active || speechTranscribing || ocrPipelineBusy}
+                    onDeactivate={() => setActiveThreadWebSearch(false)}
+                  />
                   {isMobileLayout ? (
-                    <ModelSettingsDock
-                      open={showModelSettings}
-                      onOpenChange={setShowModelSettings}
-                      busy={busy}
-                      modelId={model}
-                      onReapplyPreset={() => applyPreset(model)}
-                      temperature={temperature}
-                      setTemperature={setTemperature}
-                      topP={topP}
-                      setTopP={setTopP}
-                      topK={topK}
-                      setTopK={setTopK}
-                      presencePenalty={presencePenalty}
-                      setPresencePenalty={setPresencePenalty}
-                      maxTokens={maxTokens}
-                      setMaxTokens={setMaxTokens}
-                      extraBody={extraBody}
-                      setExtraBody={setExtraBody}
-                      gptOssReasoning={gptOssReasoning}
-                      setGptOssReasoning={setGptOssReasoning}
-                      qwenVisionOcr={qwenVisionOcr}
-                      setQwenVisionOcr={setQwenVisionOcr}
-                      systemPrompt={systemPrompt}
-                      setSystemPrompt={setSystemPrompt}
-                      webSearchConfig={webSearchConfig}
-                      webSearchDefaultEnabled={webSearchDefaultEnabled}
-                      onWebSearchDefaultChange={(enabled) => {
-                        if (!enabled) setWebSearchDefaultEnabled(false);
-                        else requestEnableWebSearch("default");
-                      }}
-                      webSearchConsentGranted={webSearchConsentGranted}
-                      onRevokeWebSearchConsent={revokeWebSearchConsent}
-                      panelMode="fixed"
-                      buttonClassName="flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 transition hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-40 dark:text-neutral-400 dark:hover:bg-neutral-800 dark:hover:text-neutral-100"
-                    />
-                  ) : null}
+                    <div
+                      className={`playground-surface-glass flex w-full min-w-0 flex-col overflow-hidden rounded-[22px] border border-transparent px-0 py-0 ${
+                        voiceRecording.active ? "overflow-hidden" : ""
+                      } ${
+                        activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-400/30" : ""
+                      }`}
+                      onPasteCapture={handleComposerPasteCapture}
+                    >
+                      <div className="w-full min-w-0 px-3 pt-2.5">
+                        {voiceRecording.active ? (
+                          <SpeechWaveform stream={voiceRecording.stream} compact />
+                        ) : ocrPipelineBusy ? (
+                          <p
+                            className="playground-text-small min-w-0 py-1 font-medium text-playground-muted"
+                            role="status"
+                          >
+                            {ocrProgress ?? "Rechnung wird verarbeitet …"}
+                          </p>
+                        ) : speechTranscribing ? (
+                          <SpeechTranscribingIndicator />
+                        ) : (
+                          <textarea
+                            ref={inputRef}
+                            className={`playground-composer-input w-full min-w-0 max-h-40 resize-none overflow-hidden bg-transparent py-0.5 text-left text-playground-ink outline-none placeholder:text-playground-muted ${
+                              composerTall ? "leading-normal" : "min-h-[1.375rem] leading-snug"
+                            }`}
+                            rows={1}
+                            placeholder={composerPlaceholder}
+                            value={input}
+                            onChange={(e) => setInput(e.target.value)}
+                            disabled={busy || speechBusy || webSearchBusy || ocrPipelineBusy}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                void send();
+                              }
+                            }}
+                          />
+                        )}
+                      </div>
+                      <div className="flex min-w-0 items-center gap-0.5 px-2 pb-2 pt-1">
+                        <label
+                          className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-playground-ink hover:bg-playground-muted/5 ${
+                            voiceRecording.active || speechTranscribing || ocrPipelineBusy
+                              ? "pointer-events-none opacity-40"
+                              : ""
+                          }`}
+                        >
+                          <span className="text-xl font-light leading-none">+</span>
+                          <input
+                            type="file"
+                            accept={
+                              activeUseCase?.prefersDocument
+                                ? "image/*,application/pdf,.pdf"
+                                : "image/*"
+                            }
+                            className="hidden"
+                            disabled={busy}
+                            onChange={(e) => {
+                              const f = e.target.files?.[0];
+                              e.target.value = "";
+                              setImageFile(f ?? null);
+                            }}
+                          />
+                        </label>
+                        <WebSearchGlobeToggle
+                          config={webSearchConfig}
+                          active={activeThreadWebSearch}
+                          searching={webSearchBusy}
+                          disabled={
+                            busy || voiceRecording.active || speechTranscribing || ocrPipelineBusy
+                          }
+                          onToggle={toggleThreadWebSearch}
+                          compact
+                        />
+                        <div className="min-w-0 flex-1" aria-hidden />
+                        {voiceRecording.active ? (
+                          <VoiceRecordingControls
+                            compact
+                            disabled={busy}
+                            onCancel={() =>
+                              speechInputRef.current?.stopRecording({ skipTranscribe: true })
+                            }
+                            onConfirm={() => speechInputRef.current?.stopRecording()}
+                          />
+                        ) : busy ? (
+                          <button
+                            type="button"
+                            onClick={stop}
+                            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-playground-border bg-playground-sidebar text-xs font-medium text-playground-ink hover:bg-playground-muted/5"
+                            title="Stoppen"
+                          >
+                            ■
+                          </button>
+                        ) : (
+                          <>
+                            {showSpeechInComposer ? (
+                              <SpeechInputButton
+                                ref={speechInputRef}
+                                disabled={busy}
+                                language={speechToText.language}
+                                maxAudioBytes={speechToText.maxAudioBytes}
+                                longRecording={Boolean(activeUseCase?.prefersLongSpeech)}
+                                onTranscript={handleSpeechTranscript}
+                                onTranscriptSegment={handleSpeechTranscriptSegment}
+                                onTranscribeProgress={handleSpeechTranscribeProgress}
+                                onError={setAppError}
+                                rateLimits={playgroundRateLimits}
+                                onBusyChange={setSpeechBusy}
+                                onRecordingChange={handleVoiceRecordingChange}
+                                className="h-9 w-9 shrink-0 rounded-full border-0 bg-playground-muted/10 text-playground-ink shadow-none hover:bg-playground-muted/15 dark:border-0 dark:bg-playground-muted/15 dark:hover:bg-playground-muted/20"
+                              />
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => void send()}
+                              disabled={!canSend}
+                              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-playground-send text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"
+                              title={sendButtonTitle}
+                            >
+                              <ArrowUpIcon className="h-4 w-4" />
+                            </button>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                  <div
+                    className={`playground-surface-glass flex w-full min-w-0 border border-transparent min-h-12 gap-1.5 py-1.5 pl-4 pr-1.5 sm:min-h-14 sm:gap-2 sm:py-2 sm:pr-2 ${
+                      composerTall ? "items-end rounded-[28px]" : "items-center rounded-full"
+                    } ${
+                      voiceRecording.active ? "overflow-hidden" : ""
+                    } ${
+                      activeThreadWebSearch ? "ring-1 ring-sky-300/50 dark:ring-sky-400/30" : ""
+                    }`}
+                    onPasteCapture={handleComposerPasteCapture}
+                  >
                   <label
-                    className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 sm:h-10 sm:w-10 dark:text-neutral-400 dark:hover:bg-neutral-800 ${
-                      voiceRecording.active || speechTranscribing
+                    className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-playground-ink hover:bg-playground-muted/5 sm:h-9 sm:w-9 ${
+                      voiceRecording.active || speechTranscribing || ocrPipelineBusy
                         ? "pointer-events-none opacity-40"
                         : ""
                     }`}
@@ -1848,7 +2783,11 @@ export function App() {
                     <span className="text-lg font-light leading-none sm:text-xl">+</span>
                     <input
                       type="file"
-                      accept="image/*"
+                      accept={
+                        activeUseCase?.prefersDocument
+                          ? "image/*,application/pdf,.pdf"
+                          : "image/*"
+                      }
                       className="hidden"
                       disabled={busy}
                       onChange={(e) => {
@@ -1862,26 +2801,62 @@ export function App() {
                     config={webSearchConfig}
                     active={activeThreadWebSearch}
                     searching={webSearchBusy}
-                    disabled={busy || voiceRecording.active || speechTranscribing}
+                    disabled={busy || voiceRecording.active || speechTranscribing || ocrPipelineBusy}
                     onToggle={toggleThreadWebSearch}
+                    compact={false}
                   />
+                  {showSpeechInComposer ? (
+                    <SpeechInputButton
+                      ref={speechInputRef}
+                      disabled={busy}
+                      language={speechToText.language}
+                      maxAudioBytes={speechToText.maxAudioBytes}
+                      longRecording={Boolean(activeUseCase?.prefersLongSpeech)}
+                      onTranscript={handleSpeechTranscript}
+                      onTranscriptSegment={handleSpeechTranscriptSegment}
+                      onTranscribeProgress={handleSpeechTranscribeProgress}
+                      onError={setAppError}
+                      rateLimits={playgroundRateLimits}
+                      onBusyChange={setSpeechBusy}
+                      onRecordingChange={handleVoiceRecordingChange}
+                      className={
+                        voiceRecording.active ? "sr-only" : "h-8 w-8 sm:h-9 sm:w-9"
+                      }
+                    />
+                  ) : null}
                   {voiceRecording.active ? (
-                    <SpeechWaveform stream={voiceRecording.stream} />
+                    <>
+                      <SpeechWaveform stream={voiceRecording.stream} />
+                      <VoiceRecordingControls
+                        disabled={busy}
+                        onCancel={() =>
+                          speechInputRef.current?.stopRecording({ skipTranscribe: true })
+                        }
+                        onConfirm={() => speechInputRef.current?.stopRecording()}
+                      />
+                    </>
+                  ) : ocrPipelineBusy ? (
+                    <p
+                      className="playground-text-small min-w-0 flex-1 px-1 font-medium text-playground-muted"
+                      role="status"
+                    >
+                      {ocrProgress ?? "Rechnung wird verarbeitet …"}
+                    </p>
                   ) : speechTranscribing ? (
                     <SpeechTranscribingIndicator />
                   ) : (
                     <textarea
                       ref={inputRef}
-                      className="max-h-52 min-h-[40px] flex-1 resize-none self-center overflow-hidden bg-transparent py-2 text-sm leading-normal text-neutral-900 outline-none placeholder:text-neutral-400 sm:min-h-[44px] sm:py-2.5 sm:text-[15px] sm:leading-relaxed dark:text-neutral-100 dark:placeholder:text-neutral-500"
+                      className={`playground-composer-input min-w-0 max-h-52 flex-1 resize-none overflow-hidden bg-transparent text-left text-playground-ink outline-none placeholder:text-playground-muted ${
+                        composerTall
+                          ? "py-1.5 leading-normal"
+                          : "playground-composer-input--single min-h-10"
+                      } ${composerTall ? "self-stretch" : "self-center"}`}
                       rows={1}
-                      placeholder={
-                        isMobileLayout
-                          ? "Nachricht…"
-                          : "Stelle irgendeine Frage (Bild: einfügen oder +)"
-                      }
+                      placeholder={composerPlaceholder}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      disabled={busy || speechBusy || webSearchBusy}
+                      disabled={busy || speechBusy || webSearchBusy || ocrPipelineBusy}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
@@ -1890,95 +2865,75 @@ export function App() {
                       }}
                     />
                   )}
-                  <div className="flex shrink-0 items-center gap-0.5 sm:gap-1 sm:pb-0.5">
-                    {speechToText?.enabled ? (
-                      <SpeechInputButton
-                        ref={speechInputRef}
-                        disabled={busy}
-                        language={speechToText.language}
-                        maxAudioBytes={speechToText.maxAudioBytes}
-                        onTranscript={handleSpeechTranscript}
-                        onError={setAppError}
-                        rateLimits={playgroundRateLimits}
-                        onBusyChange={setSpeechBusy}
-                        onRecordingChange={handleVoiceRecordingChange}
-                        className={
-                          voiceRecording.active
-                            ? "sr-only"
-                            : "h-8 w-8 sm:h-9 sm:w-9"
-                        }
-                      />
-                    ) : null}
-                    {voiceRecording.active ? (
-                      <VoiceRecordingControls
-                        disabled={busy}
-                        onCancel={() =>
-                          speechInputRef.current?.stopRecording({ skipTranscribe: true })
-                        }
-                        onConfirm={() => speechInputRef.current?.stopRecording()}
-                      />
-                    ) : busy ? (
-                      <button
-                        type="button"
-                        onClick={stop}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-neutral-300 bg-white text-xs font-medium text-neutral-800 hover:bg-neutral-50 sm:h-9 sm:w-9 dark:border-neutral-600 dark:bg-neutral-900 dark:text-neutral-200 dark:hover:bg-neutral-800"
-                        title="Stoppen"
-                      >
-                        ■
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => void send()}
-                        disabled={!canSend}
-                        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-900 text-white hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-35 sm:h-9 sm:w-9 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-200"
-                        title="Senden"
-                      >
-                        <span className="text-sm">↑</span>
-                      </button>
-                    )}
                   </div>
+                  )}
+                </div>
+                <div
+                  className={`flex shrink-0 items-center justify-center ${
+                    isMobileLayout || voiceRecording.active
+                      ? "hidden"
+                      : "h-14 w-14"
+                  }`}
+                >
+                  {busy ? (
+                    <button
+                      type="button"
+                      onClick={stop}
+                      className={`flex shrink-0 items-center justify-center rounded-full border border-playground-border bg-playground-sidebar font-medium text-playground-ink hover:bg-playground-muted/5 ${
+                        isMobileLayout ? "h-10 w-10 text-xs" : "h-14 w-14 text-sm"
+                      }`}
+                      title="Stoppen"
+                    >
+                      ■
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => void send()}
+                      disabled={!canSend}
+                      className={`flex shrink-0 items-center justify-center rounded-full bg-playground-send text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35 ${
+                        isMobileLayout ? "h-10 w-10" : "h-14 w-14"
+                      }`}
+                      title={sendButtonTitle}
+                    >
+                      <ArrowUpIcon className={isMobileLayout ? "h-4 w-4" : "h-5 w-5"} />
+                    </button>
+                  )}
                 </div>
               </div>
             </div>
-            <p className="mx-auto mt-2 max-w-3xl px-2 text-center text-[10px] leading-relaxed text-neutral-400 dark:text-neutral-500">
-              <button
-                type="button"
-                className="underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300"
-                onClick={() => setShowModelsOverview(true)}
-              >
-                Modellübersicht
-              </button>
-              {menuLinks.length > 0 ? (
-                <>
-                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
-                  <PlaygroundLinksFooter links={menuLinks} />
-                </>
+            <div className="mx-auto mt-4 max-w-playground px-2 text-center">
+              <div className="playground-text-tiny font-medium text-playground-ink">
+                {sessionCo2Grams > 0 ? (
+                  <p className="mb-0">
+                    <SessionCo2Footprint grams={sessionCo2Grams} compact inline />
+                  </p>
+                ) : null}
+                {isMobileLayout ? (
+                  <details className="mx-auto inline-block max-w-2xl text-left">
+                    <summary className="cursor-pointer list-none text-playground-muted underline [&::-webkit-details-marker]:hidden">
+                      Hinweis zum Test-Playground
+                    </summary>
+                    <p className="mt-2 text-playground-muted">
+                      Dies ist ein reiner Test-Playground: Du kannst die Modelle ausprobieren und dir einen ersten
+                      Eindruck verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den
+                      produktiven Einsatz noch für vertrauliche oder geschäftskritische Inhalte vorgesehen.
+                    </p>
+                  </details>
+                ) : (
+                  <p className="mx-auto inline-block max-w-2xl">
+                    Dies ist ein reiner Test-Playground: Du kannst die Modelle ausprobieren und dir einen ersten Eindruck
+                    verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den produktiven Einsatz
+                    noch für vertrauliche oder geschäftskritische Inhalte vorgesehen.
+                  </p>
+                )}
+              </div>
+              {pageFooterLinks.length > 0 ? (
+                <p className="playground-text-tiny mt-4 font-medium">
+                  <PlaygroundLinksFooter links={pageFooterLinks} />
+                </p>
               ) : null}
-              {sessionCo2Grams > 0 ? (
-                <>
-                  <span className="text-neutral-300 dark:text-neutral-600"> · </span>
-                  <SessionCo2Footprint grams={sessionCo2Grams} compact inline />
-                </>
-              ) : null}
-              <br />
-              <span className="mt-1 inline-block max-w-2xl text-[11px] text-neutral-500 sm:hidden dark:text-neutral-400">
-                Test-Playground — Chats nur im Browser, nicht für Produktion oder vertrauliche Inhalte.
-              </span>
-              <span className="mt-1 hidden max-w-2xl text-[11px] text-neutral-500 sm:inline-block dark:text-neutral-400">
-                Dies ist ein reiner Test-Playground: Du kannst die Modelle ausprobieren und dir einen ersten Eindruck
-                verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den produktiven Einsatz noch
-                für vertrauliche oder geschäftskritische Inhalte vorgesehen.
-              </span>
-              {legalLinks.length > 0 ? (
-                <>
-                  <br />
-                  <span className="mt-2 inline-block">
-                    <PlaygroundLinksFooter links={legalLinks} />
-                  </span>
-                </>
-              ) : null}
-            </p>
+            </div>
           </div>
         </div>
       </div>
@@ -2000,12 +2955,6 @@ export function App() {
         onConfirm={clearBrowserCache}
         onCancel={() => setClearBrowserCacheOpen(false)}
       />
-      <SettingsGlossaryOverlay
-        open={showGlossary}
-        onClose={() => setShowGlossary(false)}
-        links={playgroundLinks}
-      />
-      <ModelsOverviewOverlay open={showModelsOverview} onClose={() => setShowModelsOverview(false)} />
       <ImageLightbox
         open={imageLightbox !== null}
         src={imageLightbox?.src ?? ""}

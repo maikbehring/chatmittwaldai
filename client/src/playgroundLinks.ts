@@ -6,8 +6,18 @@ export type PlaygroundLink = {
   href: string;
 };
 
-/** Impressum, Datenschutz, AGB — nur im Footer unter dem Chat, nicht in der Sidebar. */
+/** Impressum, Datenschutz, AGB — erscheinen in der Haupt-Fußzeile. */
 export const LEGAL_FOOTER_LINK_IDS = new Set(["impressum", "privacy", "terms"]);
+
+const MAIN_FOOTER_LINK_ORDER = ["impressum", "terms", "privacy", "bug"] as const;
+
+/** Impressum, Datenschutz, AGB, Bug melden — Reihenfolge laut Figma-Fußzeile. */
+export function mainFooterLinks(links: PlaygroundLink[]): PlaygroundLink[] {
+  const byId = new Map(links.map((l) => [l.id, l]));
+  return MAIN_FOOTER_LINK_ORDER.map((id) => byId.get(id)).filter(
+    (l): l is PlaygroundLink => l != null,
+  );
+}
 
 export function legalFooterLinks(links: PlaygroundLink[]): PlaygroundLink[] {
   return links.filter((l) => LEGAL_FOOTER_LINK_IDS.has(l.id));

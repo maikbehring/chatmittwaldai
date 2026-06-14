@@ -72,11 +72,15 @@ export function WebSearchGlobeToggle({
   searching,
   disabled,
   onToggle,
-}: Pick<SharedProps, "config" | "active" | "searching" | "disabled" | "onToggle">) {
+  compact = false,
+}: Pick<SharedProps, "config" | "active" | "searching" | "disabled" | "onToggle"> & {
+  compact?: boolean;
+}) {
   if (config?.enabled === false) return null;
 
   const label = providerLabel(config);
   const hint = webSearchDataTransferHint(config);
+  const sizeClass = compact ? "h-8 w-8" : "h-9 w-9 sm:h-10 sm:w-10";
 
   return (
     <button
@@ -89,7 +93,7 @@ export function WebSearchGlobeToggle({
           ? `${hint} Klicken zum Deaktivieren.`
           : `Im Web suchen (${label}). ${hint}`
       }
-      className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full transition sm:h-10 sm:w-10 ${
+      className={`flex shrink-0 items-center justify-center rounded-full transition ${sizeClass} ${
         active
           ? "bg-sky-100 text-sky-700 ring-1 ring-sky-300/70 dark:bg-sky-950/80 dark:text-sky-300 dark:ring-sky-700"
           : "text-neutral-500 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"

@@ -1,12 +1,6 @@
-import type { PlaygroundRateLimits, RateLimitScope } from "./apiErrors";
-import {
-  CONTAINER_HOSTING_URL,
-  formatRateLimitQuota,
-  LIBRECHAT_URL,
-  MITTWALD_LLM_BASE_URL,
-  OPEN_WEBUI_URL,
-} from "./rateLimitCopy";
-import { GITHUB_REPO_URL } from "./repoLinks";
+import { useState } from "react";
+import type { PlaygroundBonusChatConfig, PlaygroundRateLimits, RateLimitScope } from "./apiErrors";
+import { formatRateLimitQuota } from "./rateLimitCopy";
 
 type RateLimitNoticeProps = {
   waitMinutes: number;
@@ -16,11 +10,17 @@ type RateLimitNoticeProps = {
   windowMinutes?: number;
   rateLimits?: PlaygroundRateLimits | null;
   aiHostingUrl: string;
-  selfHostRepoUrl?: string;
+  bonusChat?: PlaygroundBonusChatConfig | null;
+  bonusGrantAvailable?: boolean;
+  sessionApiKeyActive?: boolean;
+  onSaveApiKey?: (key: string) => void;
+  onClearApiKey?: () => void;
+  onContinueTesting?: () => void;
+  continueTestingBusy?: boolean;
 };
 
-const linkClass =
-  "font-medium text-amber-950 underline decoration-amber-400/90 underline-offset-2 hover:text-amber-900 dark:text-amber-100 dark:decoration-amber-600 dark:hover:text-white";
+const inlineLinkClass =
+  "font-medium text-playground-ink underline decoration-playground-border underline-offset-2 hover:opacity-80 dark:decoration-white/40";
 
 export function RateLimitNotice({
   waitMinutes,
@@ -30,8 +30,16 @@ export function RateLimitNotice({
   windowMinutes,
   rateLimits,
   aiHostingUrl,
-  selfHostRepoUrl = GITHUB_REPO_URL,
+  bonusChat,
+  bonusGrantAvailable = true,
+  sessionApiKeyActive = false,
+  onSaveApiKey,
+  onClearApiKey,
+  onContinueTesting,
+  continueTestingBusy = false,
 }: RateLimitNoticeProps) {
+  const [apiKeyDraft, setApiKeyDraft] = useState("");
+
   const quota =
     formatRateLimitQuota(scope, rateLimits, maxRequests) ??
     (typeof maxRequests === "number" &&
@@ -41,126 +49,131 @@ export function RateLimitNotice({
       ? `${maxRequests} Anfragen pro ${windowMinutes} Minute${windowMinutes === 1 ? "" : "n"} (pro IP)`
       : null);
 
+  const showContinueTesting =
+    !sessionApiKeyActive &&
+    bonusChat?.enabled &&
+    bonusGrantAvailable &&
+    onContinueTesting &&
+    (scope === "chat" || scope === undefined);
+  const grantSize = bonusChat?.requestsPerGrant ?? 5;
+
+  const handleSave = () => {
+    const key = apiKeyDraft.trim();
+    if (!key || !onSaveApiKey) return;
+    onSaveApiKey(key);
+    setApiKeyDraft("");
+  };
+
   return (
     <div
-      className="overflow-hidden rounded-xl border border-amber-200/90 bg-gradient-to-br from-amber-50 via-white to-orange-50/80 px-4 py-3.5 text-sm shadow-sm dark:border-amber-800/50 dark:from-amber-950/50 dark:via-neutral-950 dark:to-amber-950/20"
+      className="flex w-full flex-col gap-5 rounded-[32px] bg-playground-sidebar px-8 py-8 text-playground-ink sm:px-12"
       role="alert"
     >
-      <p className="text-[15px] font-semibold tracking-tight text-amber-950 dark:text-amber-50">
+      <h2
+        id="rate-limit-title"
+        className="playground-text-limit-title font-display font-semibold tracking-[-0.01em] text-playground-ink"
+      >
         Kurz Pause — Limit erreicht
-      </p>
-      <p className="mt-1.5 leading-relaxed text-amber-900/95 dark:text-amber-100/90">
+      </h2>
+
+      <p className="playground-text-body font-medium leading-normal text-playground-muted">
         Dieser öffentliche Playground schützt sich vor Überlastung
         {quota ? (
           <>
             {" "}
-            — aktuell gilt:{" "}
-            <span className="font-medium text-amber-950 dark:text-amber-50">{quota}</span>
+            — aktuell gilt: <span className="font-semibold text-playground-ink">{quota}</span>
           </>
         ) : scopeLabel ? (
           <>
             {" "}
-            — Limit für <span className="font-medium">{scopeLabel}</span>
+            — Limit für <span className="font-semibold text-playground-ink">{scopeLabel}</span>
           </>
         ) : null}
         . In etwa{" "}
-        <strong className="font-semibold text-amber-950 dark:text-amber-50">
+        <span className="font-semibold text-playground-ink">
           {waitMinutes} Minute{waitMinutes === 1 ? "" : "n"}
-        </strong>{" "}
+        </span>{" "}
         kannst du hier normal weitermachen.
       </p>
 
-      <div className="mt-3 rounded-lg border border-amber-200/70 bg-white/70 px-3 py-2.5 dark:border-amber-800/40 dark:bg-neutral-900/35">
-        <p className="text-[13px] font-medium text-amber-950 dark:text-amber-50">
-          Ohne Wartezeit — drei Wege mit eigenem mittwald API-Key
+      <div className="playground-rate-limit-info rounded-[32px] px-6 py-8 sm:px-8">
+        <p className="playground-text-body mb-3 font-semibold leading-normal text-playground-ink">
+          Ohne Wartezeit mit eigenem API-Key
         </p>
-        <ul className="mt-2 space-y-2.5 text-[13px] leading-relaxed text-amber-900/95 dark:text-amber-100/85">
-          <li className="flex gap-2">
-            <span className="mt-0.5 shrink-0 font-semibold text-amber-700 dark:text-amber-400">1.</span>
-            <span>
-              <a className={linkClass} href={aiHostingUrl} target="_blank" rel="noreferrer">
-                AI Hosting
-              </a>{" "}
-              im mStudio buchen und API-Key holen — Basis für alles Weitere.
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <span className="mt-0.5 shrink-0 font-semibold text-amber-700 dark:text-amber-400">2.</span>
-            <span>
-              <a className={linkClass} href={LIBRECHAT_URL} target="_blank" rel="noreferrer">
-                LibreChat
-              </a>{" "}
-              oder{" "}
-              <a className={linkClass} href={OPEN_WEBUI_URL} target="_blank" rel="noreferrer">
-                Open WebUI
-              </a>{" "}
-              — am einfachsten im mStudio per{" "}
-              <a className={linkClass} href={CONTAINER_HOSTING_URL} target="_blank" rel="noreferrer">
-                Container Hosting
-              </a>{" "}
-              starten (Open WebUI u. a. in wenigen Minuten, fully managed). Alternativ selbst
-              installieren; als OpenAI-API{" "}
-              <code className="rounded bg-amber-100/80 px-1 py-0.5 text-[11px] text-amber-950 dark:bg-amber-950/60 dark:text-amber-100">
-                {MITTWALD_LLM_BASE_URL}
-              </code>{" "}
-              und deinen mittwald-Key — ChatGPT-ähnlich, deine Limits.
-            </span>
-          </li>
-          <li className="flex gap-2">
-            <span className="mt-0.5 shrink-0 font-semibold text-amber-700 dark:text-amber-400">3.</span>
-            <span>
-              Diesen{" "}
-              <a className={linkClass} href={selfHostRepoUrl} target="_blank" rel="noreferrer">
-                Playground
-              </a>{" "}
-              selbst hosten (GitHub) — derselbe Key in der <code className="text-[11px]">.env</code>
-              , Rate-Limits stellst du selbst ein.
-            </span>
-          </li>
-        </ul>
+        <p className="playground-text-body mb-5 font-medium leading-normal text-playground-muted">
+          <a className={inlineLinkClass} href={aiHostingUrl} target="_blank" rel="noreferrer">
+            AI Hosting im mStudio buchen
+          </a>
+          , API-Key kopieren und hier eintragen — dann nutzt du dein Kontingent statt des
+          öffentlichen Limits. Der Key bleibt nur in dieser Browser-Session gespeichert.
+        </p>
+        <p className="playground-text-small mb-5 font-medium leading-snug text-playground-muted">
+          Sicherheit: Nur zum kurzen Weiterarbeiten — nicht auf gemeinsamen Geräten. Tab schließen
+          oder Key entfernen, wenn du fertig bist. Für Produktion eigenes Hosting nutzen.
+        </p>
+
+        {sessionApiKeyActive ? (
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="playground-text-body font-medium text-playground-ink">
+              ✓ API-Key hinterlegt (nur diese Session)
+            </p>
+            {onClearApiKey ? (
+              <button
+                type="button"
+                onClick={onClearApiKey}
+                className="playground-text-small font-semibold text-playground-muted underline underline-offset-2 hover:text-playground-ink"
+              >
+                Key entfernen
+              </button>
+            ) : null}
+          </div>
+        ) : onSaveApiKey ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+            <label className="min-w-0 flex-1">
+              <span className="playground-text-small mb-1.5 block font-semibold text-playground-ink">
+                mittwald API-Key
+              </span>
+              <input
+                type="password"
+                value={apiKeyDraft}
+                onChange={(e) => setApiKeyDraft(e.target.value)}
+                placeholder="sk-…"
+                autoComplete="off"
+                spellCheck={false}
+                className="playground-text-body w-full rounded-xl border border-playground-border bg-playground-main px-3 py-2.5 text-playground-ink outline-none focus-visible:ring-2 focus-visible:ring-playground-border"
+              />
+            </label>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={apiKeyDraft.trim().length < 8}
+              className="playground-text-body inline-flex h-12 shrink-0 items-center justify-center rounded-[48px] bg-playground-send px-6 font-bold text-white transition hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Speichern &amp; weiter
+            </button>
+          </div>
+        ) : null}
       </div>
 
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-start gap-3">
         <a
           href={aiHostingUrl}
           target="_blank"
           rel="noreferrer"
-          className="inline-flex items-center justify-center rounded-lg bg-[#1a6fb5] px-3.5 py-2 text-[13px] font-medium text-white shadow-sm transition hover:bg-[#155a94] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#1a6fb5] dark:bg-sky-600 dark:hover:bg-sky-500 dark:focus-visible:outline-sky-500"
+          className="playground-text-body inline-flex h-12 min-w-[120px] items-center justify-center rounded-[48px] bg-playground-send px-5 font-bold leading-5 text-white transition hover:brightness-110"
         >
-          AI Hosting &amp; API-Key →
+          AI Hosting buchen
         </a>
-        <a
-          href={CONTAINER_HOSTING_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center justify-center rounded-lg border border-amber-300/80 bg-white/90 px-3 py-1.5 text-[13px] font-medium text-amber-950 transition hover:bg-amber-50 dark:border-amber-700 dark:bg-neutral-900/50 dark:text-amber-50 dark:hover:bg-amber-950/40"
-        >
-          Container Hosting
-        </a>
-        <a
-          href={LIBRECHAT_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center justify-center rounded-lg border border-amber-300/80 bg-white/90 px-3 py-1.5 text-[13px] font-medium text-amber-950 transition hover:bg-amber-50 dark:border-amber-700 dark:bg-neutral-900/50 dark:text-amber-50 dark:hover:bg-amber-950/40"
-        >
-          LibreChat
-        </a>
-        <a
-          href={OPEN_WEBUI_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-flex items-center justify-center rounded-lg border border-amber-300/80 bg-white/90 px-3 py-1.5 text-[13px] font-medium text-amber-950 transition hover:bg-amber-50 dark:border-amber-700 dark:bg-neutral-900/50 dark:text-amber-50 dark:hover:bg-amber-950/40"
-        >
-          Open WebUI
-        </a>
-        <a
-          href={selfHostRepoUrl}
-          target="_blank"
-          rel="noreferrer"
-          className="text-[13px] font-medium text-amber-900 underline decoration-amber-400/80 underline-offset-2 hover:text-amber-950 dark:text-amber-200 dark:decoration-amber-600 dark:hover:text-amber-50"
-        >
-          Playground (GitHub)
-        </a>
+        {showContinueTesting ? (
+          <button
+            type="button"
+            onClick={onContinueTesting}
+            disabled={continueTestingBusy}
+            className="playground-text-body inline-flex h-12 min-w-[120px] items-center justify-center rounded-[56px] border-2 border-playground-ink px-5 font-bold leading-5 text-playground-ink transition hover:bg-black/[0.04] disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-white/[0.06]"
+          >
+            {continueTestingBusy ? "Wird freigeschaltet …" : `Weiter testen (+${grantSize})`}
+          </button>
+        ) : null}
       </div>
     </div>
   );

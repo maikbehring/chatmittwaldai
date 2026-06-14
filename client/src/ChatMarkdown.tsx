@@ -1,10 +1,12 @@
-import { useCallback, useRef, useState } from "react";
+import { createContext, useCallback, useContext, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 
 type Props = {
   children: string;
 };
+
+const MarkdownInPreContext = createContext(false);
 
 function CopyIcon({ className }: { className?: string }) {
   return (
@@ -45,7 +47,7 @@ function CheckIcon({ className }: { className?: string }) {
   );
 }
 
-/** Fenced code block mit Kopieren-Button (react-markdown: pre > code.language-*). */
+/** Fenced code block mit Kopieren-Button (react-markdown: pre > code). */
 function MarkdownPreWithCopy({ children }: { children: React.ReactNode }) {
   const preRef = useRef<HTMLPreElement>(null);
   const [copied, setCopied] = useState(false);
@@ -66,60 +68,62 @@ function MarkdownPreWithCopy({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <div className="relative mb-2 max-w-full">
+    <div className="relative mb-3 max-w-full">
       <button
         type="button"
         onClick={copy}
         title={copied ? "Kopiert" : "In Zwischenablage kopieren"}
         aria-label={copied ? "Kopiert" : "Code in die Zwischenablage kopieren"}
-        className="absolute right-2 top-2 z-10 flex h-8 min-w-[2rem] items-center justify-center rounded-md border border-neutral-600/70 bg-neutral-800/95 px-2 text-neutral-200 shadow-sm backdrop-blur-[2px] transition hover:border-neutral-500 hover:bg-neutral-700 hover:text-white dark:border-neutral-500/60 dark:bg-neutral-950/95 dark:hover:bg-neutral-800"
+        className="absolute right-2 top-2 z-10 flex h-8 min-w-[2rem] items-center justify-center rounded-lg border border-playground-border bg-playground-sidebar px-2 text-playground-muted shadow-sm transition hover:bg-playground-muted/5 hover:text-playground-ink"
       >
         {copied ? (
-          <CheckIcon className="text-emerald-400" />
+          <CheckIcon className="text-playground-send" />
         ) : (
-          <CopyIcon className="opacity-90" />
+          <CopyIcon className="opacity-80" />
         )}
       </button>
-      <pre
-        ref={preRef}
-        className="max-w-full overflow-x-auto rounded-lg border border-neutral-300 bg-neutral-900 pb-3 pl-3 pr-3 pt-10 text-xs leading-relaxed text-neutral-100 shadow-inner dark:border-neutral-600"
-      >
-        {children}
-      </pre>
+      <MarkdownInPreContext.Provider value={true}>
+        <pre
+          ref={preRef}
+          className="chat-markdown-pre max-w-full overflow-x-auto rounded-xl border border-playground-border bg-playground-sidebar px-4 pb-4 pr-4 pt-10 font-mono text-sm leading-relaxed text-playground-ink shadow-sm"
+        >
+          {children}
+        </pre>
+      </MarkdownInPreContext.Provider>
     </div>
   );
 }
 
 export function ChatMarkdown({ children }: Props) {
   return (
-    <div className="chat-markdown max-w-none text-[15px] leading-relaxed text-ink [&_a]:text-accent [&_a]:underline [&_li>p]:mb-0 [&_li>p:last-child]:mb-0">
+    <div className="chat-markdown max-w-none text-sm leading-relaxed text-playground-ink [&_a]:text-playground-send [&_a]:underline [&_li>p]:mb-0 [&_li>p:last-child]:mb-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
           p({ children }) {
-            return <p className="mb-2 last:mb-0">{children}</p>;
+            return <p className="mb-2.5 leading-relaxed text-playground-ink last:mb-0">{children}</p>;
           },
           h1: ({ children }) => (
-            <h3 className="mb-2 mt-3 text-[1.05rem] font-semibold first:mt-0">{children}</h3>
+            <h3 className="mb-2 mt-4 text-base font-semibold text-playground-ink first:mt-0">{children}</h3>
           ),
           h2: ({ children }) => (
-            <h3 className="mb-2 mt-3 text-[1.05rem] font-semibold first:mt-0">{children}</h3>
+            <h3 className="mb-2 mt-4 text-base font-semibold text-playground-ink first:mt-0">{children}</h3>
           ),
           h3: ({ children }) => (
-            <h4 className="mb-1 mt-2 text-[0.95rem] font-semibold first:mt-0">{children}</h4>
+            <h4 className="mb-1.5 mt-3 text-[0.95rem] font-semibold text-playground-ink first:mt-0">{children}</h4>
           ),
           ul({ children }) {
-            return <ul className="mb-2 list-disc space-y-1 pl-5">{children}</ul>;
+            return <ul className="mb-2.5 list-disc space-y-1.5 pl-5 text-playground-ink">{children}</ul>;
           },
           ol({ children }) {
-            return <ol className="mb-2 list-decimal space-y-1 pl-5">{children}</ol>;
+            return <ol className="mb-2.5 list-decimal space-y-1.5 pl-5 text-playground-ink">{children}</ol>;
           },
           li({ children }) {
-            return <li className="leading-snug">{children}</li>;
+            return <li className="leading-relaxed">{children}</li>;
           },
           blockquote({ children }) {
             return (
-              <blockquote className="mb-2 border-l-4 border-neutral-300 pl-3 text-ink-muted italic dark:border-neutral-600">
+              <blockquote className="mb-2.5 border-l-4 border-playground-border pl-3 italic text-playground-muted">
                 {children}
               </blockquote>
             );
@@ -138,48 +142,52 @@ export function ChatMarkdown({ children }: Props) {
           },
           table({ children }) {
             return (
-              <div className="mb-2 max-w-full overflow-x-auto rounded-lg border border-neutral-200 bg-neutral-50/80 dark:border-neutral-700 dark:bg-neutral-900/50">
-                <table className="w-full min-w-[16rem] border-collapse text-left text-[13px]">{children}</table>
+              <div className="mb-2.5 max-w-full overflow-x-auto rounded-xl border border-playground-border bg-playground-sidebar">
+                <table className="w-full min-w-[16rem] border-collapse text-left text-sm text-playground-ink">
+                  {children}
+                </table>
               </div>
             );
           },
           thead({ children }) {
-            return <thead className="border-b border-neutral-200 bg-neutral-100 dark:border-neutral-700 dark:bg-neutral-800/80">{children}</thead>;
+            return (
+              <thead className="border-b border-playground-border bg-playground-muted/[0.06]">{children}</thead>
+            );
           },
           tbody({ children }) {
-            return <tbody className="divide-y divide-neutral-200 dark:divide-neutral-700">{children}</tbody>;
+            return <tbody className="divide-y divide-playground-border">{children}</tbody>;
           },
           tr({ children }) {
             return <tr className="align-top">{children}</tr>;
           },
           th({ children }) {
             return (
-              <th className="max-w-[12rem] whitespace-normal px-2.5 py-2 font-semibold text-ink">
+              <th className="max-w-[12rem] whitespace-normal px-3 py-2 font-semibold text-playground-ink">
                 {children}
               </th>
             );
           },
           td({ children }) {
-            return <td className="max-w-[14rem] whitespace-normal px-2.5 py-2 text-ink">{children}</td>;
+            return <td className="max-w-[14rem] whitespace-normal px-3 py-2 text-playground-ink">{children}</td>;
           },
           strong({ children }) {
-            return <strong className="font-semibold text-ink">{children}</strong>;
+            return <strong className="font-semibold text-playground-ink">{children}</strong>;
           },
           em({ children }) {
-            return <em className="italic text-ink">{children}</em>;
+            return <em className="italic text-playground-ink">{children}</em>;
           },
           del({ children }) {
-            return <del className="text-ink-muted line-through">{children}</del>;
+            return <del className="text-playground-muted line-through">{children}</del>;
           },
           pre({ children }) {
             return <MarkdownPreWithCopy>{children}</MarkdownPreWithCopy>;
           },
           code({ className, children, ...props }) {
-            const isFence = typeof className === "string" && className.startsWith("language-");
-            if (!isFence) {
+            const inPre = useContext(MarkdownInPreContext);
+            if (inPre) {
               return (
                 <code
-                  className="rounded bg-neutral-200 px-1.5 py-0.5 font-mono text-[0.88em] text-ink dark:bg-neutral-700 dark:text-neutral-100"
+                  className={`block whitespace-pre-wrap font-mono text-sm font-normal leading-relaxed text-playground-ink ${className ?? ""}`.trim()}
                   {...props}
                 >
                   {children}
@@ -187,13 +195,16 @@ export function ChatMarkdown({ children }: Props) {
               );
             }
             return (
-              <code className={`block font-mono text-neutral-100 ${className ?? ""}`} {...props}>
+              <code
+                className="rounded-md bg-playground-muted/[0.08] px-1.5 py-0.5 font-mono text-[0.9em] text-playground-ink"
+                {...props}
+              >
                 {children}
               </code>
             );
           },
           hr() {
-            return <hr className="my-3 border-neutral-200 dark:border-neutral-600" />;
+            return <hr className="my-4 border-playground-border" />;
           },
         }}
       >

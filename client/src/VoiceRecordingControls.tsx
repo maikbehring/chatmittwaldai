@@ -2,6 +2,7 @@ type Props = {
   onCancel: () => void;
   onConfirm: () => void;
   disabled?: boolean;
+  compact?: boolean;
 };
 
 function CancelIcon() {
@@ -32,7 +33,13 @@ function ConfirmIcon() {
 }
 
 /** Abbrechen (X) und Bestätigen (Haken) wie bei ChatGPT während der Sprachaufnahme. */
-export function VoiceRecordingControls({ onCancel, onConfirm, disabled = false }: Props) {
+export function VoiceRecordingControls({
+  onCancel,
+  onConfirm,
+  disabled = false,
+  compact = false,
+}: Props) {
+  const btnClass = compact ? "h-8 w-8" : "h-10 w-10";
   return (
     <div className="flex shrink-0 items-center gap-0.5">
       <button
@@ -41,7 +48,7 @@ export function VoiceRecordingControls({ onCancel, onConfirm, disabled = false }
         disabled={disabled}
         title="Aufnahme verwerfen"
         aria-label="Aufnahme verwerfen"
-        className="flex h-10 w-10 items-center justify-center rounded-full text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800"
+        className={`flex ${btnClass} items-center justify-center rounded-full text-neutral-600 transition hover:bg-neutral-100 disabled:cursor-not-allowed disabled:opacity-40 dark:text-neutral-300 dark:hover:bg-neutral-800`}
       >
         <CancelIcon />
       </button>
@@ -51,7 +58,7 @@ export function VoiceRecordingControls({ onCancel, onConfirm, disabled = false }
         disabled={disabled}
         title="Aufnahme beenden und transkribieren"
         aria-label="Aufnahme beenden und transkribieren"
-        className="flex h-10 w-10 items-center justify-center rounded-full border-2 border-sky-500 text-neutral-800 transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-sky-400 dark:text-neutral-100 dark:hover:bg-sky-950/40"
+        className={`flex ${btnClass} items-center justify-center rounded-full border-2 border-sky-500 text-neutral-800 transition hover:bg-sky-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-sky-400 dark:text-neutral-100 dark:hover:bg-sky-950/40`}
       >
         <ConfirmIcon />
       </button>

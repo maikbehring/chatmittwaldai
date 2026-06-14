@@ -5,10 +5,16 @@ const inlineLinkClass =
   "underline decoration-neutral-300 underline-offset-2 hover:text-neutral-700 dark:decoration-neutral-600 dark:hover:text-neutral-300";
 
 const footerLinkClass =
-  "underline decoration-neutral-300 underline-offset-2 hover:text-neutral-600 dark:decoration-neutral-600 dark:hover:text-neutral-300";
+  "font-medium text-playground-muted underline decoration-playground-border underline-offset-2 hover:text-playground-ink";
 
 const sidebarLinkClass =
-  "block truncate rounded-md px-2 py-1.5 text-[11px] text-neutral-500 hover:bg-neutral-200/50 hover:text-neutral-800 dark:text-neutral-500 dark:hover:bg-neutral-800/50 dark:hover:text-neutral-200";
+  "playground-text-tiny block truncate rounded-lg px-3 py-2 font-medium text-playground-ink hover:bg-playground-muted/5";
+
+const sidebarLinkMutedClass =
+  "playground-text-tiny block truncate rounded-lg px-3 py-2 font-medium text-playground-muted hover:bg-playground-muted/5 hover:text-playground-ink";
+
+const sidebarLinkStrongClass =
+  "playground-text-tiny block truncate rounded-lg px-3 py-2 font-medium text-playground-ink hover:bg-playground-muted/5";
 
 function interleave(nodes: ReactNode[], sep: ReactNode): ReactNode[] {
   const out: ReactNode[] = [];
@@ -19,14 +25,21 @@ function interleave(nodes: ReactNode[], sep: ReactNode): ReactNode[] {
   return out;
 }
 
-export function PlaygroundLinksSidebar({ links }: { links: PlaygroundLink[] }) {
+export function PlaygroundLinksSidebar({
+  links,
+  muted = false,
+}: {
+  links: PlaygroundLink[];
+  muted?: boolean;
+}) {
   if (links.length === 0) return null;
+  const linkClass = muted ? sidebarLinkMutedClass : sidebarLinkClass;
   return (
     <>
       {links.map((l) => (
         <a
           key={l.id}
-          className={sidebarLinkClass}
+          className={linkClass}
           href={l.href}
           target="_blank"
           rel="noreferrer"
@@ -35,6 +48,25 @@ export function PlaygroundLinksSidebar({ links }: { links: PlaygroundLink[] }) {
         </a>
       ))}
     </>
+  );
+}
+
+export function PlaygroundSidebarActionLink({
+  children,
+  onClick,
+  muted = false,
+  className = "",
+}: {
+  children: ReactNode;
+  onClick: () => void;
+  muted?: boolean;
+  className?: string;
+}) {
+  const base = muted ? sidebarLinkMutedClass : sidebarLinkStrongClass;
+  return (
+    <button type="button" onClick={onClick} className={`${base} w-full text-left ${className}`.trim()}>
+      {children}
+    </button>
   );
 }
 

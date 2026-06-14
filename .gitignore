@@ -2,7 +2,15 @@ node_modules
 dist
 .env
 .env.local
+.env.production
 *.log
 PRIVAT-*.md
 .DS_Store
 client/dist
+
+# Lokale Test-PDFs (z. B. Rechnungs-OCR im Workspace-Root)
+/*.pdf
+
+# Lokale Railpack-Artefakte (mw experimental deploy)
+railpack-info.json
+railpack-plan.json
