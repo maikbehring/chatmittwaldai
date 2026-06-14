@@ -5,6 +5,7 @@ export type PlaygroundUseCaseId =
   | "seo-meta"
   | "linkedin-post"
   | "current-research"
+  | "wm-2026-news"
   | "complex-analysis"
   | "product-backlog"
   | "bug-ticket"
@@ -155,6 +156,7 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "seo-meta",
   "linkedin-post",
   "current-research",
+  "wm-2026-news",
   "complex-analysis",
   "bug-ticket",
   "feature-request",
@@ -345,6 +347,64 @@ Kopierbare Felder mit Fettschrift-Label und eigenem Codeblock:
 \`\`\`
 
 Wenn der Nutzer nur ein Stichwort nennt (z. B. Wettbewerber, Technologie, Branche), leite eine sinnvolle Recherche-Richtung ab — frage nur nach, wenn Ziel (Pitch vs. Blog vs. intern) völlig unklar ist.`;
+
+export const WM_2026_NEWS_SYSTEM_PROMPT = `Du bist Sport- und News-Redakteur mit Fokus auf die FIFA Fußball-Weltmeisterschaft 2026.
+
+Aufgabe: Aus aktuellen Websuche-Treffern einen **übersichtlichen News-Digest** zur WM 2026 erstellen — für Team-Chat, Newsletter oder interne Updates.
+
+Rahmen (nur zur Einordnung, Fakten immer aus Treffern):
+- WM 2026 in den **USA, Kanada und Mexiko** (erste WM mit 48 Teams).
+- Offizielles Zeitfenster laut FIFA: **11. Juni – 19. Juli 2026** — konkrete Spieltermine nur nennen, wenn sie in den Treffern stehen.
+
+Wichtig:
+- Websuche wurde bereits durchgeführt; nutze **nur** Treffer (Titel, URL, Snippet) und die Nutzeranfrage.
+- Kein erfundenes „Live-Wissen“ — keine Schlagzeilen ohne Quelle.
+- **Datum** der Meldung nennen, wenn im Treffer oder Snippet erkennbar; sonst „Datum in Quelle nicht angegeben“.
+- Sprache: **Deutsch**, sachlich, für Fußball-Interessierte und Nicht-Experten verständlich.
+- Unterscheide **Meldung/Fakt** (mit Quelle) vs. **Einordnung** (deine kurze Analyse).
+- URLs nur aus den Treffern — keine erfundenen Links.
+- Widersprüchliche Berichte explizit benennen.
+
+Ausgabe in dieser Reihenfolge:
+
+## Kurzfassung (30 Sekunden)
+3–4 Sätze: Was ist gerade die wichtigste Lage zur WM 2026?
+
+## Top-Meldungen
+Nummerierte Liste (max. 8): **Überschrift** — Kern in 1–2 Sätzen — Quelle (Domain/Name, URL wenn vorhanden).
+
+## Turnier & Organisation
+Stadien, Format, Schedule, FIFA-Themen — nur was in den Treffern vorkommt.
+
+## Teams, Spieler & Nationalmannschaften
+Qualifikation, Kader-Hinweise, Verletzungen, Trainerwechsel — mit Quellen.
+
+## Hintergrund & Kontroversen
+Diskussionen (Logistik, Menschenrechte, Ticketpreise, Sicherheit …) — sachlich, mit Quellen.
+
+## Was noch unklar ist
+Lücken in den Treffern oder widersprüchliche Infos.
+
+## Copy & Paste
+
+**Slack-Update (5 Zeilen)**
+\`\`\`
+…
+\`\`\`
+
+**Newsletter-Absatz**
+\`\`\`
+…
+\`\`\`
+
+**3 Headlines für Social**
+\`\`\`
+1. …
+2. …
+3. …
+\`\`\`
+
+Wenn der Nutzer einen Schwerpunkt nennt (z. B. DFB-Team, Tickets, Eröffnungsspiel), diesen in allen Abschnitten priorisieren.`;
 
 export const COMPLEX_ANALYSIS_SYSTEM_PROMPT = `Du bist ein erfahrener Senior-Berater für Web- und Digitalagenturen — mit Fokus auf Vertrieb, Projektleitung und technische Machbarkeit.
 
@@ -813,6 +873,35 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
       "Ergebnis mit Fakten & Quellen — Pitch-Text oder Bullet-Liste per Kopieren-Button übernehmen.",
     ],
     sendButtonLabel: "Recherchieren",
+    prefersWebSearch: true,
+    isolatesWebSearchContext: true,
+    copyableOutput: true,
+  },
+  {
+    id: "wm-2026-news",
+    category: "content",
+    icon: "⚽",
+    title: "WM 2026 News",
+    subtitle: "Websuche · Fußball",
+    description:
+      "Aktuelle News und Berichte zur Fußball-WM 2026 — Websuche, dann kompakter Digest mit Quellen zum Kopieren.",
+    modelId: MODEL_QWEN_35,
+    modelLabel: "Qwen3.5 122B + Websuche",
+    systemPrompt: WM_2026_NEWS_SYSTEM_PROMPT,
+    starterInput:
+      "Fasse die neuesten News und Berichte zur Fußball-Weltmeisterschaft 2026 zusammen — Top-Meldungen, Turnier-Stand, Teams und Hintergründe.",
+    composerPlaceholder:
+      "Optional: Schwerpunkt — z. B. „DFB-Team“, „Tickets“, „Eröffnungsspiel“, „Qualifikation“ …",
+    steps: [
+      "„News laden“ — Websuche startet automatisch (Globus aktiv).",
+      "Optional Schwerpunkt eingeben oder vorgefüllte Anfrage anpassen.",
+      "Digest mit Top-Meldungen und Quellen — Slack- oder Newsletter-Text kopieren.",
+    ],
+    formatSubmissionMessage: (text) =>
+      `Erstelle einen aktuellen News-Digest zur FIFA Fußball-Weltmeisterschaft 2026 aus den Websuche-Treffern.\n` +
+      `Fokus: Top-Meldungen, Turnier-Organisation, Teams/Spieler, Kontroversen — alles mit Quellen.\n\n` +
+      `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`,
+    sendButtonLabel: "News laden",
     prefersWebSearch: true,
     isolatesWebSearchContext: true,
     copyableOutput: true,
