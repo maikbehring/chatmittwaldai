@@ -2,6 +2,7 @@ node_modules
 dist
 .env
 .env.local
+.env.production
 *.log
 PRIVAT-*.md
 .DS_Store

@@ -35,6 +35,7 @@ dotenv.config({ path: path.join(repoRoot, ".env") });
 dotenv.config({ path: path.join(serverRoot, ".env"), override: true });
 
 const PORT = Number(process.env.PORT || 8787);
+const HOST = process.env.HOST || "0.0.0.0";
 const API_KEY = process.env.MITTWALD_AI_API_KEY;
 const BASE_URL = (
   process.env.MITTWALD_AI_BASE_URL || "https://llm.aihosting.mittwald.de/v1"
@@ -124,6 +125,17 @@ function normalizeOriginValue(value) {
     return new URL(String(value)).origin;
   } catch {
     return String(value).trim().toLowerCase();
+  }
+}
+
+/** Gleicher Host wie Request (Frontend + API hinter einem Reverse-Proxy). */
+function originMatchesRequestHost(req, origin) {
+  const host = req.get("host");
+  if (!host || !origin) return false;
+  try {
+    return new URL(origin).host === host;
+  } catch {
+    return false;
   }
 }
 
@@ -253,13 +265,32 @@ async function main() {
   );
 
   const corsOpts = parseCorsOrigins(CORS_ORIGIN);
-  app.use(
-    cors(
-      corsOpts === true
-        ? { origin: true }
-        : { origin: corsOpts, credentials: true },
-    ),
-  );
+  const sensitiveAllowedOrigins = parseCorsOrigins(CORS_ORIGIN);
+  const allowedOriginSet =
+    sensitiveAllowedOrigins === true
+      ? null
+      : new Set(sensitiveAllowedOrigins.map((origin) => normalizeOriginValue(origin)));
+
+  function isAllowedRequestOrigin(req, origin) {
+    if (!origin) return false;
+    if (TRUST_PROXY && originMatchesRequestHost(req, origin)) return true;
+    if (corsOpts === true) return true;
+    if (allowedOriginSet instanceof Set && allowedOriginSet.has(normalizeOriginValue(origin))) {
+      return true;
+    }
+    return false;
+  }
+
+  app.use((req, res, next) => {
+    cors({
+      origin(originHeader, callback) {
+        if (!originHeader) return callback(null, true);
+        if (isAllowedRequestOrigin(req, originHeader)) return callback(null, true);
+        callback(new Error("Origin ist nicht erlaubt."));
+      },
+      credentials: true,
+    })(req, res, next);
+  });
 
   const chatLimiter = rateLimit({
     windowMs: RATE_WINDOW_MS,
@@ -297,12 +328,6 @@ async function main() {
     handler: createRateLimitHandler("global"),
   });
 
-  const sensitiveAllowedOrigins = parseCorsOrigins(CORS_ORIGIN);
-  const allowedOriginSet =
-    sensitiveAllowedOrigins === true
-      ? null
-      : new Set(sensitiveAllowedOrigins.map((origin) => normalizeOriginValue(origin)));
-
   function requireApiKey(req, res, next) {
     if (!APP_API_KEY) return next();
     const presented = req.get("x-playground-api-key");
@@ -315,23 +340,12 @@ async function main() {
   function requireAllowedOrigin(req, res, next) {
     if (!REQUIRE_ORIGIN_CHECK) return next();
     if (sensitiveAllowedOrigins === true) return next();
-    if (!(allowedOriginSet instanceof Set) || allowedOriginSet.size === 0) {
-      return jsonError(
-        res,
-        500,
-        "origin_policy_error",
-        "Origin-Policy ist nicht korrekt konfiguriert.",
-      );
-    }
     const origin = req.get("origin");
     if (!origin) {
       return jsonError(res, 403, "origin_required", "Origin-Header fehlt.");
     }
-    const normalizedOrigin = normalizeOriginValue(origin);
-    if (!allowedOriginSet.has(normalizedOrigin)) {
-      return jsonError(res, 403, "origin_forbidden", "Origin ist nicht erlaubt.");
-    }
-    return next();
+    if (isAllowedRequestOrigin(req, origin)) return next();
+    return jsonError(res, 403, "origin_forbidden", "Origin ist nicht erlaubt.");
   }
 
   app.use("/api", globalLimiter);
@@ -654,8 +668,8 @@ async function main() {
     res.status(404).type("text/plain").send("Not found");
   });
 
-  const server = app.listen(PORT, () => {
-    console.log(`Playground-Server läuft auf http://localhost:${PORT}`);
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`Playground-Server läuft auf http://${HOST}:${PORT}`);
     if (fs.existsSync(staticDir)) {
       console.log(`Statische Dateien: ${staticDir}`);
     } else {

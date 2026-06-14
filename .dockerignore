@@ -1,0 +1,11 @@
+node_modules
+client/dist
+.git
+.env
+.env.*
+!.env.production
+*.log
+.DS_Store
+PRIVAT-*.md
+*.pdf
+docs
