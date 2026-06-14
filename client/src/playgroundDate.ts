@@ -1,5 +1,20 @@
 const TZ = "Europe/Berlin";
 
+/** Kalenderdatum in Europe/Berlin (optional mit Tages-Offset für „gestern“). */
+export function formatPlaygroundDateBerlin(offsetDays = 0): string {
+  const now = new Date();
+  if (offsetDays !== 0) {
+    now.setDate(now.getDate() + offsetDays);
+  }
+  return new Intl.DateTimeFormat("de-DE", {
+    timeZone: TZ,
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  }).format(now);
+}
+
 /** Aktuelles Datum und Uhrzeit für Zeitbezüge („heute“, „gerade“, Festtermine). */
 export function formatPlaygroundTodayContext(): string {
   const now = new Date();

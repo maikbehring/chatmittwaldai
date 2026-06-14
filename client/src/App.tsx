@@ -1802,6 +1802,8 @@ export function App() {
       return;
     }
 
+    const rawTextBeforeFormat = text;
+
     if (
       activeUseCase?.formatSubmissionMessage &&
       text.length > 0 &&
@@ -1809,6 +1811,10 @@ export function App() {
     ) {
       text = activeUseCase.formatSubmissionMessage(text);
     }
+
+    const webSearchUserMessage =
+      activeUseCase?.formatWebSearchUserMessage?.(rawTextBeforeFormat) ??
+      rawTextBeforeFormat;
 
     let userContent: string | ContentPart[];
     if (file) {
@@ -1858,7 +1864,7 @@ export function App() {
       try {
         webSearchPayload = await fetchWebSearch(
           {
-            userMessage: text,
+            userMessage: webSearchUserMessage,
             chatExcerpt: isolateWebSearch
               ? ""
               : buildWebSearchChatExcerpt(messagesBeforeSend),
