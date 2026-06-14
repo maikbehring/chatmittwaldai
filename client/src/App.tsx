@@ -34,6 +34,7 @@ import {
   hasBriefingContent,
   isCopyableUseCase,
   PLAYGROUND_USE_CASES,
+  useCaseIsolatesWebSearchContext,
   type PlaygroundUseCaseId,
 } from "./playgroundUseCases";
 import type { TranscribeProgress } from "./speechTranscription";
@@ -1834,6 +1835,8 @@ export function App() {
     setInput("");
     setImageFile(null);
 
+    const isolateWebSearch = useCaseIsolatesWebSearchContext(activeUseCase);
+
     if (useWebSearch) {
       const optimisticUser: ChatMessage = { role: "user", content: userContent };
       setMessages([
@@ -1846,7 +1849,9 @@ export function App() {
         webSearchPayload = await fetchWebSearch(
           {
             userMessage: text,
-            chatExcerpt: buildWebSearchChatExcerpt(messagesBeforeSend),
+            chatExcerpt: isolateWebSearch
+              ? ""
+              : buildWebSearchChatExcerpt(messagesBeforeSend),
             maxResults: webSearchConfig?.maxResults,
           },
           ctrl.signal,
@@ -1908,6 +1913,8 @@ export function App() {
       }
     }
 
+    const threadForApi = isolateWebSearch ? [userMessage] : nextThread;
+
     let apiMessages: ApiMessage[] = [
       { role: "system", content: formatPlaygroundTodayContext() },
     ];
@@ -1918,7 +1925,7 @@ export function App() {
     } else if (systemPrompt.trim().length > 0) {
       apiMessages.push({ role: "system", content: systemPrompt.trim() });
     }
-    for (const m of nextThread) {
+    for (const m of threadForApi) {
       if (
         webSearchPayload &&
         m.role === "user" &&
@@ -2896,32 +2903,31 @@ export function App() {
               </div>
             </div>
             <div className="mx-auto mt-4 max-w-playground px-2 text-center">
-              <p className="playground-text-tiny font-medium text-playground-ink">
+              <div className="playground-text-tiny font-medium text-playground-ink">
                 {sessionCo2Grams > 0 ? (
-                  <>
+                  <p className="mb-0">
                     <SessionCo2Footprint grams={sessionCo2Grams} compact inline />
-                    <br />
-                  </>
+                  </p>
                 ) : null}
                 {isMobileLayout ? (
                   <details className="mx-auto inline-block max-w-2xl text-left">
                     <summary className="cursor-pointer list-none text-playground-muted underline [&::-webkit-details-marker]:hidden">
                       Hinweis zum Test-Playground
                     </summary>
-                    <span className="mt-2 block text-playground-muted">
+                    <p className="mt-2 text-playground-muted">
                       Dies ist ein reiner Test-Playground: Du kannst die Modelle ausprobieren und dir einen ersten
                       Eindruck verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den
                       produktiven Einsatz noch für vertrauliche oder geschäftskritische Inhalte vorgesehen.
-                    </span>
+                    </p>
                   </details>
                 ) : (
-                  <span className="inline-block max-w-2xl">
+                  <p className="mx-auto inline-block max-w-2xl">
                     Dies ist ein reiner Test-Playground: Du kannst die Modelle ausprobieren und dir einen ersten Eindruck
                     verschaffen. Der Chat wird nicht serverseitig gespeichert und ist weder für den produktiven Einsatz
                     noch für vertrauliche oder geschäftskritische Inhalte vorgesehen.
-                  </span>
+                  </p>
                 )}
-              </p>
+              </div>
               {pageFooterLinks.length > 0 ? (
                 <p className="playground-text-tiny mt-4 font-medium">
                   <PlaygroundLinksFooter links={pageFooterLinks} />

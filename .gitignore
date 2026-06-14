@@ -6,3 +6,6 @@ dist
 PRIVAT-*.md
 .DS_Store
 client/dist
+
+# Lokale Test-PDFs (z. B. Rechnungs-OCR im Workspace-Root)
+/*.pdf

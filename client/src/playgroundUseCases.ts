@@ -8,6 +8,7 @@ export type PlaygroundUseCaseId =
   | "complex-analysis"
   | "product-backlog"
   | "bug-ticket"
+  | "feature-request"
   | "meeting-protocol"
   | "dev-debug"
   | "invoice-ocr"
@@ -48,6 +49,11 @@ export type PlaygroundUseCase = {
   prefersModelCompare?: boolean;
   /** Websuche beim Start des Use Cases automatisch aktivieren (Globus). */
   prefersWebSearch?: boolean;
+  /**
+   * Jede Websuche nur aus der aktuellen Eingabe — kein Chat-Verlauf in Suchverdichtung
+   * und KI-Request (verhindert Vermischung bei Recherche-Use-Cases).
+   */
+  isolatesWebSearchContext?: boolean;
   /** Standard Modell B beim Start des Vergleichs. */
   defaultCompareModelB?: string;
 };
@@ -56,18 +62,58 @@ export type PlaygroundBriefingField = {
   id: string;
   label: string;
   placeholder?: string;
+  rows?: number;
 };
 
+export const MITTWALD_FEATURE_REQUEST_URL =
+  "https://github.com/mittwald/feature-requests/issues/new/choose";
+
+export const FEATURE_REQUEST_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
+  {
+    id: "problem",
+    label: "Welches Problem möchtest du lösen? Wann tritt es auf?",
+    placeholder: "z. B. Als Agentur-Entwickler muss ich … — tritt auf bei …",
+    rows: 3,
+  },
+  {
+    id: "solution",
+    label: "Welche Lösungsideen hast du?",
+    placeholder: "z. B. Die Suche könnte auch nach Domains filtern …",
+    rows: 3,
+  },
+  {
+    id: "extra",
+    label: "Zusätzliche Informationen (Screenshots, Kontext)",
+    placeholder: "Produkt (mStudio, AI Hosting …), Nutzerrolle, Workaround — optional",
+    rows: 2,
+  },
+];
+
 export const LINKEDIN_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
-  { id: "thema", label: "Thema", placeholder: "Worum geht der Post?" },
-  { id: "kernbotschaft", label: "Kernbotschaft (1 Satz)", placeholder: "Was soll hängen bleiben?" },
-  { id: "zielgruppe", label: "Zielgruppe", placeholder: "z. B. Marketing-Leads im Mittelstand" },
+  {
+    id: "thema",
+    label: "Worum geht es?",
+    placeholder: "z. B. Shop-Schließung, neues Tool, Learnings aus einem Projekt",
+    rows: 3,
+  },
+  {
+    id: "kernbotschaft",
+    label: "Was soll hängen bleiben?",
+    placeholder: "Der eine Satz, den deine Leser mitnehmen sollen",
+    rows: 2,
+  },
+  { id: "zielgruppe", label: "Für wen schreibst du?", placeholder: "z. B. Geschäftsführer, Marketing-Leute, Entwickler" },
   {
     id: "beitragstyp",
-    label: "Beitragstyp",
-    placeholder: "Meinung / Case / Tipps / Story / Recruiting",
+    label: "Art des Posts",
+    placeholder: "Story · Meinung · Tipps · Erfolg/Case · Event · Branchen-News",
   },
-  { id: "cta", label: "CTA (kurze Frage am Ende, per Du)", placeholder: "z. B. Was blockiert euch noch?" },
+  {
+    id: "cta",
+    label: "Frage am Ende (per Du)",
+    placeholder: "z. B. Was ist eure Erfahrung damit? — leer lassen = KI schlägt vor",
+    rows: 2,
+  },
 ];
 
 export function emptyBriefingValues(fields: PlaygroundBriefingField[]): Record<string, string> {
@@ -94,6 +140,10 @@ export function hasBriefingContent(
   return fields.some((f) => (values[f.id]?.trim() ?? "").length > 0);
 }
 
+export function useCaseIsolatesWebSearchContext(useCase: PlaygroundUseCase | null | undefined): boolean {
+  return Boolean(useCase?.isolatesWebSearchContext ?? useCase?.prefersWebSearch);
+}
+
 export const USE_CASE_CATEGORY_LABELS: Record<PlaygroundUseCaseCategory, string> = {
   content: "Content & SEO",
   delivery: "Delivery & QA",
@@ -107,6 +157,7 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "current-research",
   "complex-analysis",
   "bug-ticket",
+  "feature-request",
   "meeting-protocol",
   "dev-debug",
   "invoice-ocr",
@@ -190,72 +241,63 @@ mittwald Playground — KI für Agenturen testen
 
 Wenn der Nutzer nur groben Kontext liefert, leite sinnvolle Snippets ab. Frage nur nach, wenn Seitentyp oder Zielgruppe völlig unklar sind.`;
 
-export const LINKEDIN_POST_SYSTEM_PROMPT = `Du schreibst LinkedIn-Posts auf Deutsch — persönlich, im Du, mit echter Erzählung wenn das Briefing es verlangt. Keine PR-Agentur, keine KI-Floskeln.
+export const LINKEDIN_POST_SYSTEM_PROMPT = `Du schreibst organische LinkedIn-Posts auf Deutsch (B2B) — persönlich im Du, Human-to-Human, mit echtem Mehrwert. Orientierung: aktuelle LinkedIn-Best-Practices (organische Reichweite, Algorithmus 2026).
 
 ## Stil (Pflicht)
-- **Anrede:** Immer **Du** („du/dein/dir“). **Nie Sie/Ihnen/Ihr.**
-- **Erzählung vs. Floskeln:** Persönliche Geschichten, echte Momente und konkrete Details aus dem Briefing sind **erwünscht**. Verboten sind leere Buzzwords und Pressetext — nicht die emotionale Tiefe.
-- **Konkret:** Namen, Daten, Orte, Handlungen nur aus dem Briefing — nichts erfinden.
-- **Whitespace:** Kurze Absätze (1–3 Sätze), Leerzeile dazwischen — mobil lesbar.
-- **Emojis:** 0–3, optional. Hashtags: **max. 4**, spezifisch, am Ende.
-- **CTA:** Wenn im Briefing leer: passende Du-Frage aus Kontext ableiten.
+- **Anrede:** Immer **Du**. Nie Sie/Ihnen/Ihr.
+- **Profil:** Standard **persönliches Profil** (mehr Reichweite als Company Page). Company Page nur wenn Briefing das sagt — dann trotzdem persönlich-human schreiben.
+- **Länge:** Optimal **900–1.200 Zeichen** (mobil lesbar, max. ~2.400). Story mit Substanz darf bis **1.400**, nicht länger ohne Briefing-Grund.
+- **Hook:** Zeile 1 = Scroll-Stopper — spezifisch, neugierig, kein Warm-up.
+- **Struktur:** Kurze Absätze (1–3 Sätze), **moderate** Leerzeilen — kein künstliches Strecken für „Verweildauer“.
+- **Mehrwert:** Leser:in schnell von Punkt A zu B — Completion Rate durch echten Inhalt, nicht Fülltext.
+- **CTA:** Recap + **eine** echte Du-Frage am Ende (Diskussion anregen). Kein plumpe Sales-Pitch.
+- **Emojis:** 0–2, sparsam. **Keine Hashtags** (2026 ohne Reichweiten-Nutzen).
+- **Links:** **Keine URLs** im Post-Text (Algorithmus drosselt). Link nur im **Erstkommentar**, wenn Briefing einen Link nennt.
+- Nur Fakten aus dem Briefing — nichts erfinden.
 
-## Länge — nach Beitragstyp (wichtig)
-| Typ | Ziel Zeichen | Zeilen ca. |
-|-----|--------------|------------|
-| **Story** | **1.100–1.600** (min. 1.000) | 16–22 |
-| Meinung / Case | 900–1.300 | 14–18 |
-| Tipps / Recruiting / Ankündigung | 800–1.100 | 12–16 |
+## Art des Posts (aus Briefing — intern passende Struktur wählen)
+- **Story:** persönlich erzählen — Anfang, Wendepunkt, was jetzt passiert, Frage.
+- **Meinung:** klare These, 2–3 Argumente, Frage.
+- **Tipps:** max. 5–8 kurze Punkte mit Nutzen, Frage.
+- **Erfolg/Case:** Ausgangslage → was ihr gemacht habt → Ergebnis, Frage.
+- **Event:** wann/wo, warum relevant, Einladung, Frage.
+- **Branchen-News:** News kurz einordnen, was es für die Zielgruppe bedeutet, Frage.
 
-**Story ist keine Kurzmeldung.** Nimm dir Raum für einen Bogen: Anfang → was es bedeutet hat → was sich ändert und warum → Hoffnung oder Perspektive → Einladung/CTA.
+Struktur wählst **du** passend — der Nutzer muss keine Framework-Namen kennen.
 
-## Verboten
-Sie-Anrede. Außerdem: „In der heutigen digitalen Welt“, „Es ist kein Geheimnis“, „Game-Changer“, „disruptiv“, „ganzheitlich“, „Synergien“, „Transformation“, „Mehr denn je“, „Am Ende des Tages“, „Der Schlüssel zum Erfolg“, leere Superlative.
+## Algorithmus & Nutzer — NICHT (streng vermeiden)
+- Externe Links, YouTube/Vimeo-Links im Post
+- Reine Promo-/Sales-Posts ohne Mehrwert
+- Hashtags, Hashtag-Spam
+- Zu viele Emojis, Gamification („kommentiere X für Y“)
+- Listen mit **mehr als 8** Punkten (max. 5–8, kürzer oft besser)
+- Schachtelsätze, Füllwörter, PR-Floskeln („In der heutigen digitalen Welt“, „Game-Changer“, „disruptiv“, „ganzheitlich“)
+- Meta-Kommentare („Hier ist dein Post“)
 
-Keine Strategie-Erklärung in der Ausgabe. Kein Fazit, das nur die Hook wiederholt.
-
-## Hook
-Zeile 1–2 vor „mehr anzeigen“: emotionaler Einstieg, konkrete News oder Bild — darf ruhig **länger** sein, wenn es die Story trägt.
-
-## Beitragstyp — Story (besonders wichtig)
-Struktur mit **Substanz**, nicht Stichpunkte:
-1. **Einstieg** — Situation oder Nachricht (konkret: Name, Datum).
-2. **Was es war** — 2–3 Sätze: Herz, Aufwand, Bedeutung (aus Kernbotschaft).
-3. **Wendepunkt** — warum sich etwas ändert; ehrlich, ohne Drama-Übertreibung.
-4. **Was jetzt** — Termin, Ort, Einladung (Fakten aus Briefing).
-5. **Perspektive** — Hoffnung, Weitergabe, offenes Ende (aus Kernbotschaft).
-6. **CTA** — echte Du-Frage oder Einladung zum Dialog.
-
-Andere Typen:
-- **Meinung:** Hook → 3 Argumente mit Beispielen → Frage.
-- **Case Study:** Ergebnis → Ausgangslage → Weg → Ergebnis → Learning → Frage.
-- **Tipp-Liste:** bis 4 Punkte, je 2 Sätze mit Nutzen.
-- **Recruiting / Ankündigung:** emotionaler Nutzen für Leser, dann Fakten.
-
-## Ausgabe
+## Ausgabe (nur Codeblöcke)
 
 **LinkedIn-Beitrag**
 \`\`\`
-[Vollständiger Post — erzählerisch wo Story, Du, Leerzeilen, Hashtags]
+[Post: Du, Hook Zeile 1, Struktur, Recap, Frage — ohne Hashtags, ohne URLs]
 \`\`\`
 (Zeichen: …)
 
 **Variante — kompakter**
 \`\`\`
-[Gleiche Story, verdichtet — 700–900 Zeichen, Kern bleibt]
+[700–950 Zeichen, gleiche Botschaft]
 \`\`\`
 
 **Hook B**
 \`\`\`
-[Alternative Zeile 1–2]
+[Alternative Scroll-Stopper Zeile 1]
 \`\`\`
 
-**Erstkommentar** — nur bei Link im Briefing:
+**Erstkommentar** — nur wenn Briefing Link/URL erwähnt:
 \`\`\`
-[1–2 Sätze, Du]
+[1–2 Sätze Du + Platzhalter-Link]
 \`\`\`
 
-Briefing dünn → sinnvolle Annahmen; bei Story trotzdem erzählerisch ausholen.`;
+Briefing dünn → sinnvolle Annahmen; Struktur selbst wählen.`;
 
 export const CURRENT_RESEARCH_SYSTEM_PROMPT = `Du bist ein erfahrener Research-Analyst und Content-Stratege für Web- und Digitalagenturen.
 
@@ -436,6 +478,44 @@ h2. Beschreibung
 3. Abschnitt „Offene Punkte“ als Liste, wenn Klärungsbedarf besteht.
 
 Der Block „Jira-Markdown (komplett)“ fasst das gesamte Ticket in einem kopierbaren Markdown-Format zusammen.`;
+
+export const FEATURE_REQUEST_SYSTEM_PROMPT = `Du formulierst Feature Requests für den öffentlichen mittwald Feature Tracker auf GitHub (Template „Feature request 🚀“).
+
+Zielgruppe der Issues: Agenturen, Entwickler, Hostinger — Feedback zu mStudio, AI Hosting, Hosting-Produkten.
+
+Regeln:
+- Sprache: **Deutsch**, sachlich, konkret — wie ein erfahrener Nutzer, nicht wie Marketing.
+- Nur Inhalte aus dem Briefing — nichts erfinden. Lücken nicht füllen, sondern knapp halten.
+- **Issue-Titel:** max. ~80 Zeichen, klar und suchbar (Problem oder Nutzen), kein „Feature Request:“-Prefix.
+- Beschreibung **exakt** im mittwald-Template mit diesen drei Abschnitten und **fett** formatierten Überschriften (GitHub Markdown).
+- Problem-Abschnitt: Rolle + Situation + wann/wie oft es auftritt.
+- Lösungsideen: 1–3 konkrete Vorschläge, keine vagen Wunschlisten.
+- Zusatzinfos: Produkt/Bereich, Workarounds, Hinweis auf Screenshot wenn im Briefing oder Bild angehängt.
+- Keine Meta-Erklärung, kein „Hier ist dein Issue“.
+
+Ausgabe — nur kopierbare Codeblöcke:
+
+**Issue-Titel**
+\`\`\`
+…
+\`\`\`
+
+**Issue-Beschreibung (GitHub)**
+\`\`\`
+**Welches Problem möchtest du lösen? Wann tritt es auf?**
+
+…
+
+**Welche Lösungsideen hast du?**
+
+…
+
+**Hast du zusätzliche Informationen (wie z.B. Screenshots)?**
+
+…
+\`\`\`
+
+Die drei Abschnitts-Überschriften im Codeblock **wörtlich** wie oben (mit ** für Fettdruck). Fließtext darunter in normalen Absätzen.`;
 
 export const MEETING_PROTOCOL_SYSTEM_PROMPT = `Du bist ein erfahrener Protokollführer — für Agenturen, Unternehmen und private Gespräche gleichermaßen.
 
@@ -693,7 +773,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "LinkedIn-Beitrag",
     subtitle: "Social · B2B Content",
     description:
-      "Posts im Du mit echter Erzählung — Stories 1.100–1.600 Zeichen, persönlich ohne PR-BlaBla, kompakte Variante zum Kopieren.",
+      "LinkedIn-Post im Du — einfaches Briefing, ~900–1.200 Zeichen, ohne Hashtags und Links im Text.",
     modelId: MODEL_QWEN_36,
     modelLabel: "Qwen3.6 35B",
     systemPrompt: LINKEDIN_POST_SYSTEM_PROMPT,
@@ -706,9 +786,9 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
       "„Beitrag erstellen“ — Hauptpost + kompakte Variante kopieren.",
     ],
     formatSubmissionMessage: (text) =>
-      `Schreibe einen LinkedIn-Post. Beitragstyp aus dem Briefing beachten — bei **Story**: 1.100–1.600 Zeichen, erzählerischer Bogen (min. 6 Absätze), nicht nur Stichpunkte. Sonst 800–1.300 Zeichen.\n` +
-      `Immer Du — nie Sie. Persönlich und erzählerisch, keine PR-Floskeln, keine Strategie-Erklärung in der Ausgabe.\n` +
-      `Ausgabe: Hauptpost, kompakte Variante (700–900 Zeichen), Hook B, Erstkommentar nur bei Link im Briefing.\n\n` +
+      `Schreibe einen LinkedIn-Post auf Deutsch, per Du, für ein persönliches Profil.\n` +
+      `Länge ca. 900–1.200 Zeichen. Keine Hashtags, keine Links im Post (Link nur im Erstkommentar wenn im Briefing).\n` +
+      `Starker Einstieg in Zeile 1, am Ende eine echte Frage. Art des Posts aus dem Briefing beachten.\n\n` +
       `--- Briefing ---\n${text.trim()}\n--- Ende Briefing ---`,
     sendButtonLabel: "Beitrag erstellen",
     prefersImage: true,
@@ -728,12 +808,13 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     composerPlaceholder:
       "Thema oder Frage — z. B. „Was macht Wettbewerber X?“ oder „Aktuelle TYPO3-Trends?“ …",
     steps: [
-      "Recherchefrage eingeben (Firma, Produkt, Technologie, Branche).",
+      "Recherchefrage eingeben — jede Anfrage steht für sich (kein Mix mit früheren Fragen im Chat).",
       "Websuche startet automatisch (Globus aktiv) — Treffer werden vor der Antwort geladen.",
       "Ergebnis mit Fakten & Quellen — Pitch-Text oder Bullet-Liste per Kopieren-Button übernehmen.",
     ],
     sendButtonLabel: "Recherchieren",
     prefersWebSearch: true,
+    isolatesWebSearchContext: true,
     copyableOutput: true,
   },
   {
@@ -809,6 +890,33 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
       `Falls ein Screenshot angehängt ist: sichtbare UI-Details und Fehler mit einbeziehen.\n\n` +
       `--- Fehlerbeschreibung / Kontext ---\n${text.trim()}\n--- Ende Kontext ---`,
     sendButtonLabel: "Ticket erstellen",
+    prefersImage: true,
+    copyableOutput: true,
+  },
+  {
+    id: "feature-request",
+    category: "delivery",
+    icon: "🚀",
+    title: "Feature Request",
+    subtitle: "mittwald Feature Tracker",
+    description:
+      "Briefing → GitHub-Issue für mittwald/feature-requests — Titel und Beschreibung passend zum offiziellen Template, zum Kopieren.",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B",
+    systemPrompt: FEATURE_REQUEST_SYSTEM_PROMPT,
+    composerPlaceholder: "Optional: Ergänzungen zum Briefing …",
+    briefingFields: FEATURE_REQUEST_BRIEFING_FIELDS,
+    steps: [
+      "Briefing-Felder ausfüllen — Feld anklicken, dann per Mikro einsprechen.",
+      "Optional: Screenshot per + für den Abschnitt „Zusätzliche Informationen“.",
+      "„Issue erstellen“ — Titel und Beschreibung kopieren und auf GitHub einfügen.",
+    ],
+    formatSubmissionMessage: (text) =>
+      `Formuliere ein Feature Request Issue für github.com/mittwald/feature-requests (Template Feature request 🚀).\n` +
+      `Ausgabe: Issue-Titel + Beschreibung mit exakt den drei Template-Abschnitten in Markdown.\n` +
+      `Falls Screenshot angehängt: in Zusatzinfos erwähnen.\n\n` +
+      `--- Briefing ---\n${text.trim()}\n--- Ende Briefing ---`,
+    sendButtonLabel: "Issue erstellen",
     prefersImage: true,
     copyableOutput: true,
   },

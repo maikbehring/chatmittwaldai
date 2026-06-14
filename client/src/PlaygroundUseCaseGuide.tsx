@@ -1,4 +1,4 @@
-import type { PlaygroundUseCase } from "./playgroundUseCases";
+import { MITTWALD_FEATURE_REQUEST_URL, type PlaygroundUseCase } from "./playgroundUseCases";
 import { MODEL_GPT_OSS } from "./modelPresets";
 import { WHISPER_CHUNK_MAX_SECONDS } from "./blobToWav";
 import { OCR_MAX_PAGES } from "./pdfToOcrImages";
@@ -84,8 +84,9 @@ export function PlaygroundUseCaseGuide({
           <span className="mr-1.5" aria-hidden>
             🌐
           </span>
-          <strong>Websuche</strong> ist für diesen Use Case automatisch aktiv (Globus im Eingabefeld). Beim ersten
-          Mal erscheint ein Einwilligungs-Dialog — Treffer werden vor der KI-Antwort geladen.
+          <strong>Websuche</strong> ist für diesen Use Case automatisch aktiv (Globus im Eingabefeld). Jede
+          Anfrage ist <strong className="text-playground-ink">eigenständig</strong> — frühere Recherchen im selben
+          Chat fließen nicht in Suche oder Antwort ein. Beim ersten Mal erscheint der Einwilligungs-Dialog.
         </p>
       ) : null}
 
@@ -121,13 +122,32 @@ export function PlaygroundUseCaseGuide({
         </p>
       ) : null}
 
+      {useCase.id === "feature-request" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-2.5 font-medium text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+          <span className="mr-1.5" aria-hidden>
+            🚀
+          </span>
+          Issue einreichen:{" "}
+          <a
+            href={MITTWALD_FEATURE_REQUEST_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            Feature request auf GitHub
+          </a>
+          {" "}— Vorlage „Feature request 🚀“ wählen, Titel und Beschreibung aus dem Playground einfügen.
+        </p>
+      ) : null}
+
       {useCase.id === "linkedin-post" ? (
         <p className="playground-text-small mb-3 rounded-xl border border-[#0A66C2]/20 bg-[#0A66C2]/5 px-3 py-2.5 font-medium text-playground-ink dark:border-[#0A66C2]/35 dark:bg-[#0A66C2]/10">
           <span className="mr-1.5" aria-hidden>
             💼
           </span>
-          <strong>Immer Du:</strong> Stories mit Erzähltiefe (~1.100–1.600 Zeichen). Feld anklicken, dann{" "}
-          <strong className="text-playground-ink">🎙</strong> im Eingabefeld — Sprache landet im aktiven Feld.
+          <strong>Tipp:</strong> Persönliches Profil posten (nicht nur Firmenseite). Keine Hashtags, keine Links im
+          Text — Link ggf. in den ersten Kommentar. Feld anklicken, dann{" "}
+          <strong className="text-playground-ink">🎙</strong>.
         </p>
       ) : null}
 
@@ -148,7 +168,10 @@ export function PlaygroundUseCaseGuide({
                   onChange={(e) => onBriefingChange(field.id, e.target.value)}
                   onFocus={() => onBriefingFieldFocus(field.id)}
                   placeholder={field.placeholder}
-                  rows={field.id === "kernbotschaft" || field.id === "cta" ? 2 : 1}
+                  rows={
+                    field.rows ??
+                    (field.id === "kernbotschaft" || field.id === "cta" ? 2 : 1)
+                  }
                   className={`playground-text-small w-full resize-none rounded-xl border bg-playground-sidebar px-3 py-2 font-medium text-playground-ink outline-none transition placeholder:text-playground-muted/70 ${
                     active
                       ? "border-playground-send ring-2 ring-playground-send/25"
