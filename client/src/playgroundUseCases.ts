@@ -802,8 +802,8 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     subtitle: "Websuche + Qwen",
     description:
       "Wettbewerber, Trends oder Fakten live recherchieren — Qwen fasst Treffer für Pitch, Briefing oder Content zusammen.",
-    modelId: MODEL_QWEN_36,
-    modelLabel: "Qwen3.6 35B + Websuche",
+    modelId: MODEL_QWEN_35,
+    modelLabel: "Qwen3.5 122B + Websuche",
     systemPrompt: CURRENT_RESEARCH_SYSTEM_PROMPT,
     composerPlaceholder:
       "Thema oder Frage — z. B. „Was macht Wettbewerber X?“ oder „Aktuelle TYPO3-Trends?“ …",

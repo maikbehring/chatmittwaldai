@@ -7,6 +7,7 @@ import {
   MODEL_GPT_OSS,
   MODEL_DEVSTRAL,
   MODEL_MINISTRAL,
+  MODEL_QWEN_35,
   MODEL_QWEN_36,
   type GptOssReasoning,
 } from "./modelPresets";
@@ -748,6 +749,7 @@ export function App() {
     () => threads.find((t) => t.id === activeThreadId)?.webSearchEnabled ?? false,
     [threads, activeThreadId],
   );
+  const prevActiveThreadWebSearchRef = useRef(false);
 
   const sessionCo2Grams = useMemo(() => {
     let sum = 0;
@@ -1149,6 +1151,14 @@ export function App() {
     [applyPreset, busy, model, stop, webSearchBusy],
   );
 
+  useEffect(() => {
+    const wasOff = !prevActiveThreadWebSearchRef.current;
+    prevActiveThreadWebSearchRef.current = activeThreadWebSearch;
+    if (!wasOff || !activeThreadWebSearch) return;
+    if (!models.some((m) => m.id === MODEL_QWEN_35)) return;
+    changeModel(MODEL_QWEN_35);
+  }, [activeThreadWebSearch, models, changeModel]);
+
   const clearUseCase = useCallback(() => {
     setActiveUseCaseId(null);
     setSystemPrompt("");
@@ -1180,8 +1190,8 @@ export function App() {
         requestEnableWebSearch("thread");
       } else {
         setActiveThreadWebSearch(false);
+        changeModel(uc.modelId);
       }
-      changeModel(uc.modelId);
       if (uc.defaultCompareModelB) setCompareModelB(uc.defaultCompareModelB);
       setSystemPrompt(uc.systemPrompt);
       if (uc.briefingFields?.length) {
