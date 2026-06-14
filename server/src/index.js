@@ -16,7 +16,7 @@ import {
   grantBonusChat,
   shouldSkipChatRateLimit,
 } from "./playgroundBonus.js";
-import { getWebSearchConfig, searchWeb } from "./webSearch.js";
+import { getWebSearchConfig, searchWeb, searchWebMulti } from "./webSearch.js";
 import {
   pickWebSearchQueryModel,
   synthesizeGoogleSearchQuery,
@@ -431,6 +431,30 @@ async function main() {
       const chatExcerpt =
         typeof req.body?.chatExcerpt === "string" ? req.body.chatExcerpt.trim() : "";
       const legacyQ = typeof req.body?.q === "string" ? req.body.q.trim() : "";
+      const directQueries = Array.isArray(req.body?.directQueries)
+        ? req.body.directQueries
+            .filter((x) => typeof x === "string")
+            .map((x) => x.trim())
+            .filter(Boolean)
+            .slice(0, 5)
+        : [];
+
+      if (directQueries.length > 0) {
+        try {
+          const data = await searchWebMulti(directQueries, {
+            maxResults: Number(req.body?.maxResults) || undefined,
+          });
+          return res.json(data);
+        } catch (e) {
+          console.error(e);
+          return jsonError(
+            res,
+            502,
+            "search_failed",
+            e instanceof Error ? e.message : "Websuche fehlgeschlagen.",
+          );
+        }
+      }
 
       let q;
       if (userMessage) {

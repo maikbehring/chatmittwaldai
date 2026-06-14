@@ -1,4 +1,4 @@
-import { formatPlaygroundDateBerlin } from "./playgroundDate";
+import { formatPlaygroundShortDateBerlin } from "./playgroundDate";
 import { MODEL_DEVSTRAL, MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
 
 export type PlaygroundUseCaseId =
@@ -38,6 +38,8 @@ export type PlaygroundUseCase = {
   formatSubmissionMessage?: (input: string) => string;
   /** Spezielle Nutzeranfrage für die Websuche (vor formatSubmissionMessage). */
   formatWebSearchUserMessage?: (input: string) => string;
+  /** Feste Suchzeilen — überspringen LLM-Verdichtung (z. B. datumsbezogene Sport-Suche). */
+  webSearchDirectQueries?: (input: string) => string[];
   sendButtonLabel?: string;
   prefersSpeech?: boolean;
   /** Langaufnahme: Whisper-Chunks alle ~14 min (Besprechungen >20 min). */
@@ -351,17 +353,25 @@ Kopierbare Felder mit Fettschrift-Label und eigenem Codeblock:
 
 Wenn der Nutzer nur ein Stichwort nennt (z. B. Wettbewerber, Technologie, Branche), leite eine sinnvolle Recherche-Richtung ab — frage nur nach, wenn Ziel (Pitch vs. Blog vs. intern) völlig unklar ist.`;
 
-export function formatWm2026WebSearchUserMessage(userText: string): string {
-  const today = formatPlaygroundDateBerlin(0);
-  const yesterday = formatPlaygroundDateBerlin(-1);
-  const focus =
-    userText.trim() ||
-    "WM 2026 aktueller Spieltag Ergebnisse Spielplan Tabellen";
-  return (
-    `FIFA WM 2026 Fußball Weltmeisterschaft: ${focus}. ` +
-    `Ergebnisse und Spiele HEUTE ${today}, Ergebnisse GESTERN ${yesterday}, ` +
-    `aktueller Spielplan, Tabellenstände, Torschützen. Nur News Juni/Juli 2026 — keine Vorschau vor Turnierstart.`
-  );
+export function buildWm2026DirectSearchQueries(userText: string): string[] {
+  const today = formatPlaygroundShortDateBerlin(0);
+  const yesterday = formatPlaygroundShortDateBerlin(-1);
+  const focus = userText.trim().toLowerCase();
+  // Google/SerpAPI: site:-Filter + kurze Datumsangaben liefern bessere Live-Treffer als DuckDuckGo.
+  const queries = [
+    `site:sportschau.de WM 2026 Ergebnisse ${yesterday}`,
+    `site:kicker.de WM 2026 Ergebnisse ${today}`,
+    `WM 2026 Ergebnisse ${yesterday} Spieltag`,
+    `WM 2026 Spielplan ${today}`,
+  ];
+  if (/dfb|deutschland|nationalmannschaft|die mannschaft/.test(focus)) {
+    queries.unshift(`site:sportschau.de Deutschland WM 2026 ${yesterday}`);
+  }
+  const groupMatch = focus.match(/gruppe\s+([a-l])/i);
+  if (groupMatch) {
+    queries.unshift(`WM 2026 Gruppe ${groupMatch[1].toUpperCase()} Ergebnisse ${today}`);
+  }
+  return queries.slice(0, 5);
 }
 
 export const WM_2026_NEWS_SYSTEM_PROMPT = `Du bist Sport- und News-Redakteur mit Fokus auf die FIFA Fußball-Weltmeisterschaft 2026.
@@ -377,14 +387,19 @@ Rahmen (nur zur Einordnung, Fakten immer aus Treffern):
 - Liegt dieses Datum **im Turnierfenster** (ab 11. Juni 2026): Die WM **läuft bereits**. Der Digest ist ein **Spieltags-Update**, keine Vorschau.
 - **Gestern** = Kalendertag vor dem Datum aus [Playground — Zeitbezug].
 
+**Treffer auswerten (wichtig):**
+- Viele Treffer haben **leere Snippets** — werte **Titel** aktiv aus. Enthält ein Titel Ergebnisse (z. B. „Deutschland siegt 7:1 gegen Curaçao“, „WM-Spiele heute - Alle Ergebnisse (14.06.2026)“), übernimm diese als Fakten mit Quellen-URL.
+- Erkenne Ergebnis-Muster in Titeln/Snippets: „X:Y“, „X - Y“, „siegt“, „Endstand“, Teamnamen + Zahl.
+- **Qualifikations-Tabellen** (Europa-Quali, Playoffs) sind **nicht** der WM-Endrunden-Stand — ignorieren oder als VERALTET markieren.
+- Priorisiere Quellen wie Sportschau, kicker, FIFA, fussballdaten, seriöse Sportmedien.
+
 **Veraltete Treffer:**
 - Ignoriere oder kennzeichne als **VERALTET**: Artikel mit „steht vor dem Start“, „kurz vor dem Anpfiff“, Vorbereitungsspiele/Testspiele vor dem 11.06., generische Organisations-Vorschau — **wenn** das heutige Datum bereits im Turnier liegt.
 - Priorisiere Treffer mit Datum **heute** oder **gestern**; bei älteren Treffern Datum nennen und Einordnung als ältere Meldung.
 
 Wichtig:
 - Websuche wurde bereits durchgeführt; nutze **nur** Treffer (Titel, URL, Snippet) und die Nutzeranfrage.
-- Kein erfundenes „Live-Wissen“ — keine Ergebnisse oder Spielpläne ohne Quelle.
-- **Ergebnisse** nur nennen, wenn sie in den Treffern stehen (Heim:auswärts oder Endstand).
+- Kein erfundenes „Live-Wissen“ — keine Ergebnisse oder Spielpläne ohne Quelle in Titel oder Snippet.
 - Sprache: **Deutsch**, sachlich, für Fußball-Interessierte verständlich.
 - URLs nur aus den Treffern — keine erfundenen Links.
 - Widersprüchliche Berichte explizit benennen.
@@ -392,16 +407,16 @@ Wichtig:
 Ausgabe in dieser Reihenfolge:
 
 ## Spieltag heute
-Datum aus [Playground — Zeitbezug]. Liste der **heutigen Spiele** aus den Treffern: Anstoßzeit (wenn bekannt), Teams, Stadion/Ort, Gruppe/Runde. Noch nicht gespielt: „geplant“. Laufend: „läuft“ nur wenn in Treffern. **Wenn keine heutigen Spiele in den Treffern:** ehrlich schreiben „Keine konkreten Spiele für heute in den Quellen“.
+Datum aus [Playground — Zeitbezug]. Liste der **heutigen Spiele** aus den Treffern: Anstoßzeit (wenn bekannt), Teams, Stadion/Ort, Gruppe/Runde. Aus Titeln wie „Fußball heute live | 15.06.2026“ Spieltag-Bezug nutzen. Noch nicht gespielt: „geplant“. **Nur wenn wirklich kein Hinweis auf heutige Spiele in Titeln/Snippets:** „Keine konkreten Spiele für heute in den Quellen“.
 
 ## Ergebnisse gestern
-Alle **Ergebnisse vom Vortag** (gestern laut Zeitbezug) aus den Treffern: Endstand, Torschützen/Höhepunkte wenn in Snippet — mit Quelle. **Wenn keine Ergebnisse in den Treffern:** „Keine gestrigen Ergebnisse in den aktuellen Quellen gefunden“.
+Alle **Ergebnisse vom Vortag** (gestern laut Zeitbezug) aus Titeln und Snippets: Endstand, Torschützen/Höhepunkte — mit Quelle. **Nur wenn kein einziges Ergebnis in Titeln/Snippets erkennbar:** „Keine gestrigen Ergebnisse in den aktuellen Quellen gefunden“.
 
 ## Kurzfassung (30 Sekunden)
 3–4 Sätze: Was ist **sportlich** am wichtigsten — gestrige Ergebnisse, heutiger Spielplan, Tabellen — nicht Vorschau-Themen.
 
 ## Top-Meldungen
-Nummerierte Liste (max. 6): **Überschrift** — Kern in 1–2 Sätzen — Quelle (Domain/Name, URL wenn vorhanden). Fokus auf **Spieltag, Ergebnisse, Kader/Verletzungen, DFB** — Organisations-Kontroversen nur wenn in frischen Treffern.
+Nummerierte Liste (max. 6): **Überschrift** — Kern in 1–2 Sätzen — Quelle (Domain/Name, URL wenn vorhanden). Fokus auf **Spieltag, Ergebnisse, Kader/Verletzungen, DFB**.
 
 ## Tabellen & Turnierstand
 Gruppenstände, Qualifikation für K.o.-Runde — nur was in den Treffern vorkommt; sonst Abschnitt kurz halten oder „nicht in Quellen“.
@@ -925,7 +940,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
       "Optional Schwerpunkt eingeben oder vorgefüllte Anfrage anpassen.",
       "Spieltags-Digest: Ergebnisse, heutiger Plan, Slack- oder Newsletter-Text kopieren.",
     ],
-    formatWebSearchUserMessage: formatWm2026WebSearchUserMessage,
+    webSearchDirectQueries: buildWm2026DirectSearchQueries,
     formatSubmissionMessage: (text) =>
       `Erstelle einen spieltagszentrierten News-Digest zur **laufenden** FIFA WM 2026 aus den Websuche-Treffern.\n` +
       `Priorität: (1) Ergebnisse **gestern**, (2) Spiele und Spielplan **heute** (Datum aus [Playground — Zeitbezug]), (3) Tabellen, (4) aktuelle Top-Meldungen.\n` +

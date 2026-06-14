@@ -218,9 +218,12 @@ async function searchSerpApi(query, maxResults, apiKey) {
   const gl = process.env.WEB_SEARCH_GOOGLE_GL?.trim();
   const hl = process.env.WEB_SEARCH_GOOGLE_HL?.trim();
   const location = process.env.WEB_SEARCH_GOOGLE_LOCATION?.trim();
+  const googleDomain = process.env.WEB_SEARCH_GOOGLE_DOMAIN?.trim();
   if (gl) params.set("gl", gl);
   if (hl) params.set("hl", hl);
   if (location) params.set("location", location);
+  if (googleDomain) params.set("google_domain", googleDomain);
+  else if (gl === "de" || hl === "de") params.set("google_domain", "google.de");
 
   const res = await fetch(`https://serpapi.com/search.json?${params}`, {
     signal: AbortSignal.timeout(15_000),
@@ -345,4 +348,66 @@ export async function searchWeb(rawQuery, options = {}) {
   }
 
   return { query, provider: cfg.provider, results };
+}
+
+const MULTI_SEARCH_MAX_TOTAL = 15;
+const MULTI_SEARCH_DDG_PAUSE_MS = 700;
+
+/**
+ * Mehrere kurze Suchzeilen nacheinander — Treffer nach URL deduplizieren.
+ * @param {string[]} rawQueries
+ * @param {{ maxResults?: number }} [options]
+ */
+export async function searchWebMulti(rawQueries, options = {}) {
+  const queries = (Array.isArray(rawQueries) ? rawQueries : [])
+    .map((q) => String(q ?? "").trim())
+    .filter(Boolean)
+    .slice(0, 5);
+  if (queries.length === 0) {
+    return { query: "", provider: "duckduckgo", results: [] };
+  }
+  if (queries.length === 1) {
+    return searchWeb(queries[0], options);
+  }
+
+  const cfg = getWebSearchConfig();
+  const maxTotal = Math.min(
+    Math.max(Number(options.maxResults) || cfg.maxResults * 2, cfg.maxResults),
+    MULTI_SEARCH_MAX_TOTAL,
+  );
+  const perQuery = Math.max(3, Math.ceil(maxTotal / queries.length));
+  const combined = [];
+  const seen = new Set();
+  let provider = cfg.provider;
+
+  for (let i = 0; i < queries.length; i++) {
+    const rawQ = queries[i];
+    try {
+      const data = await searchWeb(rawQ, { maxResults: perQuery });
+      provider = data.provider;
+      for (const r of data.results) {
+        const key = r.url.toLowerCase();
+        if (!seen.has(key)) {
+          seen.add(key);
+          combined.push(r);
+        }
+      }
+    } catch (e) {
+      console.error("Websuche Teilanfrage:", rawQ, e);
+    }
+    if (
+      i < queries.length - 1 &&
+      cfg.provider === "duckduckgo" &&
+      combined.length < maxTotal
+    ) {
+      await new Promise((resolve) => setTimeout(resolve, MULTI_SEARCH_DDG_PAUSE_MS));
+    }
+    if (combined.length >= maxTotal) break;
+  }
+
+  return {
+    query: queries.join(" · "),
+    provider,
+    results: combined.slice(0, maxTotal),
+  };
 }

@@ -75,6 +75,8 @@ export async function fetchWebSearch(
     userMessage: string;
     chatExcerpt: string;
     maxResults?: number;
+    /** Feste Suchzeilen — Server führt mehrere Suchen aus und merged Treffer. */
+    directQueries?: string[];
   },
   signal?: AbortSignal,
   rateLimits?: PlaygroundRateLimits | null,
@@ -85,6 +87,9 @@ export async function fetchWebSearch(
   };
   if (typeof args.maxResults === "number" && Number.isFinite(args.maxResults)) {
     body.maxResults = args.maxResults;
+  }
+  if (args.directQueries?.length) {
+    body.directQueries = args.directQueries;
   }
 
   const res = await fetch("/api/web/search", {
@@ -111,10 +116,14 @@ export function formatWebSearchContext(data: WebSearchResponse): string {
   return (
     `${formatPlaygroundTodayContext()}\n\n` +
     `[Playground-Websuche — vom Server geladene Treffer (${data.provider}). ` +
-      `Die an Google geschickte Suchzeile („${data.query}“) wurde aus deinem Kontext plus aktueller Eingabe automatisch zu einer Kurz-Anfrage verdichtet.]\n` +
+      (data.query.includes(" · ")
+        ? `Mehrere gezielte Suchanfragen: „${data.query}“. `
+        : `Die an Google geschickte Suchzeile („${data.query}“) wurde aus deinem Kontext plus aktueller Eingabe automatisch zu einer Kurz-Anfrage verdichtet. `) +
+      `]\n` +
     "WICHTIG: Diese Ergebnisse sind frisch aus dem Internet. Du darfst sie als Quelle nutzen. " +
     "Behaupte NICHT, du könntest nicht im Web suchen oder hättest keinen Live-Zugriff — die Suche wurde bereits für den Nutzer durchgeführt. " +
     "Prüfe Fest- und Terminangaben gegen das oben genannte heutige Datum (z. B. ob ein Event heute liegt). " +
+    "Viele Treffer haben leere Snippets — werte dann **Titel** aktiv aus (z. B. Ergebnisse, Datumsangaben, Teamnamen). " +
     "Beantworte die Frage anhand der Treffer; nenne passende URLs. Wenn die Treffer nicht reichen, sage das ehrlich.\n\n" +
     lines.join("\n\n")
   );

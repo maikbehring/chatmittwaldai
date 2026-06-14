@@ -1812,6 +1812,9 @@ export function App() {
       text = activeUseCase.formatSubmissionMessage(text);
     }
 
+    const webSearchDirectQueries =
+      activeUseCase?.webSearchDirectQueries?.(rawTextBeforeFormat);
+
     const webSearchUserMessage =
       activeUseCase?.formatWebSearchUserMessage?.(rawTextBeforeFormat) ??
       rawTextBeforeFormat;
@@ -1864,11 +1867,16 @@ export function App() {
       try {
         webSearchPayload = await fetchWebSearch(
           {
-            userMessage: webSearchUserMessage,
+            userMessage: webSearchDirectQueries?.length
+              ? rawTextBeforeFormat
+              : webSearchUserMessage,
+            directQueries: webSearchDirectQueries,
             chatExcerpt: isolateWebSearch
               ? ""
               : buildWebSearchChatExcerpt(messagesBeforeSend),
-            maxResults: webSearchConfig?.maxResults,
+            maxResults: webSearchDirectQueries?.length
+              ? 12
+              : webSearchConfig?.maxResults,
           },
           ctrl.signal,
           playgroundRateLimits,

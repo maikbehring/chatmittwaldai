@@ -15,6 +15,20 @@ export function formatPlaygroundDateBerlin(offsetDays = 0): string {
   }).format(now);
 }
 
+/** Kurzes Datum DD.MM.YYYY — für Suchanfragen. */
+export function formatPlaygroundShortDateBerlin(offsetDays = 0): string {
+  const now = new Date();
+  if (offsetDays !== 0) {
+    now.setDate(now.getDate() + offsetDays);
+  }
+  return new Intl.DateTimeFormat("de-DE", {
+    timeZone: TZ,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(now);
+}
+
 /** Aktuelles Datum und Uhrzeit für Zeitbezüge („heute“, „gerade“, Festtermine). */
 export function formatPlaygroundTodayContext(): string {
   const now = new Date();
