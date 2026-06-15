@@ -328,28 +328,34 @@ export const CURRENT_RESEARCH_SYSTEM_PROMPT = `Du bist ein erfahrener Research-A
 
 Aufgabe: Aktuelle Informationen aus Websuche-Treffern aufbereiten — für Pitches, Kundenbriefings, Blog-Ideen oder Wettbewerbsanalysen.
 
+**Zeitbezug — höchste Priorität:**
+- Lies den Block **[Playground — Zeitbezug]** in der Nutzeranfrage: Das ist das **heutige Datum** (Europe/Berlin).
+- „Aktuell“ / „derzeit“ / „Stand heute“: nur mit Treffern belegen, deren Titel oder Snippet **das laufende Jahr** oder **die letzten Monate** erkennen lassen.
+- Treffer mit **nur älteren Jahreszahlen** (z. B. reine Jahresberichte 2024, Statistiken „im Jahr 2024“) sind **nicht** als Live-Stand zu verkaufen — kennzeichne sie als **ältere Daten** oder historischen Kontext mit Jahresangabe.
+- Wenn **keine** frischen Treffer vorliegen: ehrlich sagen — keine erfundenen Zahlen für das laufende Jahr.
+- Bei Preis-/Marktthemen: Treffer mit Datum im Titel/Snippet (Monat/Jahr, „aktuell“, „heute“) priorisieren; Jahresstatistiken nur mit klarer Jahresangabe.
+
 Wichtig:
 - Die Websuche wurde bereits durchgeführt; Treffer stehen dir im Kontext (Titel, URL, Snippet).
 - Nutze **nur** diese Treffer und die Nutzerfrage — kein erfundenes „Live-Wissen“ ohne Quelle.
 - Wenn Treffer leer oder widersprüchlich: ehrlich sagen, was fehlt, und sinnvolle Nachfragen stellen.
-- Datum/Uhrzeit aus dem Kontext beachten — „aktuell“ und „neu“ nur mit Bezug zu Treffern und heutigem Datum.
 - Sprache: Deutsch, sachlich, für Agentur-Teams verständlich.
-- Unterscheide **Fakt** (mit Quelle) vs. **Einordnung** (deine Analyse).
+- Unterscheide **Fakt** (mit Quelle und Datum wenn erkennbar) vs. **Einordnung** (deine Analyse).
 - URLs aus den Treffern nennen — keine erfundenen Links.
 
 Ausgabe in dieser Reihenfolge:
 
 ## Kurzfassung
-3–5 Sätze: Kernaussage für den Pitch oder das Briefing.
+3–5 Sätze: Kernaussage für den Pitch oder das Briefing. Wenn nur ältere Daten: das sofort benennen.
 
 ## Fakten & Quellen
-Bullet-Liste: Fakt — Quelle (Titel oder Domain, URL wenn im Treffer).
+Bullet-Liste: Fakt — Quelle (Titel oder Domain, URL wenn im Treffer). **Datum/Jahr** aus Titel oder Snippet mit angeben, wenn erkennbar.
 
 ## Einordnung für die Agentur
 Was bedeutet das für Angebot, Positionierung oder Content? 2–4 Sätze.
 
 ## Offene Punkte
-Was ist unklar oder braucht vertiefte Recherche?
+Was ist unklar oder braucht vertiefte Recherche? Fehlende Live-Daten explizit nennen.
 
 ## Ausgabeformat (Copy & Paste)
 Kopierbare Felder mit Fettschrift-Label und eigenem Codeblock:
@@ -370,6 +376,43 @@ Kopierbare Felder mit Fettschrift-Label und eigenem Codeblock:
 \`\`\`
 
 Wenn der Nutzer nur ein Stichwort nennt (z. B. Wettbewerber, Technologie, Branche), leite eine sinnvolle Recherche-Richtung ab — frage nur nach, wenn Ziel (Pitch vs. Blog vs. intern) völlig unklar ist.`;
+
+/** Kurze Suchzeilen mit Datums-/Jahresbezug — bessere Live-Treffer als generische Stichwortsuche. */
+export function buildCurrentResearchDirectSearchQueries(userText: string): string[] {
+  const topic = userText.trim().replace(/\s+/g, " ");
+  if (!topic) return [];
+
+  const today = formatPlaygroundShortDateBerlin(0);
+  const now = new Date();
+  const year = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+  }).format(now);
+  const month = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    month: "long",
+  }).format(now);
+
+  const isPriceTopic = /preis|kosten|tarif|gebühr|miete|lohn|gehalt|inflation|marktpreis|teuer|günstig/i.test(
+    topic,
+  );
+
+  const queries = isPriceTopic
+    ? [
+        `${topic} aktuell ${today}`,
+        `${topic} ${month} ${year}`,
+        `${topic} Entwicklung ${year} Deutschland`,
+        `${topic} Handel ${year}`,
+      ]
+    : [
+        `${topic} aktuell ${month} ${year}`,
+        `${topic} ${year} Deutschland`,
+        `${topic} News ${year}`,
+        `${topic} neueste Entwicklung`,
+      ];
+
+  return queries.slice(0, 5);
+}
 
 export function buildWm2026DirectSearchQueries(userText: string): string[] {
   const today = formatPlaygroundShortDateBerlin(0);
@@ -1163,9 +1206,22 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
       "Thema oder Frage — z. B. „Was macht Wettbewerber X?“ oder „Aktuelle TYPO3-Trends?“ …",
     steps: [
       "Recherchefrage eingeben — jede Anfrage steht für sich (kein Mix mit früheren Fragen im Chat).",
-      "Websuche startet automatisch (Globus aktiv) — Treffer werden vor der Antwort geladen.",
+      "Websuche startet automatisch mit Datumsbezug (Globus aktiv) — mehrere aktuelle Suchanfragen parallel.",
       "Ergebnis mit Fakten & Quellen — Pitch-Text oder Bullet-Liste per Kopieren-Button übernehmen.",
     ],
+    formatSubmissionMessage: (text) => {
+      const year = new Intl.DateTimeFormat("de-DE", {
+        timeZone: "Europe/Berlin",
+        year: "numeric",
+      }).format(new Date());
+      return (
+        `Recherchiere zum folgenden Thema auf Basis der **aktuellsten** Websuche-Treffer.\n` +
+        `Priorität: Fakten aus ${year} bzw. den letzten Monaten; ältere Jahresberichte nur mit Datumsangabe und als historischer Kontext — nicht als Live-Stand.\n` +
+        `Heutiges Datum aus [Playground — Zeitbezug] für „aktuell“ verwenden.\n\n` +
+        `--- Thema / Frage ---\n${text.trim()}\n--- Ende Thema ---`
+      );
+    },
+    webSearchDirectQueries: buildCurrentResearchDirectSearchQueries,
     sendButtonLabel: "Recherchieren",
     prefersWebSearch: true,
     isolatesWebSearchContext: true,
