@@ -13,6 +13,7 @@ export type PlaygroundUseCaseId =
   | "feature-request"
   | "feature-requests-feed"
   | "ai-hosting-guide"
+  | "client-weekend"
   | "meeting-protocol"
   | "dev-debug"
   | "invoice-ocr"
@@ -46,6 +47,8 @@ export type PlaygroundUseCase = {
   prefersMittwaldFeatureRequests?: boolean;
   /** Beim Senden AI-Hosting-Doku live vom Developer Portal laden. */
   prefersMittwaldAiHostingDocs?: boolean;
+  /** Stadt + Wikipedia + Open-Meteo für kommendes Wochenende laden. */
+  prefersWeekendVisitData?: boolean;
   sendButtonLabel?: string;
   prefersSpeech?: boolean;
   /** Langaufnahme: Whisper-Chunks alle ~14 min (Besprechungen >20 min). */
@@ -175,6 +178,7 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "feature-request",
   "feature-requests-feed",
   "ai-hosting-guide",
+  "client-weekend",
   "meeting-protocol",
   "dev-debug",
   "invoice-ocr",
@@ -726,6 +730,72 @@ Links zur Developer-Doku (Modelle + API-Endpunkte).
 
 Wenn der Nutzer einen Schwerpunkt nennt (z. B. „Vision“, „OCR“, „Embeddings“, „Whisper“), priorisiere passende Modelle und Endpunkte.`;
 
+export const CLIENT_WEEKEND_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
+  {
+    id: "stadt",
+    label: "Stadt",
+    placeholder: "z. B. Hamburg, Lübeck, München, Salzburg",
+    rows: 1,
+  },
+  {
+    id: "kontext",
+    label: "Kunde & Kontext (optional)",
+    placeholder: "z. B. IT-Leiter aus München, mag gutes Essen, wenig Zeit am Samstagvormittag",
+    rows: 2,
+  },
+];
+
+export const CLIENT_WEEKEND_SYSTEM_PROMPT = `Du bist Host und Stadtkenner für Agentur-Inhaber und Account Manager in Deutschland.
+
+Aufgabe: Plane **konkrete Ideen für das kommende Wochenende** mit einem **zu Besuch anreisenden Geschäftskunden** — basierend auf den mitgelieferten Live-Daten (Stadt, Wikipedia, Wetter Open-Meteo).
+
+Regeln:
+- Nutze **nur** die gelieferten Fakten zu Stadt, Wetter und Wikipedia — erfinde keine Sehenswürdigkeiten, Öffnungszeiten oder Wetterwerte.
+- Das Wochenende ist **immer das kommende Samstag–Sonntag-Paar** aus den Daten — nicht ein anderes Datum.
+- Berücksichtige das Wetter: bei Regen eher Indoor/Kultur/Museen/Cafés; bei Sonne Spaziergänge, Aussicht, Altstadt.
+- Mische **geschäftlich angemessen** (z. B. gemeinsames Dinner, Stadtrundgang als Eisbrecher) mit **authentisch lokal** — kein touristischer Kitsch-Katalog.
+- 6–10 konkrete Vorschläge, aufgeteilt auf Samstag und Sonntag (Vormittag / Nachmittag / Abend).
+- Wenn der Nutzer Kontext nennt (Interessen, Mobilität, Zeitbudget): darauf eingehen.
+- Keine erfundenen Restaurantnamen — eher Gegenden, Typen („Fisch am Hafen“, „kleines Weingut in der Altstadt“) oder Wikipedia-Fakten.
+- Sprache: Deutsch, freundlich-professionell.
+
+Ausgabe in dieser Reihenfolge:
+
+## Was dieser Use Case macht
+2 Sätze: Er ermittelt das kommende Wochenende, lädt Wikipedia & Wetter für die Stadt und schlägt passende Aktivitäten mit dem Kunden vor.
+
+## Kurzüberblick Stadt
+3–5 Sätze aus Wikipedia — was macht die Stadt besonders?
+
+## Wetter am Wochenende
+Samstag & Sonntag in eigenen Zeilen — Temperatur, Regen, was das für Outdoor bedeutet.
+
+## Programm-Vorschläge
+
+### Samstag
+Nummerierte Ideen mit Dauer-Schätzung (z. B. „ca. 2 h“) und kurzer Begründung.
+
+### Sonntag
+Nummerierte Ideen — ggf. leichter vor der Abreise.
+
+## Tipp für den Gastgeber
+1–2 Sätze: Ton, Dresscode, Pufferzeit, Backup bei schlechtem Wetter.
+
+## Copy & Paste
+
+**Kurznachricht an den Kunden (WhatsApp/E-Mail)**
+\`\`\`
+…
+\`\`\`
+
+**Agenda-Skizze fürs Wochenende**
+\`\`\`
+…
+\`\`\`
+
+## Quellen
+Wikipedia-URL und Hinweis Open-Meteo — aus den mitgelieferten Daten.`;
+
 export const MEETING_PROTOCOL_SYSTEM_PROMPT = `Du bist ein erfahrener Protokollführer — für Agenturen, Unternehmen und private Gespräche gleichermaßen.
 
 Aufgabe: Aus Besprechungs-Transkripten (Rohtext, ggf. in Abschnitten [Abschnitt 1/2 …]) ein passendes Protokoll erstellen. **Format, Ton und Schwerpunkte leitest du aus dem Gesprächsinhalt ab** — nicht pauschal „Business“.
@@ -1215,6 +1285,33 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
       `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`,
     sendButtonLabel: "Guide laden",
     prefersMittwaldAiHostingDocs: true,
+    copyableOutput: true,
+  },
+  {
+    id: "client-weekend",
+    category: "delivery",
+    icon: "🗓️",
+    title: "Wochenende mit Kunde",
+    subtitle: "Wikipedia · Wetter · Ideen",
+    description:
+      "Stadt eingeben — für das kommende Wochenende holt der Playground Wikipedia & Open-Meteo-Wetter und schlägt Aktivitäten mit deinem zu Besuch kommenden Kunden vor.",
+    modelId: MODEL_QWEN_35,
+    modelLabel: "Qwen3.5 122B",
+    systemPrompt: CLIENT_WEEKEND_SYSTEM_PROMPT,
+    briefingFields: CLIENT_WEEKEND_BRIEFING_FIELDS,
+    composerPlaceholder:
+      "Optional: Schwerpunkte — z. B. „wenig laufen“, „mit Kindern“, „gutes Essen“ …",
+    steps: [
+      "Stadt eintragen — das kommende Samstag–Sonntag wird automatisch berechnet.",
+      "Wikipedia & Wetter laden (Open-Meteo, kostenlos).",
+      "KI schlägt ein Wochenend-Programm vor — inkl. Nachricht an den Kunden zum Kopieren.",
+    ],
+    formatSubmissionMessage: (text) =>
+      text.trim()
+        ? `Zusatzwünsche für das Wochenend-Programm:\n${text.trim()}`
+        : "Erstelle das Wochenend-Programm mit den geladenen Daten.",
+    sendButtonLabel: "Wochenende planen",
+    prefersWeekendVisitData: true,
     copyableOutput: true,
   },
   {

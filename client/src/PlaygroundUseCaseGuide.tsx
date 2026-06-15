@@ -155,6 +155,34 @@ export function PlaygroundUseCaseGuide({
         </p>
       ) : null}
 
+      {useCase.id === "client-weekend" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-amber-200/80 bg-amber-50/80 px-3 py-2.5 font-medium text-amber-950 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100">
+          <span className="mr-1.5" aria-hidden>
+            🗓️
+          </span>
+          <strong>Kurz:</strong> Stadt eintragen — das <strong>kommende Wochenende</strong> (Samstag & Sonntag,
+          Europe/Berlin) wird automatisch berechnet. Danach lädt der Playground{" "}
+          <a
+            href="https://de.wikipedia.org"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            Wikipedia
+          </a>{" "}
+          und{" "}
+          <a
+            href="https://open-meteo.com/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            Open-Meteo
+          </a>
+          -Wetter und schlägt Aktivitäten mit deinem Kunden vor.
+        </p>
+      ) : null}
+
       {useCase.id === "feature-requests-feed" ? (
         <p className="playground-text-small mb-3 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-2.5 font-medium text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
           <span className="mr-1.5" aria-hidden>

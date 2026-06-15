@@ -20,6 +20,10 @@ import { getWebSearchConfig, searchWeb, searchWebMulti } from "./webSearch.js";
 import { fetchMittwaldFeatureRequests } from "./mittwaldFeatureRequests.js";
 import { fetchMittwaldAiHostingDocs } from "./mittwaldAiHostingDocs.js";
 import {
+  fetchWeekendVisitSources,
+  prepareWeekendVisitCity,
+} from "./weekendVisitData.js";
+import {
   pickWebSearchQueryModel,
   synthesizeGoogleSearchQuery,
 } from "./webSearchQuerySynthesis.js";
@@ -444,6 +448,64 @@ async function main() {
           502,
           "ai_hosting_docs_failed",
           e instanceof Error ? e.message : "AI-Hosting-Doku konnte nicht geladen werden.",
+        );
+      }
+    },
+  );
+
+  app.get("/api/weekend-visit/prepare", featureRequestsLimiter, async (req, res) => {
+    const city = typeof req.query?.city === "string" ? req.query.city : "";
+    try {
+      const data = await prepareWeekendVisitCity(city);
+      res.json(data);
+    } catch (e) {
+      console.error(e);
+      return jsonError(
+        res,
+        502,
+        "weekend_visit_prepare_failed",
+        e instanceof Error ? e.message : "Stadt konnte nicht ermittelt werden.",
+      );
+    }
+  });
+
+  app.post(
+    "/api/weekend-visit/sources",
+    featureRequestsLimiter,
+    express.json({ limit: 4096 }),
+    async (req, res) => {
+      const body = req.body ?? {};
+      const latitude = Number(body.latitude);
+      const longitude = Number(body.longitude);
+      const saturday = typeof body.saturday === "string" ? body.saturday : "";
+      const sunday = typeof body.sunday === "string" ? body.sunday : "";
+      const wikipediaTitle =
+        typeof body.wikipediaTitle === "string" ? body.wikipediaTitle : "";
+      if (
+        !Number.isFinite(latitude) ||
+        !Number.isFinite(longitude) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(saturday) ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(sunday) ||
+        !wikipediaTitle.trim()
+      ) {
+        return jsonError(res, 400, "validation_error", "Ungültige Parameter für Wikipedia/Wetter.");
+      }
+      try {
+        const data = await fetchWeekendVisitSources({
+          latitude,
+          longitude,
+          saturday,
+          sunday,
+          wikipediaTitle: wikipediaTitle.trim(),
+        });
+        res.json(data);
+      } catch (e) {
+        console.error(e);
+        return jsonError(
+          res,
+          502,
+          "weekend_visit_sources_failed",
+          e instanceof Error ? e.message : "Wikipedia oder Wetter konnten nicht geladen werden.",
         );
       }
     },

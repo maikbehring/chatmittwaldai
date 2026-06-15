@@ -19,7 +19,39 @@ const ACCENT_BAR: Record<string, string> = {
   violet: "bg-violet-500 dark:bg-violet-400",
   emerald: "bg-emerald-500 dark:bg-emerald-400",
   sky: "bg-sky-500 dark:bg-sky-400",
+  amber: "bg-amber-500 dark:bg-amber-400",
 };
+
+export function getWeekendVisitProgressSteps(
+  phase: "prepare" | "sources" | "generate" | null,
+): UseCaseProgressStep[] {
+  const prepareActive = phase === "prepare";
+  const sourcesActive = phase === "sources";
+  const generateActive = phase === "generate";
+  return [
+    {
+      id: "prepare",
+      label: "Stadt & kommendes Wochenende",
+      status: prepareActive ? "active" : phase === null ? "pending" : "done",
+    },
+    {
+      id: "sources",
+      label: "Wikipedia & Wetter (Open-Meteo)",
+      status: prepareActive
+        ? "pending"
+        : sourcesActive
+          ? "active"
+          : generateActive
+            ? "done"
+            : "pending",
+    },
+    {
+      id: "generate",
+      label: "Wochenend-Ideen mit KI",
+      status: sourcesActive ? "pending" : generateActive ? "active" : "pending",
+    },
+  ];
+}
 
 export function getAiHostingGuideProgressSteps(
   docsLoading: boolean,
@@ -164,7 +196,9 @@ function StepIcon({
         ? "border-emerald-500 dark:border-emerald-400"
         : accentClassName === "sky"
           ? "border-sky-500 dark:border-sky-400"
-          : "border-violet-500 dark:border-violet-400";
+          : accentClassName === "amber"
+            ? "border-amber-500 dark:border-amber-400"
+            : "border-violet-500 dark:border-violet-400";
     return (
       <span
         className={`mt-0.5 inline-block h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-t-transparent ${spinBorder}`}

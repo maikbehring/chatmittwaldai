@@ -62,7 +62,14 @@ import {
 } from "./inferenceFootprint";
 import { SessionCo2Footprint } from "./SessionCo2Footprint";
 import {
+  fetchWeekendVisitSources,
+  formatWeekendVisitContext,
+  prepareWeekendVisitCity,
+  type WeekendVisitData,
+} from "./weekendVisit";
+import {
   getAiHostingGuideProgressSteps,
+  getWeekendVisitProgressSteps,
   UseCaseProgressSteps,
 } from "./UseCaseProgressSteps";
 import {
@@ -171,6 +178,7 @@ export type ChatMessage = {
   webSearch?: WebSearchResponse;
   mittwaldFeatureRequests?: MittwaldFeatureRequestsResponse;
   mittwaldAiHostingDocs?: MittwaldAiHostingDocsResponse;
+  weekendVisitData?: WeekendVisitData;
   compare?: ModelComparePayload;
 };
 
@@ -421,6 +429,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   webSearchPending,
   featureRequestsPending,
   aiHostingDocsPending,
+  weekendVisitPhase,
   webSearchProviderLabel,
   activeUseCaseId,
   onImageOpen,
@@ -430,6 +439,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   webSearchPending?: boolean;
   featureRequestsPending?: boolean;
   aiHostingDocsPending?: boolean;
+  weekendVisitPhase?: "prepare" | "sources" | "generate" | null;
   webSearchProviderLabel?: string;
   activeUseCaseId?: PlaygroundUseCaseId | null;
   onImageOpen: (src: string, alt: string) => void;
@@ -438,6 +448,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
     return (
       <div className="flex w-full justify-end">
         <div className="flex w-full max-w-full flex-col items-end gap-1">
+          {message.weekendVisitData ? (
+            <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+              {message.weekendVisitData.city}
+              {message.weekendVisitData.admin1 ? `, ${message.weekendVisitData.admin1}` : ""} · Wochenende{" "}
+              {message.weekendVisitData.weekend.saturday.slice(8, 10)}.–
+              {message.weekendVisitData.weekend.sunday.slice(8, 10)}. · Wikipedia · Open-Meteo
+            </p>
+          ) : null}
           {message.mittwaldAiHostingDocs &&
           message.mittwaldAiHostingDocs.modelsPage.models.length > 0 ? (
             <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
@@ -466,10 +484,16 @@ const ChatMessageRow = memo(function ChatMessageRow({
   }
   const assistantPlain = assistantMessagePlainText(message.content).trim();
   const isAiHostingGuide = activeUseCaseId === "ai-hosting-guide";
+  const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
   const aiHostingGuideGenerating =
     isAiHostingGuide && streaming && assistantPlain.length === 0;
+  const clientWeekendGenerating =
+    isClientWeekendUseCase && streaming && assistantPlain.length === 0;
   const showAiHostingProgress =
     isAiHostingGuide && (aiHostingDocsPending || aiHostingGuideGenerating);
+  const showWeekendVisitProgress =
+    isClientWeekendUseCase &&
+    (weekendVisitPhase != null || clientWeekendGenerating);
   const showCopyActions =
     isCopyableUseCase(activeUseCaseId) &&
     !streaming &&
@@ -477,6 +501,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
     !featureRequestsPending &&
     !aiHostingDocsPending &&
     !aiHostingGuideGenerating &&
+    !clientWeekendGenerating &&
+    weekendVisitPhase == null &&
     assistantPlain.length > 0;
 
   return (
@@ -504,6 +530,14 @@ const ChatMessageRow = memo(function ChatMessageRow({
               />
               Lade Feature Requests von GitHub …
             </p>
+          ) : showWeekendVisitProgress ? (
+            <UseCaseProgressSteps
+              steps={getWeekendVisitProgressSteps(
+                weekendVisitPhase ?? (clientWeekendGenerating ? "generate" : null),
+              )}
+              ariaLabel="Wochenende mit Kunde — Fortschritt"
+              accentClassName="amber"
+            />
           ) : showAiHostingProgress ? (
             <UseCaseProgressSteps
               steps={getAiHostingGuideProgressSteps(
@@ -617,6 +651,9 @@ export function App() {
   const [webSearchBusy, setWebSearchBusy] = useState(false);
   const [featureRequestsBusy, setFeatureRequestsBusy] = useState(false);
   const [aiHostingDocsBusy, setAiHostingDocsBusy] = useState(false);
+  const [weekendVisitPhase, setWeekendVisitPhase] = useState<
+    "prepare" | "sources" | "generate" | null
+  >(null);
   const [webSearchConsentOpen, setWebSearchConsentOpen] = useState(false);
   const [webSearchConsentGranted, setWebSearchConsentGranted] = useState(() =>
     hasWebSearchConsent(),
@@ -706,7 +743,7 @@ export function App() {
   /** Clipboard-Bild wie in ChatGPT (Capture: greift vor Textfeld, verhindert Müll-Einfügen bei Screenshots). */
   const handleComposerPasteCapture = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
-      if (busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || voiceRecording.active) {
+      if (busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || voiceRecording.active) {
         return;
       }
       const items = e.clipboardData?.items;
@@ -724,7 +761,7 @@ export function App() {
         return;
       }
     },
-    [adjustInputHeight, busy, speechBusy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, voiceRecording.active],
+    [adjustInputHeight, busy, speechBusy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase, voiceRecording.active],
   );
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -828,7 +865,7 @@ export function App() {
       return;
     }
 
-    if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy) {
+    if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase) {
       // Während des Streams / Websuche: sofort ans Ende — kein smooth, sonst kämpft die Animation
       // mit wachsendem Inhalt und der Text „springt“.
       const id = requestAnimationFrame(() => {
@@ -841,7 +878,7 @@ export function App() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
     return () => cancelAnimationFrame(id);
-  }, [messages, busy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy]);
+  }, [messages, busy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -1023,6 +1060,7 @@ export function App() {
   const isInvoiceOcrUseCase = activeUseCaseId === "invoice-ocr";
   const isModelCompareUseCase = activeUseCaseId === "model-compare";
   const isAiHostingGuideUseCase = activeUseCaseId === "ai-hosting-guide";
+  const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
   const aiHostingGuideComposerProgress = useMemo(() => {
     if (!isAiHostingGuideUseCase || messages.length === 0) return null;
     const last = messages[messages.length - 1];
@@ -1031,6 +1069,17 @@ export function App() {
     if (!aiHostingDocsBusy && !guideGenerating) return null;
     return getAiHostingGuideProgressSteps(aiHostingDocsBusy, guideGenerating);
   }, [isAiHostingGuideUseCase, messages, aiHostingDocsBusy, busy]);
+  const clientWeekendComposerProgress = useMemo(() => {
+    if (!isClientWeekendUseCase || messages.length === 0) return null;
+    if (weekendVisitPhase == null && !busy) return null;
+    const last = messages[messages.length - 1];
+    if (last.role !== "assistant" || typeof last.content !== "string") return null;
+    const generating = !weekendVisitPhase && busy && last.content === "";
+    if (!weekendVisitPhase && !generating) return null;
+    return getWeekendVisitProgressSteps(
+      weekendVisitPhase ?? (generating ? "generate" : null),
+    );
+  }, [isClientWeekendUseCase, messages, weekendVisitPhase, busy]);
   const ocrPipelineBusy = ocrProgress !== null;
 
   const speechTranscribing = speechBusy && !voiceRecording.active;
@@ -1069,6 +1118,7 @@ export function App() {
       !webSearchBusy &&
       !featureRequestsBusy &&
       !aiHostingDocsBusy &&
+      !weekendVisitPhase &&
       !voiceRecording.active &&
       !speechTranscribing &&
       !ocrPipelineBusy
@@ -1082,6 +1132,7 @@ export function App() {
     webSearchBusy,
     featureRequestsBusy,
     aiHostingDocsBusy,
+    weekendVisitPhase,
     voiceRecording.active,
     speechTranscribing,
     ocrPipelineBusy,
@@ -1161,15 +1212,16 @@ export function App() {
     abortRef.current = null;
     setBusy(false);
     setWebSearchBusy(false);
+    setWeekendVisitPhase(null);
   }, []);
 
   const changeModel = useCallback(
     (modelId: string) => {
-      if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy) stop();
+      if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase) stop();
       if (modelId !== model) setModel(modelId);
       applyPreset(modelId);
     },
-    [applyPreset, busy, model, stop, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy],
+    [applyPreset, busy, model, stop, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase],
   );
 
   useEffect(() => {
@@ -1422,7 +1474,7 @@ export function App() {
       ? imageFileRef.current !== null
       : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
-    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy))
+    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase))
       return;
     if (sendLockRef.current) return;
 
@@ -1898,11 +1950,29 @@ export function App() {
       text.length > 0 &&
       !file;
 
+    const wantsWeekendVisit =
+      activeUseCase?.prefersWeekendVisitData &&
+      typeof userContent === "string" &&
+      !file;
+    const weekendCity = (briefingValues.stadt ?? "").trim();
+
+    if (wantsWeekendVisit && weekendCity.length < 2) {
+      setAppError({
+        kind: "plain",
+        message: "Bitte eine Stadt im Briefing-Feld eintragen.",
+      });
+      return;
+    }
+
     let mittwaldFeatureRequestsPayload: MittwaldFeatureRequestsResponse | undefined;
     let mittwaldAiHostingDocsPayload: MittwaldAiHostingDocsResponse | undefined;
+    let weekendVisitPayload: WeekendVisitData | undefined;
 
     const wantsExternalPrefetch =
-      wantsMittwaldFeatureRequests || wantsMittwaldAiHostingDocs || useWebSearch;
+      wantsMittwaldFeatureRequests ||
+      wantsMittwaldAiHostingDocs ||
+      wantsWeekendVisit ||
+      useWebSearch;
 
     if (wantsExternalPrefetch) {
       const optimisticUser: ChatMessage = { role: "user", content: userContent };
@@ -1965,6 +2035,32 @@ export function App() {
       }
     }
 
+    if (wantsWeekendVisit) {
+      setWeekendVisitPhase("prepare");
+      try {
+        const prepare = await prepareWeekendVisitCity(
+          weekendCity,
+          ctrl.signal,
+          playgroundRateLimits,
+        );
+        setWeekendVisitPhase("sources");
+        const sources = await fetchWeekendVisitSources(
+          prepare,
+          ctrl.signal,
+          playgroundRateLimits,
+        );
+        weekendVisitPayload = { ...prepare, ...sources };
+        setWeekendVisitPhase("generate");
+      } catch (e) {
+        setWeekendVisitPhase(null);
+        setMessages(messagesBeforeSend);
+        if (isAbortError(e)) throw e;
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        return;
+      }
+    }
+
     if (useWebSearch) {
       if (!wantsExternalPrefetch) {
         const optimisticUser: ChatMessage = { role: "user", content: userContent };
@@ -2022,6 +2118,7 @@ export function App() {
       ...(mittwaldAiHostingDocsPayload
         ? { mittwaldAiHostingDocs: mittwaldAiHostingDocsPayload }
         : {}),
+      ...(weekendVisitPayload ? { weekendVisitData: weekendVisitPayload } : {}),
     };
     const nextThread = [...messagesBeforeSend, userMessage];
 
@@ -2054,6 +2151,9 @@ export function App() {
           }
           if (mittwaldAiHostingDocsPayload) {
             enriched = `${enriched}\n\n${formatMittwaldAiHostingDocsContext(mittwaldAiHostingDocsPayload)}`;
+          }
+          if (weekendVisitPayload) {
+            enriched = `${enriched}\n\n${formatWeekendVisitContext(weekendVisitPayload)}`;
           }
           if (webSearchPayload) {
             enriched = `${enriched}\n\n${formatWebSearchContext(webSearchPayload)}`;
@@ -2269,6 +2369,7 @@ export function App() {
     } finally {
       setBusy(false);
       setWebSearchBusy(false);
+      setWeekendVisitPhase(null);
       abortRef.current = null;
       focusComposer();
     }
@@ -2553,7 +2654,7 @@ export function App() {
               value={model}
               onChange={(e) => changeModel(e.target.value)}
               title={
-                busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy
+                busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase
                   ? "Modell wechseln (bricht die laufende Anfrage ab)"
                   : isModelCompareUseCase
                     ? "Modell A"
@@ -2745,6 +2846,15 @@ export function App() {
                         typeof m.content === "string" &&
                         m.content === ""
                       }
+                      weekendVisitPhase={
+                        activeUseCaseId === "client-weekend" &&
+                        m.role === "assistant" &&
+                        i === messages.length - 1 &&
+                        typeof m.content === "string" &&
+                        m.content === ""
+                          ? weekendVisitPhase ?? (busy ? "generate" : null)
+                          : null
+                      }
                       webSearchProviderLabel={providerLabel(webSearchConfig)}
                       activeUseCaseId={activeUseCaseId}
                       onImageOpen={openImageLightbox}
@@ -2842,6 +2952,14 @@ export function App() {
                     Use Case beenden
                   </button>
                 </div>
+                {clientWeekendComposerProgress ? (
+                  <UseCaseProgressSteps
+                    variant="compact"
+                    steps={clientWeekendComposerProgress}
+                    ariaLabel="Wochenende mit Kunde — Fortschritt"
+                    accentClassName="amber"
+                  />
+                ) : null}
                 {aiHostingGuideComposerProgress ? (
                   <UseCaseProgressSteps
                     variant="compact"
