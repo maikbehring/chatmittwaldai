@@ -12,6 +12,7 @@ export type PlaygroundUseCaseId =
   | "bug-ticket"
   | "feature-request"
   | "feature-requests-feed"
+  | "ai-hosting-guide"
   | "meeting-protocol"
   | "dev-debug"
   | "invoice-ocr"
@@ -43,6 +44,8 @@ export type PlaygroundUseCase = {
   webSearchDirectQueries?: (input: string) => string[];
   /** Beim Senden zuerst öffentliche mittwald Feature Requests von GitHub laden. */
   prefersMittwaldFeatureRequests?: boolean;
+  /** Beim Senden AI-Hosting-Doku live vom Developer Portal laden. */
+  prefersMittwaldAiHostingDocs?: boolean;
   sendButtonLabel?: string;
   prefersSpeech?: boolean;
   /** Langaufnahme: Whisper-Chunks alle ~14 min (Besprechungen >20 min). */
@@ -65,6 +68,8 @@ export type PlaygroundUseCase = {
   isolatesWebSearchContext?: boolean;
   /** Standard Modell B beim Start des Vergleichs. */
   defaultCompareModelB?: string;
+  /** Fallback, wenn das Primärmodell nicht erreichbar ist (z. B. Qwen3.6 → Qwen3.5). */
+  fallbackModelId?: string;
 };
 
 export type PlaygroundBriefingField = {
@@ -169,6 +174,7 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "bug-ticket",
   "feature-request",
   "feature-requests-feed",
+  "ai-hosting-guide",
   "meeting-protocol",
   "dev-debug",
   "invoice-ocr",
@@ -663,6 +669,63 @@ Bullet-Liste (max. 5): wiederkehrende Wünsche, hohe Kommentarzahl, oder Labels 
 
 Wenn der Nutzer einen Schwerpunkt nennt (z. B. „AI Hosting“, „mStudio“), filtere die Liste mental und priorisiere passende Issues.`;
 
+export const AI_HOSTING_GUIDE_SYSTEM_PROMPT = `Du bist technischer Redakteur für mittwald AI Hosting — OpenAI-kompatible API unter https://llm.aihosting.mittwald.de/v1.
+
+Aufgabe: Aus den **live geladenen Developer-Doku-Daten** einen verständlichen **Einstiegs-Guide** erstellen — für Entwickler, Agenturen und Neugierige am Playground.
+
+Regeln:
+- Nutze **nur** die mitgelieferten Modell-Tabellen, Empfehlungen und API-Endpunkt-Beschreibungen aus der Doku.
+- Keine erfundenen Modelle, Endpunkte oder Preise.
+- Erwähne die **Quellen-URLs** der Doku am Ende.
+- Wenn \`inPlayground: ja/nein\` gesetzt ist: kennzeichne, welche Modelle in **diesem Playground** freigegeben sind.
+- Sprache: **Deutsch**, klar, für Einsteiger verständlich — ohne Marketing-Floskeln.
+- Verweise auf den Playground als Demo-Proxy (API-Key serverseitig, Chat im Browser).
+
+Ausgabe in dieser Reihenfolge:
+
+## Was dieser Use Case macht
+2–3 Sätze in Alltagssprache: Er lädt live die offizielle mittwald-Doku (Modelle + API), fasst sie zusammen und erklärt Einsteigern, wie AI Hosting funktioniert — ohne dass man die Docs selbst durchklicken muss.
+
+## Kurzfassung (60 Sekunden)
+Was ist mittwald AI Hosting, wofür eignet es sich, wie startet man?
+
+## Verfügbare Modelle (aktuell laut Doku)
+Kompakte Tabelle oder Liste: **Modellname** — Typ — Modalitäten — Context — Lizenz.
+Markiere Modelle mit „✓ Playground“, wenn inPlayground=true.
+
+## Welches Modell wofür?
+Aus den Doku-Empfehlungen: 6–10 Bulletpoints mit Modellname und Anwendungsfall.
+
+## API nutzen — die wichtigsten Endpunkte
+Für jeden Endpunkt aus der Doku (kurz):
+- Pfad (z. B. /v1/chat/completions)
+- Wofür
+- 1 Satz Beispiel-Nutzung
+Base-URL: https://llm.aihosting.mittwald.de/v1
+
+## Erste Schritte (3–5 Schritte)
+API-Key im mStudio → curl oder OpenAI-SDK → Modell aus /v1/models wählen → erste Chat-Anfrage.
+
+## In diesem Playground
+Wie der Playground AI Hosting demonstriert (Modell-Dropdown, Use Cases, Proxy).
+
+## Quellen
+Links zur Developer-Doku (Modelle + API-Endpunkte).
+
+## Copy & Paste
+
+**Slack-Einzeiler**
+\`\`\`
+…
+\`\`\`
+
+**Elevator Pitch (3 Sätze)**
+\`\`\`
+…
+\`\`\`
+
+Wenn der Nutzer einen Schwerpunkt nennt (z. B. „Vision“, „OCR“, „Embeddings“, „Whisper“), priorisiere passende Modelle und Endpunkte.`;
+
 export const MEETING_PROTOCOL_SYSTEM_PROMPT = `Du bist ein erfahrener Protokollführer — für Agenturen, Unternehmen und private Gespräche gleichermaßen.
 
 Aufgabe: Aus Besprechungs-Transkripten (Rohtext, ggf. in Abschnitten [Abschnitt 1/2 …]) ein passendes Protokoll erstellen. **Format, Ton und Schwerpunkte leitest du aus dem Gesprächsinhalt ab** — nicht pauschal „Business“.
@@ -1123,6 +1186,35 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
       `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`,
     sendButtonLabel: "Aktualisieren",
     prefersMittwaldFeatureRequests: true,
+    copyableOutput: true,
+  },
+  {
+    id: "ai-hosting-guide",
+    category: "development",
+    icon: "🤖",
+    title: "AI Hosting Guide",
+    subtitle: "Live-Doku → Einstiegs-Guide",
+    description:
+      "Holt Modelle und API-Endpunkte live vom Developer Portal und erklärt kurz: Was ist AI Hosting, welche Modelle gibt es, wofür eignen sie sich, wie starte ich mit der API?",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B",
+    fallbackModelId: MODEL_QWEN_35,
+    systemPrompt: AI_HOSTING_GUIDE_SYSTEM_PROMPT,
+    starterInput:
+      "Was macht dieser Use Case — und erkläre mittwald AI Hosting: aktuelle Modelle, Einsatzzwecke und API-Nutzung.",
+    composerPlaceholder:
+      "Optional: Schwerpunkt — z. B. „Vision“, „OCR“, „Embeddings“, „Whisper“, „Tool Calling“ …",
+    steps: [
+      "„Guide laden“ — holt die aktuelle Doku (Modelle + API) von developer.mittwald.de.",
+      "KI erstellt einen Kurz-Guide: Was der Use Case macht, Modellübersicht, Empfehlungen, API-Einstieg.",
+      "Texte kopieren — z. B. Slack-Einzeiler oder Elevator Pitch.",
+    ],
+    formatSubmissionMessage: (text) =>
+      `Erstelle einen Einstiegs-Guide zu mittwald AI Hosting aus den geladenen Developer-Doku-Daten.\n` +
+      `Priorität: aktuelle Modellliste, Empfehlungen, API-Endpunkte, erste Schritte.\n\n` +
+      `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`,
+    sendButtonLabel: "Guide laden",
+    prefersMittwaldAiHostingDocs: true,
     copyableOutput: true,
   },
   {

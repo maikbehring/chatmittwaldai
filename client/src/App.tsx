@@ -18,6 +18,7 @@ import {
   buildCompareApiMessages,
   buildCompareChatBody,
   inferenceParamsForCompareModel,
+  modelShortLabel,
   type ModelComparePayload,
 } from "./modelCompare";
 import {
@@ -49,12 +50,26 @@ import { ChatMarkdown } from "./ChatMarkdown";
 import { ImageLightbox } from "./ImageLightbox";
 import { createRafStreamBatcher } from "./streamDeltaBatch";
 import {
+  MODEL_FIRST_TOKEN_TIMEOUT_MS,
+  streamChatCompletion,
+  streamChatCompletionWithFirstTokenTimeout,
+} from "./streamChatCompletion";
+import {
   CO2_FOOTPRINT_TOOLTIP,
   estimateInferenceCo2Grams,
   formatCo2Grams,
   sumCo2GramsFromAssistantMessages,
 } from "./inferenceFootprint";
 import { SessionCo2Footprint } from "./SessionCo2Footprint";
+import {
+  getAiHostingGuideProgressSteps,
+  UseCaseProgressSteps,
+} from "./UseCaseProgressSteps";
+import {
+  fetchMittwaldAiHostingDocs,
+  formatMittwaldAiHostingDocsContext,
+  type MittwaldAiHostingDocsResponse,
+} from "./mittwaldAiHostingDocs";
 import {
   fetchMittwaldFeatureRequests,
   formatMittwaldFeatureRequestsContext,
@@ -68,7 +83,6 @@ import { ClearBrowserCacheDialog } from "./ClearBrowserCacheDialog";
 import {
   clearSessionApiKey,
   hasSessionApiKey,
-  playgroundApiHeaders,
   setSessionApiKey,
 } from "./playgroundSessionApiKey";
 import {
@@ -100,13 +114,13 @@ import {
   appErrorFromSendFailure,
   appErrorFromUnknown,
   isAbortError,
-  ensureOkApiResponse,
   grantBonusChatRequests,
   type AppUiError,
   type PlaygroundBonusChatConfig,
   type PlaygroundRateLimits,
 } from "./apiErrors";
 import { RateLimitNotice } from "./RateLimitNotice";
+import { isModelUnreachableError, resolveModelFallback } from "./modelFallback";
 import { useIsMobileLayout } from "./useMobileLayout";
 import {
   buildWebSearchChatExcerpt,
@@ -156,6 +170,7 @@ export type ChatMessage = {
   usage?: TokenMeter;
   webSearch?: WebSearchResponse;
   mittwaldFeatureRequests?: MittwaldFeatureRequestsResponse;
+  mittwaldAiHostingDocs?: MittwaldAiHostingDocsResponse;
   compare?: ModelComparePayload;
 };
 
@@ -218,26 +233,6 @@ async function encodeImageFile(file: File, maxEdge = 1024, quality = 0.85): Prom
   return dataUrl;
 }
 
-/** Sichtbare Antwort-Token (ohne reasoning_content — der würde die UI blockieren). */
-function extractStreamDeltaContent(json: unknown): string {
-  if (!json || typeof json !== "object") return "";
-  const root = json as Record<string, unknown>;
-  const choices = root.choices;
-  if (!Array.isArray(choices) || choices.length === 0) return "";
-  const ch0 = choices[0];
-  if (!ch0 || typeof ch0 !== "object") return "";
-  const choice = ch0 as Record<string, unknown>;
-  const delta = choice.delta;
-  if (delta && typeof delta === "object") {
-    const d = delta as Record<string, unknown>;
-    const content = d.content;
-    if (typeof content === "string" && content.length > 0) return content;
-  }
-  const text = choice.text;
-  if (typeof text === "string" && text.length > 0) return text;
-  return "";
-}
-
 function assistantPlainTextLength(content: string | ContentPart[]): number {
   if (typeof content === "string") return content.length;
   let n = 0;
@@ -245,72 +240,6 @@ function assistantPlainTextLength(content: string | ContentPart[]): number {
     if (part.type === "text") n += part.text.length;
   }
   return n;
-}
-
-async function streamChatCompletion(
-  body: Record<string, unknown>,
-  onDelta: (t: string) => void,
-  signal: AbortSignal,
-  rateLimits?: PlaygroundRateLimits | null,
-): Promise<TokenMeter | null> {
-  const res = await fetch("/api/chat/completions", {
-    method: "POST",
-    headers: playgroundApiHeaders({
-      "Content-Type": "application/json",
-      Accept: "text/event-stream",
-    }),
-    body: JSON.stringify(body),
-    signal,
-  });
-
-  await ensureOkApiResponse(res, rateLimits);
-
-  const reader = res.body?.getReader();
-  if (!reader) throw new Error("Keine Antwort vom Server.");
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let lastUsage: TokenMeter | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buffer += decoder.decode(value, { stream: true });
-
-    let lineBreak: number;
-    while ((lineBreak = buffer.indexOf("\n")) !== -1) {
-      const rawLine = buffer.slice(0, lineBreak);
-      buffer = buffer.slice(lineBreak + 1);
-      const line = rawLine.replace(/\r$/, "").trim();
-      if (!line.startsWith("data:")) continue;
-      const payload = line.slice(5).trim();
-      if (payload === "[DONE]") return lastUsage;
-      try {
-        const streamPayload = JSON.parse(payload) as Record<string, unknown>;
-        const rawUsageField = streamPayload.usage;
-        if (rawUsageField && typeof rawUsageField === "object") {
-          const uo = rawUsageField as Record<string, unknown>;
-          const pTok = uo.prompt_tokens;
-          const cTok = uo.completion_tokens;
-          const promptTokens = typeof pTok === "number" ? pTok : null;
-          const completionTokens = typeof cTok === "number" ? cTok : null;
-          if (promptTokens !== null || completionTokens !== null) {
-            const prevUsage = lastUsage as TokenMeter | null;
-            lastUsage = {
-              promptTokens: promptTokens ?? prevUsage?.promptTokens ?? null,
-              completionTokens: completionTokens ?? prevUsage?.completionTokens ?? null,
-              outputTokensPerSec: null,
-            };
-          }
-        }
-        const piece = extractStreamDeltaContent(streamPayload);
-        if (piece.length > 0) onDelta(piece);
-      } catch {
-        /* SSE-Zeile ignorieren */
-      }
-    }
-  }
-  return lastUsage;
 }
 
 function AssistantTokenFooter({ stats }: { stats: TokenMeter }) {
@@ -491,6 +420,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   streaming,
   webSearchPending,
   featureRequestsPending,
+  aiHostingDocsPending,
   webSearchProviderLabel,
   activeUseCaseId,
   onImageOpen,
@@ -499,6 +429,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   streaming: boolean;
   webSearchPending?: boolean;
   featureRequestsPending?: boolean;
+  aiHostingDocsPending?: boolean;
   webSearchProviderLabel?: string;
   activeUseCaseId?: PlaygroundUseCaseId | null;
   onImageOpen: (src: string, alt: string) => void;
@@ -507,6 +438,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
     return (
       <div className="flex w-full justify-end">
         <div className="flex w-full max-w-full flex-col items-end gap-1">
+          {message.mittwaldAiHostingDocs &&
+          message.mittwaldAiHostingDocs.modelsPage.models.length > 0 ? (
+            <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+              Developer-Doku · {message.mittwaldAiHostingDocs.modelsPage.models.length} Modelle ·{" "}
+              {message.mittwaldAiHostingDocs.apiPage.endpoints.length} API-Endpunkte
+            </p>
+          ) : null}
           {message.mittwaldFeatureRequests &&
           message.mittwaldFeatureRequests.issues.length > 0 ? (
             <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
@@ -527,11 +465,18 @@ const ChatMessageRow = memo(function ChatMessageRow({
     );
   }
   const assistantPlain = assistantMessagePlainText(message.content).trim();
+  const isAiHostingGuide = activeUseCaseId === "ai-hosting-guide";
+  const aiHostingGuideGenerating =
+    isAiHostingGuide && streaming && assistantPlain.length === 0;
+  const showAiHostingProgress =
+    isAiHostingGuide && (aiHostingDocsPending || aiHostingGuideGenerating);
   const showCopyActions =
     isCopyableUseCase(activeUseCaseId) &&
     !streaming &&
     !webSearchPending &&
     !featureRequestsPending &&
+    !aiHostingDocsPending &&
+    !aiHostingGuideGenerating &&
     assistantPlain.length > 0;
 
   return (
@@ -559,6 +504,15 @@ const ChatMessageRow = memo(function ChatMessageRow({
               />
               Lade Feature Requests von GitHub …
             </p>
+          ) : showAiHostingProgress ? (
+            <UseCaseProgressSteps
+              steps={getAiHostingGuideProgressSteps(
+                Boolean(aiHostingDocsPending),
+                aiHostingGuideGenerating,
+              )}
+              ariaLabel="AI Hosting Guide — Fortschritt"
+              accentClassName="violet"
+            />
           ) : (
             renderMessageContent(message.content, streaming, onImageOpen)
           )}
@@ -647,6 +601,10 @@ export function App() {
   });
   const [systemPrompt, setSystemPrompt] = useState(() => initial.systemPrompt ?? "");
   const [activeUseCaseId, setActiveUseCaseId] = useState<PlaygroundUseCaseId | null>(null);
+  const [activeModelFallback, setActiveModelFallback] = useState<{
+    modelId: string;
+    label: string;
+  } | null>(null);
   const [briefingValues, setBriefingValues] = useState<Record<string, string>>({});
   const activeUseCase = useMemo(() => getUseCaseById(activeUseCaseId), [activeUseCaseId]);
   const [playgroundLinks, setPlaygroundLinks] = useState<PlaygroundLink[]>([]);
@@ -658,6 +616,7 @@ export function App() {
   );
   const [webSearchBusy, setWebSearchBusy] = useState(false);
   const [featureRequestsBusy, setFeatureRequestsBusy] = useState(false);
+  const [aiHostingDocsBusy, setAiHostingDocsBusy] = useState(false);
   const [webSearchConsentOpen, setWebSearchConsentOpen] = useState(false);
   const [webSearchConsentGranted, setWebSearchConsentGranted] = useState(() =>
     hasWebSearchConsent(),
@@ -747,7 +706,7 @@ export function App() {
   /** Clipboard-Bild wie in ChatGPT (Capture: greift vor Textfeld, verhindert Müll-Einfügen bei Screenshots). */
   const handleComposerPasteCapture = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
-      if (busy || speechBusy || webSearchBusy || featureRequestsBusy || voiceRecording.active) {
+      if (busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || voiceRecording.active) {
         return;
       }
       const items = e.clipboardData?.items;
@@ -765,7 +724,7 @@ export function App() {
         return;
       }
     },
-    [adjustInputHeight, busy, speechBusy, webSearchBusy, featureRequestsBusy, voiceRecording.active],
+    [adjustInputHeight, busy, speechBusy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, voiceRecording.active],
   );
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -869,7 +828,7 @@ export function App() {
       return;
     }
 
-    if (busy || webSearchBusy || featureRequestsBusy) {
+    if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy) {
       // Während des Streams / Websuche: sofort ans Ende — kein smooth, sonst kämpft die Animation
       // mit wachsendem Inhalt und der Text „springt“.
       const id = requestAnimationFrame(() => {
@@ -882,7 +841,7 @@ export function App() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
     return () => cancelAnimationFrame(id);
-  }, [messages, busy, webSearchBusy, featureRequestsBusy]);
+  }, [messages, busy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -1063,6 +1022,15 @@ export function App() {
 
   const isInvoiceOcrUseCase = activeUseCaseId === "invoice-ocr";
   const isModelCompareUseCase = activeUseCaseId === "model-compare";
+  const isAiHostingGuideUseCase = activeUseCaseId === "ai-hosting-guide";
+  const aiHostingGuideComposerProgress = useMemo(() => {
+    if (!isAiHostingGuideUseCase || messages.length === 0) return null;
+    const last = messages[messages.length - 1];
+    if (last.role !== "assistant" || typeof last.content !== "string") return null;
+    const guideGenerating = !aiHostingDocsBusy && busy && last.content === "";
+    if (!aiHostingDocsBusy && !guideGenerating) return null;
+    return getAiHostingGuideProgressSteps(aiHostingDocsBusy, guideGenerating);
+  }, [isAiHostingGuideUseCase, messages, aiHostingDocsBusy, busy]);
   const ocrPipelineBusy = ocrProgress !== null;
 
   const speechTranscribing = speechBusy && !voiceRecording.active;
@@ -1090,6 +1058,7 @@ export function App() {
       !busy &&
       !webSearchBusy &&
       !featureRequestsBusy &&
+      !aiHostingDocsBusy &&
       !voiceRecording.active &&
       !speechTranscribing &&
       !ocrPipelineBusy
@@ -1102,6 +1071,7 @@ export function App() {
     busy,
     webSearchBusy,
     featureRequestsBusy,
+    aiHostingDocsBusy,
     voiceRecording.active,
     speechTranscribing,
     ocrPipelineBusy,
@@ -1171,11 +1141,11 @@ export function App() {
 
   const changeModel = useCallback(
     (modelId: string) => {
-      if (busy || webSearchBusy || featureRequestsBusy) stop();
+      if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy) stop();
       if (modelId !== model) setModel(modelId);
       applyPreset(modelId);
     },
-    [applyPreset, busy, model, stop, webSearchBusy, featureRequestsBusy],
+    [applyPreset, busy, model, stop, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy],
   );
 
   useEffect(() => {
@@ -1188,6 +1158,7 @@ export function App() {
 
   const clearUseCase = useCallback(() => {
     setActiveUseCaseId(null);
+    setActiveModelFallback(null);
     setSystemPrompt("");
     setBriefingValues({});
     activeBriefingFieldIdRef.current = null;
@@ -1210,6 +1181,7 @@ export function App() {
       stop();
       setAppError(null);
       setContextTrimNotice(null);
+      setActiveModelFallback(null);
       setActiveUseCaseId(id);
       setMessages([]);
       setImageFile(null);
@@ -1426,7 +1398,7 @@ export function App() {
       ? imageFileRef.current !== null
       : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
-    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy))
+    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy))
       return;
     if (sendLockRef.current) return;
 
@@ -1890,9 +1862,19 @@ export function App() {
       text.length > 0 &&
       !file;
 
-    let mittwaldFeatureRequestsPayload: MittwaldFeatureRequestsResponse | undefined;
+    const wantsMittwaldAiHostingDocs =
+      activeUseCase?.prefersMittwaldAiHostingDocs &&
+      typeof userContent === "string" &&
+      text.length > 0 &&
+      !file;
 
-    if (wantsMittwaldFeatureRequests || useWebSearch) {
+    let mittwaldFeatureRequestsPayload: MittwaldFeatureRequestsResponse | undefined;
+    let mittwaldAiHostingDocsPayload: MittwaldAiHostingDocsResponse | undefined;
+
+    const wantsExternalPrefetch =
+      wantsMittwaldFeatureRequests || wantsMittwaldAiHostingDocs || useWebSearch;
+
+    if (wantsExternalPrefetch) {
       const optimisticUser: ChatMessage = { role: "user", content: userContent };
       setMessages([
         ...messagesBeforeSend,
@@ -1927,8 +1909,34 @@ export function App() {
       }
     }
 
+    if (wantsMittwaldAiHostingDocs) {
+      setAiHostingDocsBusy(true);
+      try {
+        mittwaldAiHostingDocsPayload = await fetchMittwaldAiHostingDocs(
+          ctrl.signal,
+          playgroundRateLimits,
+        );
+      } catch (e) {
+        setAiHostingDocsBusy(false);
+        setMessages(messagesBeforeSend);
+        if (isAbortError(e)) throw e;
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        return;
+      }
+      setAiHostingDocsBusy(false);
+      if (mittwaldAiHostingDocsPayload.modelsPage.models.length === 0) {
+        setMessages(messagesBeforeSend);
+        setAppError({
+          kind: "plain",
+          message: "AI-Hosting-Doku: keine Modelle geladen. Bitte erneut versuchen.",
+        });
+        return;
+      }
+    }
+
     if (useWebSearch) {
-      if (!wantsMittwaldFeatureRequests) {
+      if (!wantsExternalPrefetch) {
         const optimisticUser: ChatMessage = { role: "user", content: userContent };
         setMessages([
           ...messagesBeforeSend,
@@ -1981,95 +1989,106 @@ export function App() {
       ...(mittwaldFeatureRequestsPayload
         ? { mittwaldFeatureRequests: mittwaldFeatureRequestsPayload }
         : {}),
+      ...(mittwaldAiHostingDocsPayload
+        ? { mittwaldAiHostingDocs: mittwaldAiHostingDocsPayload }
+        : {}),
     };
     const nextThread = [...messagesBeforeSend, userMessage];
 
     setMessages([...nextThread, { role: "assistant", content: "" }]);
     setBusy(true);
+    setActiveModelFallback(null);
 
     const hasVision =
       Array.isArray(userContent) &&
       userContent.some((p) => p.type === "image_url");
 
-    let effTemp = temperature;
-    let effTopP = topP;
-    let effTopK = topK;
-    let effPresence = presencePenalty;
-    let effMax = maxTokens;
-    let effExtra =
-      extraBody && Object.keys(extraBody).length > 0 ? { ...extraBody } : null;
-
-    if (hasVision) {
-      if (model === MODEL_MINISTRAL || model === MODEL_DEVSTRAL) {
-        effTemp = 0.1;
-      } else if (isQwen3Model(model)) {
-        const qv = qwenVisionOcr ? getQwenVisionOcrInference() : getQwenVisionInference();
-        effTemp = qv.temperature;
-        effTopP = typeof qv.topP === "number" ? qv.topP : effTopP;
-        effTopK = typeof qv.topK === "number" ? qv.topK : effTopK;
-        effExtra = qv.extraBody ? { ...qv.extraBody } : effExtra;
-        const cap = qv.maxTokens ?? 2048;
-        effMax = effMax === null ? cap : Math.min(effMax, cap);
-      }
-    }
-
     const threadForApi = isolateWebSearch ? [userMessage] : nextThread;
 
-    let apiMessages: ApiMessage[] = [
-      { role: "system", content: formatPlaygroundTodayContext() },
-    ];
-    if (model === MODEL_GPT_OSS) {
-      const line = `Reasoning: ${gptOssReasoning}`;
-      const rest = systemPrompt.trim();
-      apiMessages.push({ role: "system", content: rest ? `${line}\n\n${rest}` : line });
-    } else if (systemPrompt.trim().length > 0) {
-      apiMessages.push({ role: "system", content: systemPrompt.trim() });
-    }
-    for (const m of threadForApi) {
-      if (m.role === "user" && m === userMessage && typeof m.content === "string") {
-        let enriched = m.content;
-        if (mittwaldFeatureRequestsPayload) {
-          enriched = `${enriched}\n\n${formatMittwaldFeatureRequestsContext(mittwaldFeatureRequestsPayload)}`;
+    const buildApiMessages = (streamModelId: string): ApiMessage[] => {
+      const api: ApiMessage[] = [
+        { role: "system", content: formatPlaygroundTodayContext() },
+      ];
+      if (streamModelId === MODEL_GPT_OSS) {
+        const line = `Reasoning: ${gptOssReasoning}`;
+        const rest = systemPrompt.trim();
+        api.push({ role: "system", content: rest ? `${line}\n\n${rest}` : line });
+      } else if (systemPrompt.trim().length > 0) {
+        api.push({ role: "system", content: systemPrompt.trim() });
+      }
+      for (const m of threadForApi) {
+        if (m.role === "user" && m === userMessage && typeof m.content === "string") {
+          let enriched = m.content;
+          if (mittwaldFeatureRequestsPayload) {
+            enriched = `${enriched}\n\n${formatMittwaldFeatureRequestsContext(mittwaldFeatureRequestsPayload)}`;
+          }
+          if (mittwaldAiHostingDocsPayload) {
+            enriched = `${enriched}\n\n${formatMittwaldAiHostingDocsContext(mittwaldAiHostingDocsPayload)}`;
+          }
+          if (webSearchPayload) {
+            enriched = `${enriched}\n\n${formatWebSearchContext(webSearchPayload)}`;
+          }
+          if (enriched !== m.content) {
+            api.push({ role: "user", content: enriched });
+            continue;
+          }
         }
-        if (webSearchPayload) {
-          enriched = `${enriched}\n\n${formatWebSearchContext(webSearchPayload)}`;
-        }
-        if (enriched !== m.content) {
-          apiMessages.push({ role: "user", content: enriched });
-          continue;
+        api.push(m);
+      }
+      return api;
+    };
+
+    const trimNoticeRef = { count: 0 };
+    const buildChatStreamBody = (streamModelId: string): Record<string, unknown> => {
+      let effTemp = temperature;
+      let effTopP = topP;
+      let effTopK = topK;
+      let effPresence = presencePenalty;
+      let effMax = maxTokens;
+      let effExtra =
+        extraBody && Object.keys(extraBody).length > 0 ? { ...extraBody } : null;
+
+      if (hasVision) {
+        if (streamModelId === MODEL_MINISTRAL || streamModelId === MODEL_DEVSTRAL) {
+          effTemp = 0.1;
+        } else if (isQwen3Model(streamModelId)) {
+          const qv = qwenVisionOcr ? getQwenVisionOcrInference() : getQwenVisionInference();
+          effTemp = qv.temperature;
+          effTopP = typeof qv.topP === "number" ? qv.topP : effTopP;
+          effTopK = typeof qv.topK === "number" ? qv.topK : effTopK;
+          effExtra = qv.extraBody ? { ...qv.extraBody } : effExtra;
+          const cap = qv.maxTokens ?? 2048;
+          effMax = effMax === null ? cap : Math.min(effMax, cap);
         }
       }
-      apiMessages.push(m);
-    }
 
-    const { messages: trimmedApiMessages, trimmedCount } = trimMessagesForApi(
-      apiMessages,
-      maxMessages,
-    );
-    apiMessages = trimmedApiMessages;
-    if (trimmedCount > 0) {
-      setContextTrimNotice(
-        `Langer Chatverlauf: ${trimmedCount} ältere Nachricht${trimmedCount === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}). „Clear chat“ setzt den Verlauf zurück.`,
+      let apiMessages = buildApiMessages(streamModelId);
+      const { messages: trimmedApiMessages, trimmedCount } = trimMessagesForApi(
+        apiMessages,
+        maxMessages,
       );
-    } else {
-      setContextTrimNotice(null);
-    }
+      apiMessages = trimmedApiMessages;
+      trimNoticeRef.count = trimmedCount;
 
-    const body: Record<string, unknown> = {
-      model,
-      messages: apiMessages,
-      temperature: effTemp,
-      stream: true,
+      const body: Record<string, unknown> = {
+        model: streamModelId,
+        messages: apiMessages,
+        temperature: effTemp,
+        stream: true,
+      };
+      if (typeof effTopP === "number") body.top_p = effTopP;
+      if (typeof effTopK === "number") body.top_k = effTopK;
+      if (typeof effPresence === "number") body.presence_penalty = effPresence;
+      if (effMax !== null && effMax > 0) body.max_tokens = effMax;
+      if (effExtra && Object.keys(effExtra).length > 0) body.extra_body = effExtra;
+      body.stream_options = { include_usage: true };
+      return body;
     };
-    if (typeof effTopP === "number") body.top_p = effTopP;
-    if (typeof effTopK === "number") body.top_k = effTopK;
-    if (typeof effPresence === "number") body.presence_penalty = effPresence;
-    if (effMax !== null && effMax > 0) body.max_tokens = effMax;
-    if (effExtra && Object.keys(effExtra).length > 0) body.extra_body = effExtra;
-    body.stream_options = { include_usage: true };
 
     const streamStart = performance.now();
     let firstContentAt: number | null = null;
+    let streamReceivedContent = false;
+    let usedModelFallback = false;
 
     const appendAssistantDelta = (delta: string) => {
       setMessages((prev) => {
@@ -2085,19 +2104,79 @@ export function App() {
     };
 
     const deltaBatch = createRafStreamBatcher((chunk) => {
-      if (chunk.length > 0) firstContentAt ??= performance.now();
+      if (chunk.length > 0) {
+        streamReceivedContent = true;
+        firstContentAt ??= performance.now();
+      }
       appendAssistantDelta(chunk);
     });
 
+    const allowedModelIds = models.map((m) => m.id);
+    let effectiveModelId = model;
+    const primaryFallbackId = resolveModelFallback(
+      model,
+      allowedModelIds,
+      activeUseCase?.fallbackModelId,
+    );
+
+    const applyTrimNotice = (fallbackSuffix?: string) => {
+      const trimMsg =
+        trimNoticeRef.count > 0
+          ? `Langer Chatverlauf: ${trimNoticeRef.count} ältere Nachricht${trimNoticeRef.count === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}). „Clear chat“ setzt den Verlauf zurück.`
+          : null;
+      if (fallbackSuffix) {
+        setContextTrimNotice(trimMsg ? `${trimMsg} ${fallbackSuffix}` : fallbackSuffix);
+        return;
+      }
+      setContextTrimNotice(trimMsg);
+    };
+
+    const runStream = async (streamModelId: string, useFirstTokenTimeout: boolean) => {
+      const body = buildChatStreamBody(streamModelId);
+      if (!usedModelFallback) applyTrimNotice();
+      const onDelta = (delta: string) => {
+        if (delta.length > 0) deltaBatch.push(delta);
+      };
+      if (useFirstTokenTimeout) {
+        return streamChatCompletionWithFirstTokenTimeout(
+          body,
+          onDelta,
+          ctrl.signal,
+          playgroundRateLimits,
+          MODEL_FIRST_TOKEN_TIMEOUT_MS,
+        );
+      }
+      return streamChatCompletion(body, onDelta, ctrl.signal, playgroundRateLimits);
+    };
+
     try {
-      const usageSnap = await streamChatCompletion(
-        body,
-        (delta) => {
-          if (delta.length > 0) deltaBatch.push(delta);
-        },
-        ctrl.signal,
-        playgroundRateLimits,
-      );
+      let usageSnap: TokenMeter | null;
+      try {
+        usageSnap = await runStream(effectiveModelId, primaryFallbackId !== null);
+      } catch (firstErr) {
+        if (isAbortError(firstErr)) throw firstErr;
+        const fallbackId = resolveModelFallback(
+          effectiveModelId,
+          allowedModelIds,
+          activeUseCase?.fallbackModelId,
+        );
+        if (
+          !fallbackId ||
+          !isModelUnreachableError(firstErr) ||
+          streamReceivedContent
+        ) {
+          throw firstErr;
+        }
+        effectiveModelId = fallbackId;
+        usedModelFallback = true;
+        const fallbackLabel = modelShortLabel(fallbackId);
+        setActiveModelFallback({ modelId: fallbackId, label: fallbackLabel });
+        applyTrimNotice(
+          `${modelShortLabel(model)} war nicht erreichbar — Antwort mit ${fallbackLabel} (Fallback).`,
+        );
+        usageSnap = await runStream(effectiveModelId, false);
+      }
+
       deltaBatch.flush();
       const streamEnd = performance.now();
       const genSec =
@@ -2128,9 +2207,9 @@ export function App() {
           ? estimateInferenceCo2Grams(
               usageSnap?.promptTokens ?? 0,
               usageSnap?.completionTokens ?? 0,
-              model,
+              effectiveModelId,
             )
-          : estimateInferenceCo2Grams(0, roughOutTok, model);
+          : estimateInferenceCo2Grams(0, roughOutTok, effectiveModelId);
 
         copy[copy.length - 1] = {
           ...last,
@@ -2191,6 +2270,7 @@ export function App() {
     compareModelB,
     activeUseCaseId,
     requestEnableWebSearch,
+    models,
   ]);
 
   useEffect(() => {
@@ -2441,7 +2521,7 @@ export function App() {
               value={model}
               onChange={(e) => changeModel(e.target.value)}
               title={
-                busy || webSearchBusy || featureRequestsBusy
+                busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy
                   ? "Modell wechseln (bricht die laufende Anfrage ab)"
                   : isModelCompareUseCase
                     ? "Modell A"
@@ -2474,7 +2554,7 @@ export function App() {
                   className="playground-text-small max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-8 font-bold text-playground-muted outline-none hover:bg-playground-muted/5 focus-visible:ring-2 focus-visible:ring-playground-border sm:max-w-[min(100%,14rem)]"
                   value={compareModelB}
                   onChange={(e) => setCompareModelB(e.target.value)}
-                  disabled={busy || webSearchBusy || featureRequestsBusy}
+                  disabled={busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy}
                   title="Modell B"
                 >
                   {models.length === 0 ? (
@@ -2626,6 +2706,13 @@ export function App() {
                         typeof m.content === "string" &&
                         m.content === ""
                       }
+                      aiHostingDocsPending={
+                        aiHostingDocsBusy &&
+                        m.role === "assistant" &&
+                        i === messages.length - 1 &&
+                        typeof m.content === "string" &&
+                        m.content === ""
+                      }
                       webSearchProviderLabel={providerLabel(webSearchConfig)}
                       activeUseCaseId={activeUseCaseId}
                       onImageOpen={openImageLightbox}
@@ -2684,31 +2771,53 @@ export function App() {
             ) : null}
             {activeUseCase && messages.length > 0 ? (
               <div
-                className="mx-auto mb-2 flex max-w-playground flex-wrap items-center justify-between gap-2 rounded-2xl border border-playground-border bg-playground-sidebar px-4 py-2"
+                className="mx-auto mb-2 flex max-w-playground flex-col gap-2 rounded-2xl border border-playground-border bg-playground-sidebar px-4 py-2"
                 role="status"
               >
-                <span className="playground-text-small flex items-center gap-2 font-medium text-playground-ink">
-                  <span className="text-base" aria-hidden>
-                    {activeUseCase.icon}
-                  </span>
-                  <span>
-                    Use Case: <span className="font-bold">{activeUseCase.title}</span>
-                    <span className="text-playground-muted">
-                      {" "}
-                      ·{" "}
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="playground-text-small flex items-center gap-2 font-medium text-playground-ink">
+                    <span className="text-base" aria-hidden>
+                      {activeUseCase.icon}
+                    </span>
+                    <span>
+                      Use Case: <span className="font-bold">{activeUseCase.title}</span>
+                      <span className="text-playground-muted">
+                        {" "}
+                        ·{" "}
                       {isModelCompareUseCase
                         ? `${model} vs ${compareModelB}`
-                        : activeUseCase.modelLabel}
+                        : activeModelFallback ? (
+                          <>
+                            <span className="text-amber-800 dark:text-amber-200">
+                              {activeModelFallback.label}
+                            </span>
+                            <span className="font-normal text-playground-muted">
+                              {" "}
+                              (Fallback)
+                            </span>
+                          </>
+                        ) : (
+                          activeUseCase.modelLabel
+                        )}
+                      </span>
                     </span>
                   </span>
-                </span>
-                <button
-                  type="button"
-                  className="playground-text-tiny font-medium text-playground-muted underline decoration-playground-border underline-offset-2 hover:text-playground-ink"
-                  onClick={clearUseCase}
-                >
-                  Use Case beenden
-                </button>
+                  <button
+                    type="button"
+                    className="playground-text-tiny font-medium text-playground-muted underline decoration-playground-border underline-offset-2 hover:text-playground-ink"
+                    onClick={clearUseCase}
+                  >
+                    Use Case beenden
+                  </button>
+                </div>
+                {aiHostingGuideComposerProgress ? (
+                  <UseCaseProgressSteps
+                    variant="compact"
+                    steps={aiHostingGuideComposerProgress}
+                    ariaLabel="AI Hosting Guide — Fortschritt"
+                    accentClassName="violet"
+                  />
+                ) : null}
               </div>
             ) : null}
             {imageFile && (
@@ -2774,7 +2883,7 @@ export function App() {
                             placeholder={composerPlaceholder}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            disabled={busy || speechBusy || webSearchBusy || featureRequestsBusy || ocrPipelineBusy}
+                            disabled={busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || ocrPipelineBusy}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
@@ -2964,7 +3073,7 @@ export function App() {
                       placeholder={composerPlaceholder}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      disabled={busy || speechBusy || webSearchBusy || featureRequestsBusy || ocrPipelineBusy}
+                      disabled={busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || ocrPipelineBusy}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();

@@ -48,6 +48,11 @@ export function PlaygroundUseCaseGuide({
             <p className="playground-text-tiny mt-0.5 font-medium text-playground-muted">
               Modell: {useCase.modelLabel}
             </p>
+            {useCase.description ? (
+              <p className="playground-text-small mt-2 max-w-prose text-playground-muted">
+                {useCase.description}
+              </p>
+            ) : null}
           </div>
         </div>
         <button
@@ -119,6 +124,34 @@ export function PlaygroundUseCaseGuide({
           <strong>PDF oder Bild</strong> per <strong className="text-playground-ink">+</strong> anhängen.
           PDFs werden im Browser in Bilder umgewandelt (bessere Kopfzeilen-Erkennung als PDF-Upload direkt an
           GLM-OCR). Bis {OCR_MAX_PAGES} Seiten.
+        </p>
+      ) : null}
+
+      {useCase.id === "ai-hosting-guide" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-violet-200/80 bg-violet-50/80 px-3 py-2.5 font-medium text-violet-950 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
+          <span className="mr-1.5" aria-hidden>
+            🤖
+          </span>
+          <strong>Kurz:</strong> Lädt die aktuelle Modell- und API-Doku von developer.mittwald.de und erstellt
+          daraus einen verständlichen Einstiegs-Guide — inkl. Empfehlung, welches Modell wofür passt. Falls
+          Qwen3.6 nicht erreichbar ist, wird automatisch Qwen3.5 als Fallback genutzt.{" "}
+          <a
+            href="https://developer.mittwald.de/de/docs/v2/platform/aihosting/models/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            Modelle
+          </a>
+          {" · "}
+          <a
+            href="https://developer.mittwald.de/de/docs/v2/platform/aihosting/api-endpoints/supported-endpoints/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            API-Endpunkte
+          </a>
         </p>
       ) : null}
 

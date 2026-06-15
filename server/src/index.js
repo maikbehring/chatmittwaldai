@@ -18,6 +18,7 @@ import {
 } from "./playgroundBonus.js";
 import { getWebSearchConfig, searchWeb, searchWebMulti } from "./webSearch.js";
 import { fetchMittwaldFeatureRequests } from "./mittwaldFeatureRequests.js";
+import { fetchMittwaldAiHostingDocs } from "./mittwaldAiHostingDocs.js";
 import {
   pickWebSearchQueryModel,
   synthesizeGoogleSearchQuery,
@@ -422,6 +423,27 @@ async function main() {
           502,
           "feature_requests_failed",
           e instanceof Error ? e.message : "Feature Requests konnten nicht geladen werden.",
+        );
+      }
+    },
+  );
+
+  app.get(
+    "/api/mittwald/ai-hosting-docs",
+    featureRequestsLimiter,
+    async (_req, res) => {
+      try {
+        const data = await fetchMittwaldAiHostingDocs({
+          allowedModelIds: ALLOWED_MODELS,
+        });
+        res.json(data);
+      } catch (e) {
+        console.error(e);
+        return jsonError(
+          res,
+          502,
+          "ai_hosting_docs_failed",
+          e instanceof Error ? e.message : "AI-Hosting-Doku konnte nicht geladen werden.",
         );
       }
     },
