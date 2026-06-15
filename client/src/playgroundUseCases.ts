@@ -14,6 +14,7 @@ export type PlaygroundUseCaseId =
   | "feature-requests-feed"
   | "ai-hosting-guide"
   | "client-weekend"
+  | "price-compare"
   | "meeting-protocol"
   | "dev-debug"
   | "invoice-ocr"
@@ -49,6 +50,8 @@ export type PlaygroundUseCase = {
   prefersMittwaldAiHostingDocs?: boolean;
   /** Stadt + Wikipedia + Open-Meteo für kommendes Wochenende laden. */
   prefersWeekendVisitData?: boolean;
+  /** Iterative Websuche für Preisvergleich (Produkt × zwei Anbieter). */
+  prefersPriceCompareSearch?: boolean;
   sendButtonLabel?: string;
   prefersSpeech?: boolean;
   /** Langaufnahme: Whisper-Chunks alle ~14 min (Besprechungen >20 min). */
@@ -179,6 +182,7 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "feature-requests-feed",
   "ai-hosting-guide",
   "client-weekend",
+  "price-compare",
   "meeting-protocol",
   "dev-debug",
   "invoice-ocr",
@@ -796,6 +800,77 @@ Nummerierte Ideen — ggf. leichter vor der Abreise.
 ## Quellen
 Wikipedia-URL und Hinweis Open-Meteo — aus den mitgelieferten Daten.`;
 
+export const PRICE_COMPARE_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
+  {
+    id: "produkt",
+    label: "Produkt",
+    placeholder: "z. B. Apple iPhone 16 128 GB, Bosch Serie 6 Geschirrspüler, Adobe Creative Cloud",
+    rows: 1,
+  },
+  {
+    id: "anbieter1",
+    label: "Anbieter A",
+    placeholder: "z. B. Amazon, MediaMarkt, Alternate",
+    rows: 1,
+  },
+  {
+    id: "anbieter2",
+    label: "Anbieter B",
+    placeholder: "z. B. Saturn, Cyberport, Apple Store",
+    rows: 1,
+  },
+];
+
+export const PRICE_COMPARE_SYSTEM_PROMPT = `Du bist Preis- und Einkaufsberater für Agenturen, Freelancer und kleine Unternehmen in Deutschland.
+
+Aufgabe: **Vergleiche zwei Anbieter** für ein konkretes Produkt — basierend auf den mitgelieferten Websuche-Treffern (iterativ gesammelt).
+
+Regeln:
+- Nutze **nur** Preise und Fakten aus den Treffern — **nichts erfinden oder schätzen**.
+- Wenn kein klarer Preis im Snippet steht: „Preis auf Seite prüfen“ mit URL — keinen Fantasiepreis.
+- Ordne jeden Treffer dem passenden Anbieter zu (URL, Shopname im Titel).
+- Unterscheide: Aktionspreis, UVP, „ab …“, Gebraucht/Refurbished — klar kennzeichnen.
+- Wenn die Datenlage als „begrenzt“ markiert ist: ehrlich sagen und nur Sicheres behaupten.
+- Versandkosten nur erwähnen, wenn in den Treffern genannt.
+- Sprache: Deutsch, sachlich, für schnelle Kaufentscheidung.
+
+Ausgabe in dieser Reihenfolge:
+
+## Was dieser Use Case macht
+2 Sätze: Produkt + zwei Anbieter eingeben — der Playground sucht iterativ im Web nach Preisen und erstellt einen Vergleich.
+
+## Kurzfazit
+1–3 Sätze: Wer wirkt günstiger? Wo ist die Datenlage dünn? Klarer Tipp oder „beide prüfen“.
+
+## Vergleichstabelle
+Markdown-Tabelle mit Spalten: **Anbieter** | **Preis (aus Treffern)** | **Hinweis** | **Quelle (Link)**.
+Nur Zeilen mit belastbaren Angaben — Lücken offen lassen statt raten.
+
+## Details pro Anbieter
+### Anbieter A
+Bullet-Liste: gefundene Preise, Konditionen, Auffälligkeiten — mit Quellenlinks.
+
+### Anbieter B
+Bullet-Liste — gleiches Format.
+
+## Empfehlung
+2–4 Sätze: Kaufempfehlung nur auf Basis der Daten — Alternativen nennen, wenn unklar.
+
+## Copy & Paste
+
+**Slack-/Teams-Kurzinfo**
+\`\`\`
+…
+\`\`\`
+
+**E-Mail an Kolleg:in / Einkauf**
+\`\`\`
+…
+\`\`\`
+
+## Quellen
+Nummerierte Liste der verwendeten URLs aus den Treffern.`;
+
 export const MEETING_PROTOCOL_SYSTEM_PROMPT = `Du bist ein erfahrener Protokollführer — für Agenturen, Unternehmen und private Gespräche gleichermaßen.
 
 Aufgabe: Aus Besprechungs-Transkripten (Rohtext, ggf. in Abschnitten [Abschnitt 1/2 …]) ein passendes Protokoll erstellen. **Format, Ton und Schwerpunkte leitest du aus dem Gesprächsinhalt ab** — nicht pauschal „Business“.
@@ -1312,6 +1387,34 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
         : "Erstelle das Wochenend-Programm mit den geladenen Daten.",
     sendButtonLabel: "Wochenende planen",
     prefersWeekendVisitData: true,
+    copyableOutput: true,
+  },
+  {
+    id: "price-compare",
+    category: "delivery",
+    icon: "💰",
+    title: "Preisvergleich",
+    subtitle: "2 Anbieter · Websuche",
+    description:
+      "Produkt und zwei Shops eingeben — der Playground sucht iterativ nach Preisen im Web und erstellt einen übersichtlichen Vergleich mit Quellen.",
+    modelId: MODEL_QWEN_35,
+    modelLabel: "Qwen3.5 122B + Websuche",
+    systemPrompt: PRICE_COMPARE_SYSTEM_PROMPT,
+    briefingFields: PRICE_COMPARE_BRIEFING_FIELDS,
+    composerPlaceholder:
+      "Optional: Schwerpunkte — z. B. „nur Neuware“, „mit Versand“, „Business-Lizenz“ …",
+    steps: [
+      "Produkt und zwei Anbieter im Briefing eintragen.",
+      "Iterative Websuche — bis genug Preis-Treffer für beide Anbieter da sind (max. 4 Runden).",
+      "KI-Vergleich mit Tabelle, Empfehlung und Copy-Texten zum Übernehmen.",
+    ],
+    formatSubmissionMessage: (text) =>
+      text.trim()
+        ? `Zusatz für den Preisvergleich:\n${text.trim()}`
+        : "Erstelle den Preisvergleich aus den geladenen Websuche-Treffern.",
+    sendButtonLabel: "Preise vergleichen",
+    prefersPriceCompareSearch: true,
+    isolatesWebSearchContext: true,
     copyableOutput: true,
   },
   {

@@ -183,6 +183,17 @@ export function PlaygroundUseCaseGuide({
         </p>
       ) : null}
 
+      {useCase.id === "price-compare" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-sky-200/80 bg-sky-50/80 px-3 py-2.5 font-medium text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+          <span className="mr-1.5" aria-hidden>
+            💰
+          </span>
+          <strong>Kurz:</strong> Produkt und <strong>zwei Anbieter</strong> eintragen — der Playground sucht in mehreren
+          Runden im Web nach Preisen (DuckDuckGo bzw. SerpAPI in Produktion), bis genug brauchbare Treffer da sind.
+          Danach erstellt die KI einen Vergleich — nur mit Fakten aus den Treffern, keine erfundenen Preise.
+        </p>
+      ) : null}
+
       {useCase.id === "feature-requests-feed" ? (
         <p className="playground-text-small mb-3 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-2.5 font-medium text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
           <span className="mr-1.5" aria-hidden>

@@ -24,6 +24,11 @@ import {
   prepareWeekendVisitCity,
 } from "./weekendVisitData.js";
 import {
+  countUsefulPriceResults,
+  isPriceCompareSufficient,
+  runPriceCompareSearchRound,
+} from "./priceCompareSearch.js";
+import {
   pickWebSearchQueryModel,
   synthesizeGoogleSearchQuery,
 } from "./webSearchQuerySynthesis.js";
@@ -506,6 +511,70 @@ async function main() {
           502,
           "weekend_visit_sources_failed",
           e instanceof Error ? e.message : "Wikipedia oder Wetter konnten nicht geladen werden.",
+        );
+      }
+    },
+  );
+
+  app.post(
+    "/api/price-compare/round",
+    featureRequestsLimiter,
+    express.json({ limit: 65536 }),
+    async (req, res) => {
+      const body = req.body ?? {};
+      const product = typeof body.product === "string" ? body.product.trim() : "";
+      const providerA = typeof body.providerA === "string" ? body.providerA.trim() : "";
+      const providerB = typeof body.providerB === "string" ? body.providerB.trim() : "";
+      const roundIndex = Number(body.roundIndex) || 0;
+      const priorResults = Array.isArray(body.priorResults) ? body.priorResults : [];
+
+      if (product.length < 2) {
+        return jsonError(res, 400, "price_compare_invalid", "Bitte ein Produkt angeben.");
+      }
+      if (providerA.length < 2 || providerB.length < 2) {
+        return jsonError(res, 400, "price_compare_invalid", "Bitte zwei Anbieter angeben.");
+      }
+
+      try {
+        const step = await runPriceCompareSearchRound({
+          product,
+          providerA,
+          providerB,
+          roundIndex,
+          excludeUrls: priorResults.map((r) => r?.url).filter(Boolean),
+        });
+
+        const seen = new Set(
+          priorResults.map((r) => String(r?.url ?? "").toLowerCase()).filter(Boolean),
+        );
+        const newResults = [];
+        for (const r of step.results) {
+          const key = String(r.url ?? "").toLowerCase();
+          if (!key || seen.has(key)) continue;
+          seen.add(key);
+          newResults.push({ ...r, searchRound: roundIndex + 1 });
+        }
+
+        const combined = [...priorResults, ...newResults];
+        const sufficient = isPriceCompareSufficient(combined, providerA, providerB);
+        const usefulCount = countUsefulPriceResults(combined);
+
+        res.json({
+          roundIndex,
+          queries: step.queries,
+          provider: step.provider,
+          newResults,
+          combined,
+          sufficient,
+          usefulCount,
+        });
+      } catch (e) {
+        console.error(e);
+        return jsonError(
+          res,
+          502,
+          "price_compare_round_failed",
+          e instanceof Error ? e.message : "Preisvergleich-Suche fehlgeschlagen.",
         );
       }
     },

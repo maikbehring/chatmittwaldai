@@ -68,7 +68,13 @@ import {
   type WeekendVisitData,
 } from "./weekendVisit";
 import {
+  formatPriceCompareContext,
+  searchPriceCompareIterative,
+  type PriceCompareSearchResponse,
+} from "./priceCompare";
+import {
   getAiHostingGuideProgressSteps,
+  getPriceCompareProgressSteps,
   getWeekendVisitProgressSteps,
   UseCaseProgressSteps,
 } from "./UseCaseProgressSteps";
@@ -179,6 +185,7 @@ export type ChatMessage = {
   mittwaldFeatureRequests?: MittwaldFeatureRequestsResponse;
   mittwaldAiHostingDocs?: MittwaldAiHostingDocsResponse;
   weekendVisitData?: WeekendVisitData;
+  priceCompareSearch?: PriceCompareSearchResponse;
   compare?: ModelComparePayload;
 };
 
@@ -430,6 +437,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
   featureRequestsPending,
   aiHostingDocsPending,
   weekendVisitPhase,
+  priceComparePhase,
+  priceCompareRound,
   webSearchProviderLabel,
   activeUseCaseId,
   onImageOpen,
@@ -440,6 +449,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
   featureRequestsPending?: boolean;
   aiHostingDocsPending?: boolean;
   weekendVisitPhase?: "prepare" | "sources" | "generate" | null;
+  priceComparePhase?: "search" | "generate" | null;
+  priceCompareRound?: { round: number; total: number } | null;
   webSearchProviderLabel?: string;
   activeUseCaseId?: PlaygroundUseCaseId | null;
   onImageOpen: (src: string, alt: string) => void;
@@ -448,6 +459,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
     return (
       <div className="flex w-full justify-end">
         <div className="flex w-full max-w-full flex-col items-end gap-1">
+          {message.priceCompareSearch && message.priceCompareSearch.results.length > 0 ? (
+            <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+              Preisvergleich · {message.priceCompareSearch.roundsCompleted}/
+              {message.priceCompareSearch.totalRounds} Runden · {message.priceCompareSearch.results.length} Treffer
+              {message.priceCompareSearch.sufficient ? " · ausreichend" : ""}
+            </p>
+          ) : null}
           {message.weekendVisitData ? (
             <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
               {message.weekendVisitData.city}
@@ -485,6 +503,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   const assistantPlain = assistantMessagePlainText(message.content).trim();
   const isAiHostingGuide = activeUseCaseId === "ai-hosting-guide";
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
+  const isPriceCompareUseCase = activeUseCaseId === "price-compare";
   const aiHostingGuideGenerating =
     isAiHostingGuide && streaming && assistantPlain.length === 0;
   const clientWeekendGenerating =
@@ -494,6 +513,10 @@ const ChatMessageRow = memo(function ChatMessageRow({
   const showWeekendVisitProgress =
     isClientWeekendUseCase &&
     (weekendVisitPhase != null || clientWeekendGenerating);
+  const priceCompareGenerating =
+    isPriceCompareUseCase && streaming && assistantPlain.length === 0 && priceComparePhase === "generate";
+  const showPriceCompareProgress =
+    isPriceCompareUseCase && (priceComparePhase === "search" || priceCompareGenerating);
   const showCopyActions =
     isCopyableUseCase(activeUseCaseId) &&
     !streaming &&
@@ -502,6 +525,8 @@ const ChatMessageRow = memo(function ChatMessageRow({
     !aiHostingDocsPending &&
     !aiHostingGuideGenerating &&
     !clientWeekendGenerating &&
+    !priceCompareGenerating &&
+    priceComparePhase == null &&
     weekendVisitPhase == null &&
     assistantPlain.length > 0;
 
@@ -530,6 +555,17 @@ const ChatMessageRow = memo(function ChatMessageRow({
               />
               Lade Feature Requests von GitHub …
             </p>
+          ) : showPriceCompareProgress ? (
+            <UseCaseProgressSteps
+              steps={getPriceCompareProgressSteps(
+                priceComparePhase === "search"
+                  ? priceCompareRound ?? { round: 1, total: 4 }
+                  : null,
+                priceCompareGenerating,
+              )}
+              ariaLabel="Preisvergleich — Fortschritt"
+              accentClassName="sky"
+            />
           ) : showWeekendVisitProgress ? (
             <UseCaseProgressSteps
               steps={getWeekendVisitProgressSteps(
@@ -654,6 +690,11 @@ export function App() {
   const [weekendVisitPhase, setWeekendVisitPhase] = useState<
     "prepare" | "sources" | "generate" | null
   >(null);
+  const [priceCompareSearchBusy, setPriceCompareSearchBusy] = useState(false);
+  const [priceCompareRound, setPriceCompareRound] = useState<{
+    round: number;
+    total: number;
+  } | null>(null);
   const [webSearchConsentOpen, setWebSearchConsentOpen] = useState(false);
   const [webSearchConsentGranted, setWebSearchConsentGranted] = useState(() =>
     hasWebSearchConsent(),
@@ -743,7 +784,7 @@ export function App() {
   /** Clipboard-Bild wie in ChatGPT (Capture: greift vor Textfeld, verhindert Müll-Einfügen bei Screenshots). */
   const handleComposerPasteCapture = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
-      if (busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || voiceRecording.active) {
+      if (busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy || voiceRecording.active) {
         return;
       }
       const items = e.clipboardData?.items;
@@ -761,7 +802,7 @@ export function App() {
         return;
       }
     },
-    [adjustInputHeight, busy, speechBusy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase, voiceRecording.active],
+    [adjustInputHeight, busy, speechBusy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase, priceCompareSearchBusy, voiceRecording.active],
   );
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -865,7 +906,7 @@ export function App() {
       return;
     }
 
-    if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase) {
+    if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy) {
       // Während des Streams / Websuche: sofort ans Ende — kein smooth, sonst kämpft die Animation
       // mit wachsendem Inhalt und der Text „springt“.
       const id = requestAnimationFrame(() => {
@@ -878,7 +919,7 @@ export function App() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
     return () => cancelAnimationFrame(id);
-  }, [messages, busy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase]);
+  }, [messages, busy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase, priceCompareSearchBusy]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -1061,6 +1102,7 @@ export function App() {
   const isModelCompareUseCase = activeUseCaseId === "model-compare";
   const isAiHostingGuideUseCase = activeUseCaseId === "ai-hosting-guide";
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
+  const isPriceCompareUseCase = activeUseCaseId === "price-compare";
   const aiHostingGuideComposerProgress = useMemo(() => {
     if (!isAiHostingGuideUseCase || messages.length === 0) return null;
     const last = messages[messages.length - 1];
@@ -1080,6 +1122,19 @@ export function App() {
       weekendVisitPhase ?? (generating ? "generate" : null),
     );
   }, [isClientWeekendUseCase, messages, weekendVisitPhase, busy]);
+  const priceCompareComposerProgress = useMemo(() => {
+    if (!isPriceCompareUseCase || messages.length === 0) return null;
+    if (!priceCompareSearchBusy && priceCompareRound == null && !busy) return null;
+    const last = messages[messages.length - 1];
+    if (last.role !== "assistant" || typeof last.content !== "string") return null;
+    const searching = priceCompareSearchBusy || priceCompareRound != null;
+    const generating = !searching && busy && last.content === "";
+    if (!searching && !generating) return null;
+    return getPriceCompareProgressSteps(
+      searching ? priceCompareRound ?? { round: 1, total: 4 } : null,
+      generating,
+    );
+  }, [isPriceCompareUseCase, messages, priceCompareRound, priceCompareSearchBusy, busy]);
   const ocrPipelineBusy = ocrProgress !== null;
 
   const speechTranscribing = speechBusy && !voiceRecording.active;
@@ -1119,6 +1174,7 @@ export function App() {
       !featureRequestsBusy &&
       !aiHostingDocsBusy &&
       !weekendVisitPhase &&
+      !priceCompareSearchBusy &&
       !voiceRecording.active &&
       !speechTranscribing &&
       !ocrPipelineBusy
@@ -1133,6 +1189,7 @@ export function App() {
     featureRequestsBusy,
     aiHostingDocsBusy,
     weekendVisitPhase,
+    priceCompareSearchBusy,
     voiceRecording.active,
     speechTranscribing,
     ocrPipelineBusy,
@@ -1213,15 +1270,17 @@ export function App() {
     setBusy(false);
     setWebSearchBusy(false);
     setWeekendVisitPhase(null);
+    setPriceCompareSearchBusy(false);
+    setPriceCompareRound(null);
   }, []);
 
   const changeModel = useCallback(
     (modelId: string) => {
-      if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase) stop();
+      if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy) stop();
       if (modelId !== model) setModel(modelId);
       applyPreset(modelId);
     },
-    [applyPreset, busy, model, stop, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase],
+    [applyPreset, busy, model, stop, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase, priceCompareSearchBusy],
   );
 
   useEffect(() => {
@@ -1474,7 +1533,7 @@ export function App() {
       ? imageFileRef.current !== null
       : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
-    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase))
+    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy))
       return;
     if (sendLockRef.current) return;
 
@@ -1918,6 +1977,7 @@ export function App() {
     let webSearchPayload: WebSearchResponse | undefined;
     const wantsWebSearch =
       !isModelCompareUseCase &&
+      !activeUseCase?.prefersPriceCompareSearch &&
       activeThreadWebSearch &&
       typeof userContent === "string" &&
       text.length > 0 &&
@@ -1964,14 +2024,39 @@ export function App() {
       return;
     }
 
+    const wantsPriceCompare =
+      activeUseCase?.prefersPriceCompareSearch &&
+      typeof userContent === "string" &&
+      !file;
+    const priceProduct = (briefingValues.produkt ?? "").trim();
+    const priceProviderA = (briefingValues.anbieter1 ?? "").trim();
+    const priceProviderB = (briefingValues.anbieter2 ?? "").trim();
+
+    if (wantsPriceCompare && priceProduct.length < 2) {
+      setAppError({
+        kind: "plain",
+        message: "Bitte ein Produkt im Briefing eintragen.",
+      });
+      return;
+    }
+    if (wantsPriceCompare && (priceProviderA.length < 2 || priceProviderB.length < 2)) {
+      setAppError({
+        kind: "plain",
+        message: "Bitte beide Anbieter im Briefing eintragen.",
+      });
+      return;
+    }
+
     let mittwaldFeatureRequestsPayload: MittwaldFeatureRequestsResponse | undefined;
     let mittwaldAiHostingDocsPayload: MittwaldAiHostingDocsResponse | undefined;
     let weekendVisitPayload: WeekendVisitData | undefined;
+    let priceComparePayload: PriceCompareSearchResponse | undefined;
 
     const wantsExternalPrefetch =
       wantsMittwaldFeatureRequests ||
       wantsMittwaldAiHostingDocs ||
       wantsWeekendVisit ||
+      wantsPriceCompare ||
       useWebSearch;
 
     if (wantsExternalPrefetch) {
@@ -2061,6 +2146,35 @@ export function App() {
       }
     }
 
+    if (wantsPriceCompare) {
+      setPriceCompareSearchBusy(true);
+      setPriceCompareRound({ round: 1, total: 4 });
+      try {
+        priceComparePayload = await searchPriceCompareIterative(
+          {
+            product: priceProduct,
+            providerA: priceProviderA,
+            providerB: priceProviderB,
+          },
+          {
+            signal: ctrl.signal,
+            rateLimits: playgroundRateLimits,
+            onRound: (round, total) => setPriceCompareRound({ round, total }),
+          },
+        );
+      } catch (e) {
+        setPriceCompareSearchBusy(false);
+        setPriceCompareRound(null);
+        setMessages(messagesBeforeSend);
+        if (isAbortError(e)) throw e;
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        return;
+      }
+      setPriceCompareSearchBusy(false);
+      setPriceCompareRound(null);
+    }
+
     if (useWebSearch) {
       if (!wantsExternalPrefetch) {
         const optimisticUser: ChatMessage = { role: "user", content: userContent };
@@ -2119,6 +2233,7 @@ export function App() {
         ? { mittwaldAiHostingDocs: mittwaldAiHostingDocsPayload }
         : {}),
       ...(weekendVisitPayload ? { weekendVisitData: weekendVisitPayload } : {}),
+      ...(priceComparePayload ? { priceCompareSearch: priceComparePayload } : {}),
     };
     const nextThread = [...messagesBeforeSend, userMessage];
 
@@ -2154,6 +2269,9 @@ export function App() {
           }
           if (weekendVisitPayload) {
             enriched = `${enriched}\n\n${formatWeekendVisitContext(weekendVisitPayload)}`;
+          }
+          if (priceComparePayload) {
+            enriched = `${enriched}\n\n${formatPriceCompareContext(priceComparePayload)}`;
           }
           if (webSearchPayload) {
             enriched = `${enriched}\n\n${formatWebSearchContext(webSearchPayload)}`;
@@ -2370,6 +2488,8 @@ export function App() {
       setBusy(false);
       setWebSearchBusy(false);
       setWeekendVisitPhase(null);
+      setPriceCompareSearchBusy(false);
+      setPriceCompareRound(null);
       abortRef.current = null;
       focusComposer();
     }
@@ -2654,7 +2774,7 @@ export function App() {
               value={model}
               onChange={(e) => changeModel(e.target.value)}
               title={
-                busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase
+                busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy
                   ? "Modell wechseln (bricht die laufende Anfrage ab)"
                   : isModelCompareUseCase
                     ? "Modell A"
@@ -2687,7 +2807,7 @@ export function App() {
                   className="playground-text-small max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-8 font-bold text-playground-muted outline-none hover:bg-playground-muted/5 focus-visible:ring-2 focus-visible:ring-playground-border sm:max-w-[min(100%,14rem)]"
                   value={compareModelB}
                   onChange={(e) => setCompareModelB(e.target.value)}
-                  disabled={busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy}
+                  disabled={busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || priceCompareSearchBusy}
                   title="Modell B"
                 >
                   {models.length === 0 ? (
@@ -2855,6 +2975,20 @@ export function App() {
                           ? weekendVisitPhase ?? (busy ? "generate" : null)
                           : null
                       }
+                      priceComparePhase={
+                        activeUseCaseId === "price-compare" &&
+                        m.role === "assistant" &&
+                        i === messages.length - 1 &&
+                        typeof m.content === "string" &&
+                        m.content === ""
+                          ? priceCompareSearchBusy || priceCompareRound
+                            ? "search"
+                            : busy
+                              ? "generate"
+                              : null
+                          : null
+                      }
+                      priceCompareRound={priceCompareRound}
                       webSearchProviderLabel={providerLabel(webSearchConfig)}
                       activeUseCaseId={activeUseCaseId}
                       onImageOpen={openImageLightbox}
@@ -2952,6 +3086,14 @@ export function App() {
                     Use Case beenden
                   </button>
                 </div>
+                {priceCompareComposerProgress ? (
+                  <UseCaseProgressSteps
+                    variant="compact"
+                    steps={priceCompareComposerProgress}
+                    ariaLabel="Preisvergleich — Fortschritt"
+                    accentClassName="sky"
+                  />
+                ) : null}
                 {clientWeekendComposerProgress ? (
                   <UseCaseProgressSteps
                     variant="compact"

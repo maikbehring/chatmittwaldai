@@ -53,6 +53,27 @@ export function getWeekendVisitProgressSteps(
   ];
 }
 
+export function getPriceCompareProgressSteps(
+  searchRound: { round: number; total: number } | null,
+  generating: boolean,
+): UseCaseProgressStep[] {
+  const searching = searchRound != null;
+  return [
+    {
+      id: "search",
+      label: searching
+        ? `Preise suchen (Runde ${searchRound.round}/${searchRound.total})`
+        : "Preise im Internet suchen",
+      status: searching ? "active" : generating ? "done" : "pending",
+    },
+    {
+      id: "compare",
+      label: "Vergleich mit KI erstellen",
+      status: searching ? "pending" : generating ? "active" : "pending",
+    },
+  ];
+}
+
 export function getAiHostingGuideProgressSteps(
   docsLoading: boolean,
   guideGenerating: boolean,
