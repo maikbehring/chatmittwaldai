@@ -1035,6 +1035,16 @@ export function App() {
 
   const speechTranscribing = speechBusy && !voiceRecording.active;
 
+  const focusComposer = useCallback(() => {
+    if (voiceRecording.active || speechTranscribing || ocrPipelineBusy) return;
+    window.requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus({ preventScroll: true });
+      adjustInputHeight();
+    });
+  }, [adjustInputHeight, ocrPipelineBusy, speechTranscribing, voiceRecording.active]);
+
   const composerPlaceholder = useMemo(() => {
     if (activeUseCase) return activeUseCase.composerPlaceholder;
     return isMobileLayout
@@ -1077,6 +1087,20 @@ export function App() {
     ocrPipelineBusy,
     isInvoiceOcrUseCase,
   ]);
+
+  const composerTextareaVisible =
+    !voiceRecording.active && !speechTranscribing && !ocrPipelineBusy;
+  const composerTextareaWasHiddenRef = useRef(false);
+  useEffect(() => {
+    if (!composerTextareaVisible) {
+      composerTextareaWasHiddenRef.current = true;
+      return;
+    }
+    if (composerTextareaWasHiddenRef.current) {
+      composerTextareaWasHiddenRef.current = false;
+      focusComposer();
+    }
+  }, [composerTextareaVisible, focusComposer]);
 
   const handleVoiceRecordingChange = useCallback((active: boolean, stream: MediaStream | null) => {
     setVoiceRecording({ active, stream });
@@ -1453,8 +1477,10 @@ export function App() {
 
       setInput("");
       setImageFile(null);
+      inputValueRef.current = "";
       setMessages([...nextThread, compareAssistant]);
       setBusy(true);
+      focusComposer();
 
       const hasVision =
         Array.isArray(userContent) &&
@@ -1623,6 +1649,7 @@ export function App() {
       } finally {
         setBusy(false);
         abortRef.current = null;
+        focusComposer();
       }
       return;
     }
@@ -1798,6 +1825,7 @@ export function App() {
         setBusy(false);
         setOcrProgress(null);
         abortRef.current = null;
+        focusComposer();
       }
       return;
     }
@@ -1853,6 +1881,8 @@ export function App() {
 
     setInput("");
     setImageFile(null);
+    inputValueRef.current = "";
+    focusComposer();
 
     const isolateWebSearch = useCaseIsolatesWebSearchContext(activeUseCase);
 
@@ -2240,6 +2270,7 @@ export function App() {
       setBusy(false);
       setWebSearchBusy(false);
       abortRef.current = null;
+      focusComposer();
     }
     } finally {
       sendLockRef.current = false;
@@ -2271,6 +2302,7 @@ export function App() {
     activeUseCaseId,
     requestEnableWebSearch,
     models,
+    focusComposer,
   ]);
 
   useEffect(() => {
@@ -2883,7 +2915,6 @@ export function App() {
                             placeholder={composerPlaceholder}
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            disabled={busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || ocrPipelineBusy}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
@@ -2968,6 +2999,7 @@ export function App() {
                             ) : null}
                             <button
                               type="button"
+                              onMouseDown={(e) => e.preventDefault()}
                               onClick={() => void send()}
                               disabled={!canSend}
                               className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-playground-send text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35"
@@ -3073,7 +3105,6 @@ export function App() {
                       placeholder={composerPlaceholder}
                       value={input}
                       onChange={(e) => setInput(e.target.value)}
-                      disabled={busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || ocrPipelineBusy}
                       onKeyDown={(e) => {
                         if (e.key === "Enter" && !e.shiftKey) {
                           e.preventDefault();
@@ -3106,6 +3137,7 @@ export function App() {
                   ) : (
                     <button
                       type="button"
+                      onMouseDown={(e) => e.preventDefault()}
                       onClick={() => void send()}
                       disabled={!canSend}
                       className={`flex shrink-0 items-center justify-center rounded-full bg-playground-send text-white hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-35 ${

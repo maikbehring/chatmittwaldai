@@ -62,6 +62,11 @@ export function isModelUnreachableError(e: unknown): boolean {
     msg.includes("econnrefused") ||
     msg.includes("etimedout") ||
     msg.includes("enotfound") ||
+    msg.includes("failed to fetch") ||
+    msg.includes("networkerror") ||
+    msg.includes("network error") ||
+    msg.includes("connection closed") ||
+    msg.includes("verbindung") ||
     /\b502\b/.test(msg) ||
     /\b503\b/.test(msg) ||
     /\b504\b/.test(msg) ||
