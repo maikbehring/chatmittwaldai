@@ -9,15 +9,23 @@ export default defineConfig(({ mode }) => {
   const repoRoot = path.resolve(__dirname, "..");
   const env = loadEnv(mode, repoRoot, "");
   const apiPort = env.PORT || "8787";
+  const rawBase =
+    env.VITE_APP_BASE_PATH?.trim() || (mode === "development" ? "/" : "/ai/");
+  const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
+  const baseNoSlash = base.replace(/\/$/, "");
+  const apiProxyPath = `${baseNoSlash}/api`;
 
   return {
+    base,
     plugins: [react()],
     server: {
       port: 5173,
       proxy: {
-        "/api": {
+        [apiProxyPath]: {
           target: `http://127.0.0.1:${apiPort}`,
           changeOrigin: true,
+          rewrite: (requestPath) =>
+            baseNoSlash ? requestPath.replace(new RegExp(`^${baseNoSlash}`), "") : requestPath,
           configure(proxy) {
             proxy.on("proxyRes", (proxyRes, _req, res) => {
               const ct = proxyRes.headers["content-type"];

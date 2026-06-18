@@ -1,3 +1,4 @@
+import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
@@ -39,7 +40,7 @@ export async function fetchPriceCompareRound(
   sufficient: boolean;
   usefulCount: number;
 }> {
-  const res = await fetch("/api/price-compare/round", {
+  const res = await fetch(apiUrl("/api/price-compare/round"), {
     method: "POST",
     headers: playgroundApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(args),
@@ -126,7 +127,7 @@ export async function fetchPriceCompareSearch(
   signal?: AbortSignal,
   rateLimits?: PlaygroundRateLimits | null,
 ): Promise<PriceCompareSearchResponse> {
-  const res = await fetch("/api/price-compare/search", {
+  const res = await fetch(apiUrl("/api/price-compare/search"), {
     method: "POST",
     headers: playgroundApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({

@@ -1,3 +1,4 @@
+import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 
@@ -53,7 +54,7 @@ export async function streamChatCompletion(
   signal: AbortSignal,
   rateLimits?: PlaygroundRateLimits | null,
 ): Promise<StreamTokenMeter | null> {
-  const res = await fetch("/api/chat/completions", {
+  const res = await fetch(apiUrl("/api/chat/completions"), {
     method: "POST",
     headers: playgroundApiHeaders({
       "Content-Type": "application/json",

@@ -1,3 +1,4 @@
+import { apiUrl } from "./appPaths";
 import {
   ensureOkApiResponse,
   type PlaygroundRateLimits,
@@ -17,7 +18,7 @@ async function transcribeWavBlob(
   rateLimits: PlaygroundRateLimits | null | undefined,
 ): Promise<string> {
   const audio = await blobToBase64(wav);
-  const res = await fetch("/api/audio/transcriptions", {
+  const res = await fetch(apiUrl("/api/audio/transcriptions"), {
     method: "POST",
     headers: playgroundApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({ audio, language }),

@@ -1,3 +1,4 @@
+import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
@@ -43,7 +44,7 @@ export async function fetchMittwaldAiHostingDocs(
   signal?: AbortSignal,
   rateLimits?: PlaygroundRateLimits | null,
 ): Promise<MittwaldAiHostingDocsResponse> {
-  const res = await fetch("/api/mittwald/ai-hosting-docs", {
+  const res = await fetch(apiUrl("/api/mittwald/ai-hosting-docs"), {
     headers: playgroundApiHeaders(),
     signal,
   });

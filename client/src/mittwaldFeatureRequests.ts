@@ -1,3 +1,4 @@
+import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
@@ -27,7 +28,7 @@ export async function fetchMittwaldFeatureRequests(
   signal?: AbortSignal,
   rateLimits?: PlaygroundRateLimits | null,
 ): Promise<MittwaldFeatureRequestsResponse> {
-  const res = await fetch("/api/mittwald/feature-requests?limit=10", {
+  const res = await fetch(apiUrl("/api/mittwald/feature-requests?limit=10"), {
     headers: playgroundApiHeaders(),
     signal,
   });

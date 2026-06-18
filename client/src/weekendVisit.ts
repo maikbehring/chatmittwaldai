@@ -1,3 +1,4 @@
+import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
@@ -57,7 +58,7 @@ export async function prepareWeekendVisitCity(
   rateLimits?: PlaygroundRateLimits | null,
 ): Promise<WeekendVisitPrepare> {
   const res = await fetch(
-    `/api/weekend-visit/prepare?city=${encodeURIComponent(city.trim())}`,
+    apiUrl(`/api/weekend-visit/prepare?city=${encodeURIComponent(city.trim())}`),
     { headers: playgroundApiHeaders(), signal },
   );
   await ensureOkApiResponse(res, rateLimits);
@@ -69,7 +70,7 @@ export async function fetchWeekendVisitSources(
   signal?: AbortSignal,
   rateLimits?: PlaygroundRateLimits | null,
 ): Promise<WeekendVisitSources> {
-  const res = await fetch("/api/weekend-visit/sources", {
+  const res = await fetch(apiUrl("/api/weekend-visit/sources"), {
     method: "POST",
     headers: playgroundApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify({

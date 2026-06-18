@@ -1,4 +1,5 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { apiUrl } from "./appPaths";
 import {
   getInferencePreset,
   getQwenVisionInference,
@@ -1009,8 +1010,8 @@ export function App() {
     (async () => {
       try {
         const [cfgRes, modRes] = await Promise.all([
-          fetch("/api/config"),
-          fetch("/api/models"),
+          fetch(apiUrl("/api/config")),
+          fetch(apiUrl("/api/models")),
         ]);
         if (cfgRes.ok) {
           const c = (await cfgRes.json()) as {

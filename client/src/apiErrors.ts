@@ -263,13 +263,14 @@ export function appErrorFromSendFailure(
   return appErrorFromUnknown(e, rateLimits);
 }
 
+import { apiUrl } from "./appPaths";
 import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 
 export async function grantBonusChatRequests(): Promise<{
   granted: number;
   remaining: number;
 }> {
-  const res = await fetch("/api/rate-limit/continue-testing", {
+  const res = await fetch(apiUrl("/api/rate-limit/continue-testing"), {
     method: "POST",
     headers: playgroundApiHeaders({ "Content-Type": "application/json" }),
   });
