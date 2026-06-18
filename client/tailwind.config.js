@@ -6,6 +6,7 @@ export default {
     extend: {
       fontFamily: {
         sans: [
+          "Inter Variable",
           "Inter",
           "ui-sans-serif",
           "system-ui",
@@ -16,6 +17,7 @@ export default {
           "sans-serif",
         ],
         display: [
+          "Inter Variable",
           "Inter",
           "Proxima Nova",
           "ui-sans-serif",
