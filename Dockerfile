@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:22-bookworm-slim AS base
+FROM --platform=linux/amd64 node:26-bookworm-slim AS base
 
 FROM base AS deps
 WORKDIR /app
