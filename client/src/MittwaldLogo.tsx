@@ -1,3 +1,5 @@
+import { assetUrl } from "./appPaths";
+
 type MittwaldLogoProps = {
   className?: string;
   /** sm: 24px · md: 32px · lg: 40px · xl: 48–56px */
@@ -14,7 +16,7 @@ const sizeClass: Record<NonNullable<MittwaldLogoProps["size"]>, string> = {
   xl: "h-10 w-auto sm:h-11",
 };
 
-const WORDMARK_LIGHT_SRC = "/brand/mittwald-wordmark-light.png";
+const WORDMARK_LIGHT_SRC = assetUrl("brand/mittwald-wordmark-light.png");
 
 function MittwaldMarkSvg({
   className,

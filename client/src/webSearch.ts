@@ -1,3 +1,4 @@
+import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
@@ -92,7 +93,7 @@ export async function fetchWebSearch(
     body.directQueries = args.directQueries;
   }
 
-  const res = await fetch("/api/web/search", {
+  const res = await fetch(apiUrl("/api/web/search"), {
     method: "POST",
     headers: playgroundApiHeaders({ "Content-Type": "application/json" }),
     body: JSON.stringify(body),

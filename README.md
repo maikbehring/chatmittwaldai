@@ -91,7 +91,7 @@ Standard-Port: **8787** (`PORT` in `.env`). Für öffentliche URLs: Reverse-Prox
 
 ### Deploy auf mittwald Container Hosting
 
-Für eine öffentliche URL (z. B. `https://ki-playground.mittwald.app`) liegt im Repo ein **`Dockerfile`** — Build und Start in einem Prozess (Express + `client/dist`).
+Für eine öffentliche URL (z. B. `https://playground.mittwald.de/ai`) liegt im Repo ein **`Dockerfile`** — Build und Start in einem Prozess (Express + `client/dist`). Der Playground ist für den Unterpfad **`/ai`** konfiguriert (`VITE_APP_BASE_PATH=/ai/`).
 
 **Kurzablauf:**
 

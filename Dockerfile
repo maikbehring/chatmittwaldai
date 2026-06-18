@@ -13,6 +13,7 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY package.json package-lock.json ./
 COPY client ./client
 COPY server ./server
+ENV VITE_APP_BASE_PATH=/ai/
 RUN npm run build
 
 FROM base AS runner
