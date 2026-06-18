@@ -19,6 +19,7 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+ENV PLAYGROUND_BASE_PATH=/ai
 RUN chown -R node:node /app
 USER node
 COPY --from=builder --chown=node:node /app/package.json /app/package-lock.json ./

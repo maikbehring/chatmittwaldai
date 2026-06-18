@@ -16,6 +16,7 @@ import {
   grantBonusChat,
   shouldSkipChatRateLimit,
 } from "./playgroundBonus.js";
+import { createBasePathStripMiddleware, normalizePlaygroundBasePath } from "./playgroundBasePath.js";
 import { getWebSearchConfig, searchWeb, searchWebMulti } from "./webSearch.js";
 import { fetchMittwaldFeatureRequests } from "./mittwaldFeatureRequests.js";
 import { fetchMittwaldAiHostingDocs } from "./mittwaldAiHostingDocs.js";
@@ -62,6 +63,7 @@ const MAX_BODY_BYTES = Math.min(
   25 * 1024 * 1024,
 );
 const BRAND_TITLE = process.env.PLAYGROUND_BRAND_TITLE || "Mittwald KI-Playground";
+const PLAYGROUND_BASE_PATH = normalizePlaygroundBasePath(process.env.PLAYGROUND_BASE_PATH);
 const CORS_ORIGIN = process.env.CORS_ORIGIN || "http://localhost:5173";
 const TRUST_PROXY = process.env.TRUST_PROXY === "1";
 const APP_API_KEY = process.env.PLAYGROUND_APP_API_KEY?.trim() || "";
@@ -262,6 +264,7 @@ async function main() {
 
   const app = express();
   if (TRUST_PROXY) app.set("trust proxy", 1);
+  app.use(createBasePathStripMiddleware(PLAYGROUND_BASE_PATH));
 
   if (process.env.NODE_ENV === "production" && hasWildcardOrigin(CORS_ORIGIN)) {
     console.error(
@@ -888,6 +891,9 @@ async function main() {
 
   const server = app.listen(PORT, HOST, () => {
     console.log(`Playground-Server läuft auf http://${HOST}:${PORT}`);
+    if (PLAYGROUND_BASE_PATH) {
+      console.log(`Öffentlicher Basis-Pfad: ${PLAYGROUND_BASE_PATH}`);
+    }
     if (fs.existsSync(staticDir)) {
       console.log(`Statische Dateien: ${staticDir}`);
     } else {
