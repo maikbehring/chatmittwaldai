@@ -15,6 +15,7 @@ export type PlaygroundUseCaseId =
   | "ai-hosting-guide"
   | "client-weekend"
   | "price-compare"
+  | "audio-transcribe"
   | "meeting-protocol"
   | "dev-debug"
   | "invoice-ocr"
@@ -61,6 +62,8 @@ export type PlaygroundUseCase = {
   prefersImage?: boolean;
   /** PDF oder Bild per + — z. B. Rechnungs-OCR (PDF wird clientseitig gerendert). */
   prefersDocument?: boolean;
+  /** Audiodatei per + — lange Transkription mit automatischen Whisper-Chunks. */
+  prefersAudioFile?: boolean;
   /** Kopier-Buttons über Assistenten-Antworten (Codeblöcke). */
   copyableOutput?: boolean;
   /** Zwei Modelle parallel vergleichen (Modell A = Header, B = zweites Dropdown). */
@@ -76,6 +79,8 @@ export type PlaygroundUseCase = {
   defaultCompareModelB?: string;
   /** Fallback, wenn das Primärmodell nicht erreichbar ist (z. B. Qwen3.6 → Qwen3.5). */
   fallbackModelId?: string;
+  /** Als experimentell markieren (Badge in Karte, Guide und Chat-Status). */
+  experimental?: boolean;
 };
 
 export type PlaygroundBriefingField = {
@@ -183,6 +188,7 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "ai-hosting-guide",
   "client-weekend",
   "price-compare",
+  "audio-transcribe",
   "meeting-protocol",
   "dev-debug",
   "invoice-ocr",
@@ -914,6 +920,35 @@ Bullet-Liste — gleiches Format.
 ## Quellen
 Nummerierte Liste der verwendeten URLs aus den Treffern.`;
 
+export const AUDIO_TRANSCRIBE_SYSTEM_PROMPT = `Du formatierst Rohtranskripte von Whisper (Speech-to-Text) aus Audiodateien.
+
+Aufgabe: Aus dem gelieferten Rohtext ein **lesbares, vollständiges Transkript** erstellen — ohne Inhalte wegzulassen oder zu erfinden.
+
+Wichtig:
+- Mehrere **[Abschnitt N]**-Blöcke stammen aus automatischer Aufteilung langer Aufnahmen — in der **richtigen Reihenfolge** zu einem Fließtext zusammenführen.
+- Rechtschreibung, Satzzeichen und Absätze glätten; offensichtliche Whisper-Artefakte korrigieren.
+- **Keine** Zusammenfassung statt Volltext — der Nutzer will das komplette Transkript.
+- Sprecher nur benennen, wenn im Rohtext erkennbar — keine erfundene Dialogstruktur.
+- Sprache wie im Audio (Standard: Deutsch).
+
+Ausgabe in dieser Reihenfolge:
+
+## Transkript
+Vollständiger bereinigter Text in einem Codeblock zum Kopieren:
+
+\`\`\`
+…
+\`\`\`
+
+## Hinweise zur Qualität
+2–4 kurze Bullets: z. B. erkannte Abschnittsanzahl, auffällige Lücken, sehr leise Passagen — nur wenn aus dem Text erkennbar.
+
+## Optional: Kurzfassung
+Nur wenn der Nutzer in den Hinweisen explizit eine Zusammenfassung wünscht — sonst Abschnitt weglassen oder „— nicht angefordert —“.
+
+## Rohtranskript (Referenz)
+Optional kompakt: Anzahl Zeichen/Wörter, ob alle Abschnitte zusammengeführt wurden.`;
+
 export const MEETING_PROTOCOL_SYSTEM_PROMPT = `Du bist ein erfahrener Protokollführer — für Agenturen, Unternehmen und private Gespräche gleichermaßen.
 
 Aufgabe: Aus Besprechungs-Transkripten (Rohtext, ggf. in Abschnitten [Abschnitt 1/2 …]) ein passendes Protokoll erstellen. **Format, Ton und Schwerpunkte leitest du aus dem Gesprächsinhalt ab** — nicht pauschal „Business“.
@@ -1472,6 +1507,33 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     prefersPriceCompareSearch: true,
     isolatesWebSearchContext: true,
     copyableOutput: true,
+  },
+  {
+    id: "audio-transcribe",
+    category: "delivery",
+    icon: "🎙️",
+    title: "Audio transkribieren",
+    subtitle: "Datei · Whisper · Auto-Chunks",
+    description:
+      "Lange Audiodatei (MP3, WAV, …) hochladen — Whisper transkribiert automatisch in Abschnitten (~14 min), Qwen bereinigt den Volltext zum Kopieren.",
+    modelId: MODEL_QWEN_35,
+    modelLabel: "Whisper + Qwen3.5 122B",
+    systemPrompt: AUDIO_TRANSCRIBE_SYSTEM_PROMPT,
+    composerPlaceholder:
+      "Optional: Hinweise — z. B. „englisch“, „nur bereinigen, nicht kürzen“, „mit Kurzfassung“ …",
+    steps: [
+      "Audiodatei per + anhängen (auch ~30 min und länger).",
+      "„Transkribieren“ — automatische Aufteilung in Whisper-Chunks, Fortschritt pro Abschnitt.",
+      "Bereinigtes Volltranskript im Codeblock kopieren.",
+    ],
+    formatSubmissionMessage: (text) =>
+      text.trim()
+        ? `Zusatz-Hinweise zur Transkription:\n${text.trim()}`
+        : "Bereinige das Rohtranskript zu einem vollständigen Fließtext.",
+    sendButtonLabel: "Transkribieren",
+    prefersAudioFile: true,
+    copyableOutput: true,
+    experimental: true,
   },
   {
     id: "meeting-protocol",

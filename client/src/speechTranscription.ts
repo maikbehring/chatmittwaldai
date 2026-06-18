@@ -9,7 +9,9 @@ import { blobToBase64, blobToWav16Chunks } from "./blobToWav";
 export type TranscribeProgress = {
   chunk: number;
   total: number;
-  phase: "segment" | "chunk";
+  phase: "segment" | "prepare" | "chunk";
+  chunkDurationSeconds?: number;
+  chunkBytes?: number;
 };
 
 async function transcribeWavBlob(
@@ -42,14 +44,31 @@ export async function transcribeAudioBlob(
     onProgress?: (progress: TranscribeProgress) => void;
   },
 ): Promise<string> {
-  const wavChunks = await blobToWav16Chunks(raw);
+  const wavChunks = await blobToWav16Chunks(raw, {
+    maxChunkBytes: Math.floor(options.maxAudioBytes * 0.92),
+  });
+
+  options.onProgress?.({
+    chunk: 0,
+    total: wavChunks.length,
+    phase: "prepare",
+  });
+
   const parts: string[] = [];
 
   for (let i = 0; i < wavChunks.length; i++) {
-    options.onProgress?.({ chunk: i + 1, total: wavChunks.length, phase: "chunk" });
-    const wav = wavChunks[i];
+    const { blob: wav, durationSeconds } = wavChunks[i];
+    options.onProgress?.({
+      chunk: i + 1,
+      total: wavChunks.length,
+      phase: "chunk",
+      chunkDurationSeconds: durationSeconds,
+      chunkBytes: wav.size,
+    });
     if (wav.size > options.maxAudioBytes) {
-      throw new Error("Aufnahme-Abschnitt ist zu groß. Bitte kürzer aufnehmen.");
+      throw new Error(
+        "Audio-Abschnitt überschreitet das Server-Limit. Bitte eine kürzere Datei oder geringere Qualität verwenden.",
+      );
     }
     const text = await transcribeWavBlob(wav, options.language, options.rateLimits);
     parts.push(

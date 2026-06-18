@@ -13,6 +13,8 @@ type Props = {
   accentClassName?: string;
   /** Kompakte Zeile für Composer-/Status-Leiste */
   variant?: "full" | "compact";
+  /** Zusatzzeile unter dem aktiven Schritt (z. B. Chunk-Details). */
+  detail?: string | null;
 };
 
 const ACCENT_BAR: Record<string, string> = {
@@ -49,6 +51,39 @@ export function getWeekendVisitProgressSteps(
       id: "generate",
       label: "Wochenend-Ideen mit KI",
       status: sourcesActive ? "pending" : generateActive ? "active" : "pending",
+    },
+  ];
+}
+
+export function getAudioTranscribeProgressSteps(
+  transcribing: boolean,
+  formatting: boolean,
+  chunk?: { current: number; total: number } | null,
+  preparing?: boolean,
+): UseCaseProgressStep[] {
+  let transcribeLabel = "Audiodatei transkribieren";
+  if (preparing) {
+    transcribeLabel = "Audio dekodieren & Abschnitte planen";
+  } else if (transcribing) {
+    if (chunk && chunk.total > 1) {
+      transcribeLabel = `Whisper transkribiert (Abschnitt ${chunk.current}/${chunk.total})`;
+    } else {
+      transcribeLabel = "Whisper transkribiert";
+    }
+  } else if (formatting) {
+    transcribeLabel = "Whisper-Transkript fertig";
+  }
+
+  return [
+    {
+      id: "transcribe",
+      label: transcribeLabel,
+      status: preparing || transcribing ? "active" : formatting ? "done" : "pending",
+    },
+    {
+      id: "format",
+      label: formatting ? "Qwen bereinigt Volltranskript" : "Transkript mit Qwen bereinigen",
+      status: preparing || transcribing ? "pending" : formatting ? "active" : "pending",
     },
   ];
 }
@@ -112,6 +147,7 @@ export function UseCaseProgressSteps({
   ariaLabel = "Fortschritt",
   accentClassName = "violet",
   variant = "full",
+  detail = null,
 }: Props) {
   const { total, activeIndex, activeStep, progressPct, stepLabel } =
     useProgressMetrics(steps);
@@ -134,6 +170,9 @@ export function UseCaseProgressSteps({
             {stepLabel}/{total}
           </p>
         </div>
+        {detail ? (
+          <p className="playground-text-tiny mb-1 min-w-0 text-playground-muted/90">{detail}</p>
+        ) : null}
         <div
           className="h-1 w-full overflow-hidden rounded-full bg-neutral-200 dark:bg-neutral-800"
           aria-hidden

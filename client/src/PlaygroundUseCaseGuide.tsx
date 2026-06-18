@@ -2,6 +2,7 @@ import { MITTWALD_FEATURE_REQUEST_URL, type PlaygroundUseCase } from "./playgrou
 import { MODEL_GPT_OSS } from "./modelPresets";
 import { WHISPER_CHUNK_MAX_SECONDS } from "./blobToWav";
 import { OCR_MAX_PAGES } from "./pdfToOcrImages";
+import { UseCaseExperimentalBadge } from "./UseCaseExperimentalBadge";
 
 type Props = {
   useCase: PlaygroundUseCase;
@@ -43,7 +44,10 @@ export function PlaygroundUseCaseGuide({
           <div>
             <p className="playground-text-small font-bold text-playground-muted">{useCase.subtitle}</p>
             <h2 className="playground-text-lead font-display font-semibold text-playground-ink">
-              {useCase.title}
+              <span className="inline-flex flex-wrap items-center gap-2">
+                {useCase.title}
+                {useCase.experimental ? <UseCaseExperimentalBadge /> : null}
+              </span>
             </h2>
             <p className="playground-text-tiny mt-0.5 font-medium text-playground-muted">
               Modell: {useCase.modelLabel}
@@ -124,6 +128,17 @@ export function PlaygroundUseCaseGuide({
           <strong>PDF oder Bild</strong> per <strong className="text-playground-ink">+</strong> anhängen.
           PDFs werden im Browser in Bilder umgewandelt (bessere Kopfzeilen-Erkennung als PDF-Upload direkt an
           GLM-OCR). Bis {OCR_MAX_PAGES} Seiten.
+        </p>
+      ) : null}
+
+      {useCase.prefersAudioFile ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-sky-200/80 bg-sky-50/80 px-3 py-2.5 font-medium text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
+          <span className="mr-1.5" aria-hidden>
+            🎙️
+          </span>
+          <strong>Audiodatei</strong> (MP3, WAV, FLAC, OGG, …) per{" "}
+          <strong className="text-playground-ink">+</strong> anhängen. Lange Aufnahmen (~30 min und mehr) werden
+          automatisch in Abschnitte geteilt und mit <strong>Whisper</strong> transkribiert.
         </p>
       ) : null}
 
