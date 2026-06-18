@@ -14,6 +14,28 @@ export async function blobToWav16(blob: Blob): Promise<Blob> {
 /** Whisper-Limit ~20 min — Chunks mit Sicherheitsmarge (Sekunden). */
 export const WHISPER_CHUNK_MAX_SECONDS = 14 * 60;
 
+const WAV_HEADER_BYTES = 44;
+
+/** Maximale Chunk-Länge in Sekunden, sodass WAV ≤ maxBytes bleibt (Stereo/48 kHz-sicher). */
+export function maxWavChunkSecondsForAudioBuffer(
+  buffer: AudioBuffer,
+  maxBytes: number,
+  maxSecondsCap = WHISPER_CHUNK_MAX_SECONDS,
+): number {
+  const bytesPerFrame = buffer.numberOfChannels * 2;
+  if (bytesPerFrame <= 0 || buffer.sampleRate <= 0) return maxSecondsCap;
+  const maxDataBytes = Math.max(maxBytes - WAV_HEADER_BYTES, bytesPerFrame);
+  const maxFrames = Math.floor(maxDataBytes / bytesPerFrame);
+  const maxSecBySize = maxFrames / buffer.sampleRate;
+  return Math.max(1, Math.min(maxSecondsCap, maxSecBySize));
+}
+
+export type BlobToWav16ChunksOptions = {
+  maxChunkSeconds?: number;
+  /** WAV-Rohgröße pro Chunk (z. B. Server-Limit aus /api/config). */
+  maxChunkBytes?: number;
+};
+
 function sliceAudioBuffer(
   ctx: AudioContext,
   buffer: AudioBuffer,
@@ -27,24 +49,43 @@ function sliceAudioBuffer(
   return sliced;
 }
 
-/** Teilt Audio in WAV-Chunks ≤ maxChunkSeconds (für Whisper-Transkription). */
+export type Wav16Chunk = {
+  blob: Blob;
+  durationSeconds: number;
+};
+
+/** Teilt Audio in WAV-Chunks ≤ maxChunkSeconds und optional ≤ maxChunkBytes. */
 export async function blobToWav16Chunks(
   blob: Blob,
-  maxChunkSeconds = WHISPER_CHUNK_MAX_SECONDS,
-): Promise<Blob[]> {
+  options: BlobToWav16ChunksOptions = {},
+): Promise<Wav16Chunk[]> {
+  const maxChunkSeconds = options.maxChunkSeconds ?? WHISPER_CHUNK_MAX_SECONDS;
+  const maxChunkBytes = options.maxChunkBytes;
   const ctx = new AudioContext();
   try {
     const arrayBuf = await blob.arrayBuffer();
     const audioBuffer = await ctx.decodeAudioData(arrayBuf.slice(0));
-    const maxFrames = Math.floor(maxChunkSeconds * audioBuffer.sampleRate);
+    const effectiveMaxSeconds =
+      maxChunkBytes != null
+        ? maxWavChunkSecondsForAudioBuffer(audioBuffer, maxChunkBytes, maxChunkSeconds)
+        : maxChunkSeconds;
+    const maxFrames = Math.floor(effectiveMaxSeconds * audioBuffer.sampleRate);
     if (audioBuffer.length <= maxFrames) {
-      return [new Blob([encodeWav16(audioBuffer)], { type: "audio/wav" })];
+      return [
+        {
+          blob: new Blob([encodeWav16(audioBuffer)], { type: "audio/wav" }),
+          durationSeconds: audioBuffer.duration,
+        },
+      ];
     }
-    const chunks: Blob[] = [];
+    const chunks: Wav16Chunk[] = [];
     for (let start = 0; start < audioBuffer.length; start += maxFrames) {
       const length = Math.min(maxFrames, audioBuffer.length - start);
       const sliced = sliceAudioBuffer(ctx, audioBuffer, start, length);
-      chunks.push(new Blob([encodeWav16(sliced)], { type: "audio/wav" }));
+      chunks.push({
+        blob: new Blob([encodeWav16(sliced)], { type: "audio/wav" }),
+        durationSeconds: length / audioBuffer.sampleRate,
+      });
     }
     return chunks;
   } finally {

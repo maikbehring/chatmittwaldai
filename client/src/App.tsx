@@ -14,6 +14,7 @@ import {
 } from "./modelPresets";
 import { PlaygroundUseCaseCards } from "./PlaygroundUseCaseCards";
 import { PlaygroundUseCaseGuide } from "./PlaygroundUseCaseGuide";
+import { UseCaseExperimentalBadge } from "./UseCaseExperimentalBadge";
 import { ModelCompareMessageRow } from "./ModelCompareMessageRow";
 import {
   buildCompareApiMessages,
@@ -22,6 +23,17 @@ import {
   modelShortLabel,
   type ModelComparePayload,
 } from "./modelCompare";
+import {
+  audioAttachmentLabel,
+  AUDIO_FILE_ACCEPT,
+  audioTranscribeStatusLine,
+  buildAudioTranscribeStructureUserMessage,
+  formatAudioTranscribeProgressDetail,
+  isAudioUploadFile,
+  transcribeUploadedAudioFile,
+  type AudioTranscribeProgressState,
+} from "./audioFileTranscription";
+import { getBlobDurationSeconds } from "./blobToWav";
 import {
   fileToOcrPageImages,
   ocrAttachmentLabel,
@@ -75,6 +87,7 @@ import {
 } from "./priceCompare";
 import {
   getAiHostingGuideProgressSteps,
+  getAudioTranscribeProgressSteps,
   getPriceCompareProgressSteps,
   getWeekendVisitProgressSteps,
   UseCaseProgressSteps,
@@ -626,6 +639,12 @@ export function App() {
   const [speechTranscribeStatus, setSpeechTranscribeStatus] = useState<string | null>(null);
   const [compareModelB, setCompareModelB] = useState(MODEL_QWEN_36);
   const [ocrProgress, setOcrProgress] = useState<string | null>(null);
+  const [audioTranscribePhase, setAudioTranscribePhase] = useState<
+    "transcribe" | "format" | null
+  >(null);
+  const [audioTranscribeProgress, setAudioTranscribeProgress] =
+    useState<AudioTranscribeProgressState | null>(null);
+  const [audioFileDurationSec, setAudioFileDurationSec] = useState<number | null>(null);
   const [voiceRecording, setVoiceRecording] = useState<{
     active: boolean;
     stream: MediaStream | null;
@@ -1079,6 +1098,10 @@ export function App() {
       setImagePreview(null);
       return;
     }
+    if (isAudioUploadFile(imageFile)) {
+      setImagePreview(null);
+      return;
+    }
     const isPdf =
       imageFile.type === "application/pdf" ||
       imageFile.name.toLowerCase().endsWith(".pdf");
@@ -1091,6 +1114,24 @@ export function App() {
     return () => URL.revokeObjectURL(url);
   }, [imageFile]);
 
+  useEffect(() => {
+    if (!imageFile || !isAudioUploadFile(imageFile)) {
+      setAudioFileDurationSec(null);
+      return;
+    }
+    let cancelled = false;
+    void getBlobDurationSeconds(imageFile)
+      .then((d) => {
+        if (!cancelled) setAudioFileDurationSec(d);
+      })
+      .catch(() => {
+        if (!cancelled) setAudioFileDurationSec(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [imageFile]);
+
   const attachmentIsPdf = useMemo(() => {
     if (!imageFile) return false;
     return (
@@ -1099,7 +1140,13 @@ export function App() {
     );
   }, [imageFile]);
 
+  const attachmentIsAudio = useMemo(
+    () => (imageFile ? isAudioUploadFile(imageFile) : false),
+    [imageFile],
+  );
+
   const isInvoiceOcrUseCase = activeUseCaseId === "invoice-ocr";
+  const isAudioTranscribeUseCase = activeUseCaseId === "audio-transcribe";
   const isModelCompareUseCase = activeUseCaseId === "model-compare";
   const isAiHostingGuideUseCase = activeUseCaseId === "ai-hosting-guide";
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
@@ -1136,19 +1183,63 @@ export function App() {
       generating,
     );
   }, [isPriceCompareUseCase, messages, priceCompareRound, priceCompareSearchBusy, busy]);
+  const audioTranscribeComposerProgress = useMemo(() => {
+    if (!isAudioTranscribeUseCase || messages.length === 0) return null;
+    if (audioTranscribePhase == null && !busy) return null;
+    const last = messages[messages.length - 1];
+    if (last.role !== "assistant" || typeof last.content !== "string") return null;
+    const preparing = audioTranscribeProgress?.phase === "prepare";
+    const transcribing =
+      audioTranscribePhase === "transcribe" && audioTranscribeProgress?.phase !== "prepare";
+    const formatting =
+      audioTranscribePhase === "format" ||
+      (!transcribing && !preparing && busy && last.content === "");
+    if (!preparing && !transcribing && !formatting) return null;
+    const chunk =
+      audioTranscribeProgress?.chunk != null && audioTranscribeProgress.total != null
+        ? { current: audioTranscribeProgress.chunk, total: audioTranscribeProgress.total }
+        : null;
+    return getAudioTranscribeProgressSteps(transcribing, formatting, chunk, preparing);
+  }, [
+    isAudioTranscribeUseCase,
+    messages,
+    audioTranscribePhase,
+    audioTranscribeProgress,
+    busy,
+  ]);
+  const audioTranscribeProgressDetail = useMemo(
+    () => formatAudioTranscribeProgressDetail(audioTranscribeProgress, audioTranscribePhase),
+    [audioTranscribeProgress, audioTranscribePhase],
+  );
   const ocrPipelineBusy = ocrProgress !== null;
+  const audioPipelineBusy = audioTranscribePhase !== null;
+  const attachmentPipelineBusy = ocrPipelineBusy || audioPipelineBusy;
+  const attachmentPipelineStatus = audioPipelineBusy
+    ? audioTranscribeProgress
+      ? audioTranscribeStatusLine(audioTranscribeProgress)
+      : speechTranscribeStatus ??
+        (audioTranscribePhase === "format"
+          ? "Qwen bereinigt Volltranskript …"
+          : "Transkribiere …")
+    : ocrProgress ?? "Rechnung wird verarbeitet …";
+
+  const composerFileAccept = useMemo(() => {
+    if (activeUseCase?.prefersAudioFile) return AUDIO_FILE_ACCEPT;
+    if (activeUseCase?.prefersDocument) return "image/*,application/pdf,.pdf";
+    return "image/*";
+  }, [activeUseCase?.prefersAudioFile, activeUseCase?.prefersDocument]);
 
   const speechTranscribing = speechBusy && !voiceRecording.active;
 
   const focusComposer = useCallback(() => {
-    if (voiceRecording.active || speechTranscribing || ocrPipelineBusy) return;
+    if (voiceRecording.active || speechTranscribing || ocrPipelineBusy || audioPipelineBusy) return;
     window.requestAnimationFrame(() => {
       const el = inputRef.current;
       if (!el) return;
       el.focus({ preventScroll: true });
       adjustInputHeight();
     });
-  }, [adjustInputHeight, ocrPipelineBusy, speechTranscribing, voiceRecording.active]);
+  }, [adjustInputHeight, ocrPipelineBusy, audioPipelineBusy, speechTranscribing, voiceRecording.active]);
 
   const composerPlaceholder = useMemo(() => {
     if (activeUseCase) return activeUseCase.composerPlaceholder;
@@ -1161,13 +1252,18 @@ export function App() {
 
   const composerTall = input.includes("\n");
 
-  const showSpeechInComposer = speechToText?.enabled;
+  const showSpeechInComposer =
+    speechToText?.enabled && !activeUseCase?.prefersAudioFile;
 
   const canSend = useMemo(() => {
     const t = input.trim();
     const hasFile = imageFile !== null;
     const hasBriefing = hasBriefingContent(activeUseCase?.briefingFields, briefingValues);
-    const contentOk = isInvoiceOcrUseCase ? hasFile : hasBriefing || t.length > 0 || hasFile;
+    const contentOk = isInvoiceOcrUseCase
+      ? hasFile
+      : isAudioTranscribeUseCase
+        ? attachmentIsAudio
+        : hasBriefing || t.length > 0 || hasFile;
     return (
       contentOk &&
       !busy &&
@@ -1178,7 +1274,8 @@ export function App() {
       !priceCompareSearchBusy &&
       !voiceRecording.active &&
       !speechTranscribing &&
-      !ocrPipelineBusy
+      !ocrPipelineBusy &&
+      !audioPipelineBusy
     );
   }, [
     input,
@@ -1194,11 +1291,14 @@ export function App() {
     voiceRecording.active,
     speechTranscribing,
     ocrPipelineBusy,
+    audioPipelineBusy,
     isInvoiceOcrUseCase,
+    isAudioTranscribeUseCase,
+    attachmentIsAudio,
   ]);
 
   const composerTextareaVisible =
-    !voiceRecording.active && !speechTranscribing && !ocrPipelineBusy;
+    !voiceRecording.active && !speechTranscribing && !ocrPipelineBusy && !audioPipelineBusy;
   const composerTextareaWasHiddenRef = useRef(false);
   useEffect(() => {
     if (!composerTextareaVisible) {
@@ -1529,12 +1629,15 @@ export function App() {
   const send = useCallback(async (options?: { force?: boolean }) => {
     const textNow = inputValueRef.current.trim();
     const invoiceOcr = activeUseCaseId === "invoice-ocr";
+    const audioTranscribe = activeUseCaseId === "audio-transcribe";
     const hasBriefing = hasBriefingContent(activeUseCase?.briefingFields, briefingValues);
     const hasContent = invoiceOcr
       ? imageFileRef.current !== null
-      : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
+      : audioTranscribe
+        ? imageFileRef.current !== null && isAudioUploadFile(imageFileRef.current)
+        : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
-    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy))
+    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy || ocrPipelineBusy || audioPipelineBusy))
       return;
     if (sendLockRef.current) return;
 
@@ -1760,6 +1863,202 @@ export function App() {
         });
       } finally {
         setBusy(false);
+        abortRef.current = null;
+        focusComposer();
+      }
+      return;
+    }
+
+    if (audioTranscribe) {
+      if (!file || !isAudioUploadFile(file)) {
+        setAppError({
+          kind: "plain",
+          message: "Bitte eine Audiodatei (MP3, WAV, FLAC, OGG, …) per + anhängen.",
+        });
+        return;
+      }
+      if (!speechToText?.enabled) {
+        setAppError({
+          kind: "plain",
+          message: "Spracheingabe/Whisper ist auf diesem Server nicht aktiv.",
+        });
+        return;
+      }
+
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      const userNotes = text;
+      const fileLabel = audioAttachmentLabel(file, audioFileDurationSec);
+
+      setInput("");
+      setImageFile(null);
+      setAudioFileDurationSec(null);
+
+      const userDisplay =
+        userNotes.length > 0
+          ? `${userNotes}\n\n🎙️ ${fileLabel}`
+          : `Audio transkribieren: ${fileLabel}`;
+
+      const userMessage: ChatMessage = { role: "user", content: userDisplay };
+      const nextThread = [...messagesBeforeSend, userMessage];
+      setMessages([...nextThread, { role: "assistant", content: "" }]);
+      setBusy(true);
+      setAudioTranscribePhase("transcribe");
+      setAudioTranscribeProgress(null);
+      setSpeechTranscribeStatus(null);
+
+      const streamStart = performance.now();
+      let firstContentAt: number | null = null;
+      const deltaBatch = createRafStreamBatcher((chunk) => {
+        if (chunk.length > 0) firstContentAt ??= performance.now();
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+          const prevText = typeof last.content === "string" ? last.content : "";
+          const copy = prev.slice();
+          copy[copy.length - 1] = { role: "assistant", content: prevText + chunk };
+          return copy;
+        });
+      });
+
+      try {
+        const { transcript } = await transcribeUploadedAudioFile(file, {
+          language: speechToText.language,
+          maxAudioBytes: speechToText.maxAudioBytes,
+          rateLimits: playgroundRateLimits,
+          signal: ctrl.signal,
+          onProgress: (state) => {
+            setAudioTranscribeProgress(state);
+            setSpeechTranscribeStatus(audioTranscribeStatusLine(state));
+          },
+        });
+
+        setAudioTranscribePhase("format");
+        setAudioTranscribeProgress({
+          phase: "format",
+          message: "Qwen bereinigt Volltranskript",
+        });
+        setSpeechTranscribeStatus("Qwen bereinigt Volltranskript …");
+
+        const structureUserText = buildAudioTranscribeStructureUserMessage(
+          transcript,
+          userNotes,
+          fileLabel,
+        );
+
+        let apiMessages: ApiMessage[] = [
+          { role: "system", content: formatPlaygroundTodayContext() },
+        ];
+        if (systemPrompt.trim().length > 0) {
+          apiMessages.push({ role: "system", content: systemPrompt.trim() });
+        }
+        for (const m of nextThread) {
+          apiMessages.push(
+            m === userMessage
+              ? { role: "user", content: structureUserText }
+              : m,
+          );
+        }
+
+        const { messages: trimmedApiMessages, trimmedCount } = trimMessagesForApi(
+          apiMessages,
+          maxMessages,
+        );
+        apiMessages = trimmedApiMessages;
+        if (trimmedCount > 0) {
+          setContextTrimNotice(
+            `Langer Chatverlauf: ${trimmedCount} ältere Nachricht${trimmedCount === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}). „Clear chat“ setzt den Verlauf zurück.`,
+          );
+        } else {
+          setContextTrimNotice(null);
+        }
+
+        const qwenPreset = getInferencePreset(model);
+        const body: Record<string, unknown> = {
+          model,
+          messages: apiMessages,
+          temperature: qwenPreset.temperature,
+          stream: true,
+          stream_options: { include_usage: true },
+        };
+        if (typeof qwenPreset.topP === "number") body.top_p = qwenPreset.topP;
+        if (typeof qwenPreset.topK === "number") body.top_k = qwenPreset.topK;
+        if (typeof qwenPreset.presencePenalty === "number") {
+          body.presence_penalty = qwenPreset.presencePenalty;
+        }
+        if (qwenPreset.extraBody) body.extra_body = qwenPreset.extraBody;
+        const cap = qwenPreset.maxTokens ?? 8192;
+        body.max_tokens = maxTokens === null ? cap : Math.min(maxTokens, cap);
+
+        const usageSnap = await streamChatCompletion(
+          body,
+          (delta) => {
+            if (delta.length > 0) deltaBatch.push(delta);
+          },
+          ctrl.signal,
+          playgroundRateLimits,
+        );
+        deltaBatch.flush();
+
+        const streamEnd = performance.now();
+        const genSec =
+          firstContentAt != null
+            ? Math.max((streamEnd - firstContentAt) / 1000, 0.001)
+            : Math.max((streamEnd - streamStart) / 1000, 0.001);
+        const hasApiCounts =
+          usageSnap != null &&
+          (usageSnap.promptTokens != null || usageSnap.completionTokens != null);
+
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+          const len = assistantPlainTextLength(last.content);
+          const roughOutTok = Math.max(1, Math.ceil(len / 4));
+          let outputTokensPerSec: number | null = null;
+          const comp = usageSnap?.completionTokens;
+          if (typeof comp === "number") {
+            outputTokensPerSec = Math.round((comp / genSec) * 10) / 10;
+          } else if (len > 0) {
+            outputTokensPerSec = Math.round((roughOutTok / genSec) * 10) / 10;
+          }
+          const co2Grams = hasApiCounts
+            ? estimateInferenceCo2Grams(
+                usageSnap?.promptTokens ?? 0,
+                usageSnap?.completionTokens ?? 0,
+                model,
+              )
+            : estimateInferenceCo2Grams(0, roughOutTok, model);
+          copy[copy.length - 1] = {
+            ...last,
+            usage: {
+              promptTokens: usageSnap?.promptTokens ?? null,
+              completionTokens: usageSnap?.completionTokens ?? null,
+              outputTokensPerSec,
+              generationSeconds: genSec,
+              co2Grams,
+              source: hasApiCounts ? "api" : "heuristic",
+            },
+          };
+          return copy;
+        });
+      } catch (e) {
+        deltaBatch.cancel();
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.content === "") {
+            return prev.slice(0, -1);
+          }
+          return prev;
+        });
+      } finally {
+        setBusy(false);
+        setAudioTranscribePhase(null);
+        setAudioTranscribeProgress(null);
+        setSpeechTranscribeStatus(null);
         abortRef.current = null;
         focusComposer();
       }
@@ -3057,7 +3356,11 @@ export function App() {
                       {activeUseCase.icon}
                     </span>
                     <span>
-                      Use Case: <span className="font-bold">{activeUseCase.title}</span>
+                      Use Case:{" "}
+                      <span className="inline-flex flex-wrap items-center gap-1.5">
+                        <span className="font-bold">{activeUseCase.title}</span>
+                        {activeUseCase.experimental ? <UseCaseExperimentalBadge /> : null}
+                      </span>
                       <span className="text-playground-muted">
                         {" "}
                         ·{" "}
@@ -3111,6 +3414,15 @@ export function App() {
                     accentClassName="violet"
                   />
                 ) : null}
+                {audioTranscribeComposerProgress ? (
+                  <UseCaseProgressSteps
+                    variant="compact"
+                    steps={audioTranscribeComposerProgress}
+                    detail={audioTranscribeProgressDetail}
+                    ariaLabel="Audio transkribieren — Fortschritt"
+                    accentClassName="emerald"
+                  />
+                ) : null}
               </div>
             ) : null}
             {imageFile && (
@@ -3124,8 +3436,19 @@ export function App() {
                   >
                     PDF
                   </span>
+                ) : attachmentIsAudio ? (
+                  <span
+                    className="flex h-9 shrink-0 items-center rounded-lg bg-playground-muted/10 px-2.5 font-medium text-playground-ink ring-1 ring-playground-border"
+                    aria-hidden
+                  >
+                    🎙️
+                  </span>
                 ) : null}
-                <span className="min-w-0 truncate text-playground-muted">{imageFile.name}</span>
+                <span className="min-w-0 truncate text-playground-muted">
+                  {attachmentIsAudio
+                    ? audioAttachmentLabel(imageFile, audioFileDurationSec)
+                    : imageFile.name}
+                </span>
                 <button type="button" className="shrink-0 underline" onClick={() => setImageFile(null)} disabled={busy}>
                   Anhang entfernen
                 </button>
@@ -3142,7 +3465,7 @@ export function App() {
                     config={webSearchConfig}
                     active={activeThreadWebSearch}
                     searching={webSearchBusy}
-                    disabled={busy || voiceRecording.active || speechTranscribing || ocrPipelineBusy}
+                    disabled={busy || voiceRecording.active || speechTranscribing || attachmentPipelineBusy}
                     onDeactivate={() => setActiveThreadWebSearch(false)}
                   />
                   {isMobileLayout ? (
@@ -3157,12 +3480,12 @@ export function App() {
                       <div className="w-full min-w-0 px-3 pt-2.5">
                         {voiceRecording.active ? (
                           <SpeechWaveform stream={voiceRecording.stream} compact />
-                        ) : ocrPipelineBusy ? (
+                        ) : attachmentPipelineBusy ? (
                           <p
                             className="playground-text-small min-w-0 py-1 font-medium text-playground-muted"
                             role="status"
                           >
-                            {ocrProgress ?? "Rechnung wird verarbeitet …"}
+                            {attachmentPipelineStatus}
                           </p>
                         ) : speechTranscribing ? (
                           <SpeechTranscribingIndicator />
@@ -3188,7 +3511,7 @@ export function App() {
                       <div className="flex min-w-0 items-center gap-0.5 px-2 pb-2 pt-1">
                         <label
                           className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-playground-ink hover:bg-playground-muted/5 ${
-                            voiceRecording.active || speechTranscribing || ocrPipelineBusy
+                            voiceRecording.active || speechTranscribing || attachmentPipelineBusy
                               ? "pointer-events-none opacity-40"
                               : ""
                           }`}
@@ -3196,11 +3519,7 @@ export function App() {
                           <span className="text-xl font-light leading-none">+</span>
                           <input
                             type="file"
-                            accept={
-                              activeUseCase?.prefersDocument
-                                ? "image/*,application/pdf,.pdf"
-                                : "image/*"
-                            }
+                            accept={composerFileAccept}
                             className="hidden"
                             disabled={busy}
                             onChange={(e) => {
@@ -3215,7 +3534,7 @@ export function App() {
                           active={activeThreadWebSearch}
                           searching={webSearchBusy}
                           disabled={
-                            busy || voiceRecording.active || speechTranscribing || ocrPipelineBusy
+                            busy || voiceRecording.active || speechTranscribing || attachmentPipelineBusy
                           }
                           onToggle={toggleThreadWebSearch}
                           compact
@@ -3285,7 +3604,7 @@ export function App() {
                   >
                   <label
                     className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-playground-ink hover:bg-playground-muted/5 sm:h-9 sm:w-9 ${
-                      voiceRecording.active || speechTranscribing || ocrPipelineBusy
+                      voiceRecording.active || speechTranscribing || attachmentPipelineBusy
                         ? "pointer-events-none opacity-40"
                         : ""
                     }`}
@@ -3293,11 +3612,7 @@ export function App() {
                     <span className="text-lg font-light leading-none sm:text-xl">+</span>
                     <input
                       type="file"
-                      accept={
-                        activeUseCase?.prefersDocument
-                          ? "image/*,application/pdf,.pdf"
-                          : "image/*"
-                      }
+                      accept={composerFileAccept}
                       className="hidden"
                       disabled={busy}
                       onChange={(e) => {
@@ -3311,7 +3626,7 @@ export function App() {
                     config={webSearchConfig}
                     active={activeThreadWebSearch}
                     searching={webSearchBusy}
-                    disabled={busy || voiceRecording.active || speechTranscribing || ocrPipelineBusy}
+                    disabled={busy || voiceRecording.active || speechTranscribing || attachmentPipelineBusy}
                     onToggle={toggleThreadWebSearch}
                     compact={false}
                   />
@@ -3345,12 +3660,12 @@ export function App() {
                         onConfirm={() => speechInputRef.current?.stopRecording()}
                       />
                     </>
-                  ) : ocrPipelineBusy ? (
+                  ) : attachmentPipelineBusy ? (
                     <p
                       className="playground-text-small min-w-0 flex-1 px-1 font-medium text-playground-muted"
                       role="status"
                     >
-                      {ocrProgress ?? "Rechnung wird verarbeitet …"}
+                      {attachmentPipelineStatus}
                     </p>
                   ) : speechTranscribing ? (
                     <SpeechTranscribingIndicator />
