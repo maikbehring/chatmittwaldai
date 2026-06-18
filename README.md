@@ -249,6 +249,7 @@ Wenn der Playground **für alle** erreichbar sein soll — wie eine Demo zum Aus
 
 ## Datenschutz & Sicherheit (Kurz)
 
+- Chats liegen **nur im localStorage** des jeweiligen Browsers (inkl. mehrerer Threads, Websuche pro Chat, Websuche-Einwilligung).
 - **Schrift Inter** wird **selbst gehostet** (npm-Paket, kein Abruf von Google Fonts / fonts.googleapis.com).
 - Der **API-Key** (mittwald, ggf. SerpAPI/Serper) liegt nur in der Server-Umgebung (`.env`), nicht im Frontend.
 - Anfragen gehen über euren **Proxy** an mittwald; Inhalte unterliegen auch der [mittwald-Dokumentation](https://developer.mittwald.de/de/docs/v2/platform/aihosting/).
