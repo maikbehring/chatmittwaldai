@@ -69,7 +69,7 @@ body {
 }
 
 .playground-text-new-chat {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   font-size: 14px;
   font-weight: 500;
   font-style: normal;
@@ -89,7 +89,7 @@ body {
 }
 
 .playground-text-hero {
-  font-family: Inter, "Proxima Nova", ui-sans-serif, system-ui, sans-serif;
+  font-family: "Inter Variable", Inter, "Proxima Nova", ui-sans-serif, system-ui, sans-serif;
   font-size: clamp(1.5rem, calc(52 / 1920 * 100vw), 2.75rem);
   font-weight: 600;
   font-style: normal;
@@ -133,7 +133,7 @@ body {
 }
 
 .playground-text-user-prompt {
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-family: "Inter Variable", Inter, ui-sans-serif, system-ui, sans-serif;
   font-size: clamp(0.875rem, calc(15 / 1920 * 100vw), 1rem);
   font-weight: 500;
   font-style: normal;
