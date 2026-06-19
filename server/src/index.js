@@ -83,6 +83,18 @@ const SELF_HOST_REPO_URL = "https://github.com/maikbehring/chatmittwaldai";
 const WHISPER_MODEL =
   process.env.PLAYGROUND_WHISPER_MODEL || "whisper-large-v3-turbo";
 const WHISPER_LANGUAGE = process.env.PLAYGROUND_WHISPER_LANGUAGE || "de";
+const EMBEDDING_MODEL =
+  process.env.PLAYGROUND_EMBEDDING_MODEL || "Qwen3-Embedding-8B";
+const RERANK_MODEL =
+  process.env.PLAYGROUND_RERANK_MODEL || "Qwen3-VL-Reranker-2B";
+const SEMANTIC_SEARCH_MAX_PASSAGES = Math.min(
+  Math.max(Number(process.env.PLAYGROUND_SEMANTIC_SEARCH_MAX_PASSAGES || 20), 2),
+  30,
+);
+const SEMANTIC_SEARCH_MAX_PASSAGE_CHARS = Math.min(
+  Math.max(Number(process.env.PLAYGROUND_SEMANTIC_SEARCH_MAX_PASSAGE_CHARS || 2000), 200),
+  8000,
+);
 const MAX_AUDIO_BYTES = Math.min(
   Math.max(Number(process.env.PLAYGROUND_MAX_AUDIO_BYTES || 25 * 1024 * 1024), 1024),
   25 * 1024 * 1024,
@@ -389,6 +401,12 @@ async function main() {
         model: WHISPER_MODEL,
         language: WHISPER_LANGUAGE,
         maxAudioBytes: MAX_AUDIO_BYTES,
+      },
+      semanticSearch: {
+        enabled: true,
+        embeddingModel: EMBEDDING_MODEL,
+        rerankModel: RERANK_MODEL,
+        maxPassages: SEMANTIC_SEARCH_MAX_PASSAGES,
       },
       webSearch: getWebSearchConfig(),
       links: getPlaygroundLinks(),
@@ -761,6 +779,166 @@ async function main() {
         });
       } catch {
         return jsonError(res, 502, "bad_upstream", "Ungültige Whisper-Antwort.");
+      }
+    },
+  );
+
+  const semanticSearchLimiter = rateLimit({
+    windowMs: RATE_WINDOW_MS,
+    max: RATE_MAX_CHAT,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: shouldSkipPublicRateLimit,
+    handler: createRateLimitHandler("chat"),
+  });
+
+  function normalizeEmbeddingInputs(raw) {
+    if (typeof raw === "string") {
+      const t = raw.trim();
+      return t ? [t] : [];
+    }
+    if (!Array.isArray(raw)) return [];
+    return raw
+      .map((item) => (typeof item === "string" ? item.trim() : ""))
+      .filter(Boolean)
+      .slice(0, SEMANTIC_SEARCH_MAX_PASSAGES);
+  }
+
+  app.post(
+    "/api/embeddings",
+    requireApiKey,
+    requireAllowedOrigin,
+    semanticSearchLimiter,
+    express.json({ limit: "4mb" }),
+    async (req, res) => {
+      const inputs = normalizeEmbeddingInputs(req.body?.input);
+      if (inputs.length === 0) {
+        return jsonError(res, 400, "validation_error", "input (String oder Array) fehlt.");
+      }
+      for (const item of inputs) {
+        if (item.length > SEMANTIC_SEARCH_MAX_PASSAGE_CHARS) {
+          return jsonError(
+            res,
+            400,
+            "validation_error",
+            `Text zu lang (max. ${SEMANTIC_SEARCH_MAX_PASSAGE_CHARS} Zeichen pro Eintrag).`,
+          );
+        }
+      }
+
+      const model =
+        typeof req.body?.model === "string" && req.body.model.trim()
+          ? req.body.model.trim()
+          : EMBEDDING_MODEL;
+
+      let upstream;
+      try {
+        upstream = await fetch(`${BASE_URL}/embeddings`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resolveUpstreamApiKey(req, API_KEY)}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify({
+            model,
+            input: inputs.length === 1 ? inputs[0] : inputs,
+            encoding_format: "float",
+          }),
+        });
+      } catch (e) {
+        console.error(e);
+        return jsonError(res, 502, "upstream_unreachable", "Verbindung zur Embedding-API fehlgeschlagen.");
+      }
+
+      const text = await upstream.text();
+      if (!upstream.ok) {
+        return jsonError(
+          res,
+          upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502,
+          "upstream_error",
+          summarizeUpstreamError(text),
+        );
+      }
+
+      try {
+        return res.json(JSON.parse(text));
+      } catch {
+        return jsonError(res, 502, "bad_upstream", "Ungültige Embedding-Antwort.");
+      }
+    },
+  );
+
+  app.post(
+    "/api/rerank",
+    requireApiKey,
+    requireAllowedOrigin,
+    semanticSearchLimiter,
+    express.json({ limit: "4mb" }),
+    async (req, res) => {
+      const query = typeof req.body?.query === "string" ? req.body.query.trim() : "";
+      if (query.length < 3) {
+        return jsonError(res, 400, "validation_error", "query fehlt oder ist zu kurz.");
+      }
+      if (query.length > SEMANTIC_SEARCH_MAX_PASSAGE_CHARS) {
+        return jsonError(res, 400, "validation_error", "query ist zu lang.");
+      }
+
+      const documents = normalizeEmbeddingInputs(req.body?.documents);
+      if (documents.length < 1) {
+        return jsonError(res, 400, "validation_error", "documents (Array) fehlt.");
+      }
+      if (documents.length > SEMANTIC_SEARCH_MAX_PASSAGES) {
+        return jsonError(
+          res,
+          400,
+          "validation_error",
+          `Zu viele Dokumente (max. ${SEMANTIC_SEARCH_MAX_PASSAGES}).`,
+        );
+      }
+
+      const model =
+        typeof req.body?.model === "string" && req.body.model.trim()
+          ? req.body.model.trim()
+          : RERANK_MODEL;
+      const instruction =
+        typeof req.body?.instruction === "string" && req.body.instruction.trim()
+          ? req.body.instruction.trim()
+          : undefined;
+
+      const payload = { model, query, documents };
+      if (instruction) payload.instruction = instruction;
+
+      let upstream;
+      try {
+        upstream = await fetch(`${BASE_URL}/rerank`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resolveUpstreamApiKey(req, API_KEY)}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch (e) {
+        console.error(e);
+        return jsonError(res, 502, "upstream_unreachable", "Verbindung zur Rerank-API fehlgeschlagen.");
+      }
+
+      const text = await upstream.text();
+      if (!upstream.ok) {
+        return jsonError(
+          res,
+          upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502,
+          "upstream_error",
+          summarizeUpstreamError(text),
+        );
+      }
+
+      try {
+        return res.json(JSON.parse(text));
+      } catch {
+        return jsonError(res, 502, "bad_upstream", "Ungültige Rerank-Antwort.");
       }
     },
   );

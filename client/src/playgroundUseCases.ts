@@ -15,6 +15,7 @@ export type PlaygroundUseCaseId =
   | "ai-hosting-guide"
   | "client-weekend"
   | "price-compare"
+  | "semantic-search"
   | "audio-transcribe"
   | "meeting-protocol"
   | "dev-debug"
@@ -53,6 +54,8 @@ export type PlaygroundUseCase = {
   prefersWeekendVisitData?: boolean;
   /** Iterative Websuche für Preisvergleich (Produkt × zwei Anbieter). */
   prefersPriceCompareSearch?: boolean;
+  /** Embedding + Rerank + Qwen-Antwort aus Textpassagen. */
+  prefersSemanticSearch?: boolean;
   sendButtonLabel?: string;
   prefersSpeech?: boolean;
   /** Langaufnahme: Whisper-Chunks alle ~14 min (Besprechungen >20 min). */
@@ -188,6 +191,7 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "ai-hosting-guide",
   "client-weekend",
   "price-compare",
+  "semantic-search",
   "audio-transcribe",
   "meeting-protocol",
   "dev-debug",
@@ -920,6 +924,34 @@ Bullet-Liste — gleiches Format.
 ## Quellen
 Nummerierte Liste der verwendeten URLs aus den Treffern.`;
 
+export const SEMANTIC_SEARCH_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
+  {
+    id: "passagen",
+    label: "Textpassagen (je Absatz eine, Leerzeile dazwischen)",
+    placeholder:
+      "Passage 1 …\n\nPassage 2 …\n\n(mindestens 2, maximal 20 Absätze — Demo-Texte sind vorausgefüllt)",
+    rows: 10,
+  },
+];
+
+export const SEMANTIC_SEARCH_SYSTEM_PROMPT = `Du beantwortest Fragen auf Basis von vorab ausgewählten Textpassagen (nach Embedding + Reranking).
+
+Regeln:
+- Nutze **nur** die gelieferten Passagen — nichts erfinden.
+- Wenn die Passagen die Frage nicht vollständig beantworten, sage das klar.
+- Kurz und sachlich auf Deutsch.
+- Die Vergleichstabelle **Embedding vs. Reranking** steht bereits in der Antwort — wiederhole sie nicht.
+
+Ausgabeformat:
+
+## Antwort
+2–6 Sätze oder kurze Bullet-Liste — nur Inhalt aus den Passagen.
+
+## Kurzfassung zum Kopieren
+\`\`\`
+…
+\`\`\``;
+
 export const AUDIO_TRANSCRIBE_SYSTEM_PROMPT = `Du formatierst Rohtranskripte von Whisper (Speech-to-Text) aus Audiodateien.
 
 Aufgabe: Aus dem gelieferten Rohtext ein **lesbares, vollständiges Transkript** erstellen — ohne Inhalte wegzulassen oder zu erfinden.
@@ -1507,6 +1539,29 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     prefersPriceCompareSearch: true,
     isolatesWebSearchContext: true,
     copyableOutput: true,
+  },
+  {
+    id: "semantic-search",
+    category: "delivery",
+    icon: "🔎",
+    title: "Semantische Suche",
+    subtitle: "Embed · Rerank · Demo",
+    description:
+      "Textpassagen + Frage — Qwen3-Embedding findet Kandidaten, Qwen3-VL-Reranker sortiert präzise, Qwen antwortet. Vergleichstabelle Embed vs. Rerank inklusive.",
+    modelId: MODEL_QWEN_35,
+    modelLabel: "Embedding + Rerank + Qwen3.5",
+    systemPrompt: SEMANTIC_SEARCH_SYSTEM_PROMPT,
+    briefingFields: SEMANTIC_SEARCH_BRIEFING_FIELDS,
+    composerPlaceholder: "Deine Frage — z. B. „Wie sind die Zahlungsbedingungen?“",
+    steps: [
+      "Demo-Texte sind vorausgefüllt — oder eigene Passagen einfügen (Leerzeile zwischen Absätzen).",
+      "Frage stellen → Embeddings, Vektorsuche (Top 10), Rerank (Top 3), dann KI-Antwort.",
+      "Tabelle Embed vs. Rerank und Antwort kopieren.",
+    ],
+    sendButtonLabel: "Suchen",
+    prefersSemanticSearch: true,
+    copyableOutput: true,
+    experimental: true,
   },
   {
     id: "audio-transcribe",

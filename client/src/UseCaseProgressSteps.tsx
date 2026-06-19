@@ -55,6 +55,52 @@ export function getWeekendVisitProgressSteps(
   ];
 }
 
+export function getSemanticSearchProgressSteps(
+  phase: "embed" | "retrieve" | "rerank" | "answer" | null,
+): UseCaseProgressStep[] {
+  const order = ["embed", "retrieve", "rerank", "answer"] as const;
+  const phaseIndex = phase ? order.indexOf(phase) : -1;
+  const statusFor = (step: (typeof order)[number]): UseCaseProgressStepStatus => {
+    const idx = order.indexOf(step);
+    if (phaseIndex < 0) return "pending";
+    if (idx < phaseIndex) return "done";
+    if (idx === phaseIndex) return "active";
+    return "pending";
+  };
+
+  return [
+    {
+      id: "embed",
+      label:
+        phase === "embed"
+          ? "Embeddings (Qwen3-Embedding-8B)"
+          : "Embeddings erzeugen",
+      status: statusFor("embed"),
+    },
+    {
+      id: "retrieve",
+      label:
+        phase === "retrieve"
+          ? "Vektorsuche (Cosine, Top 10)"
+          : "Vektorsuche",
+      status: statusFor("retrieve"),
+    },
+    {
+      id: "rerank",
+      label:
+        phase === "rerank"
+          ? "Rerank (Qwen3-VL-Reranker-2B)"
+          : "Reranking",
+      status: statusFor("rerank"),
+    },
+    {
+      id: "answer",
+      label: phase === "answer" ? "Antwort mit Qwen" : "Antwort generieren",
+      status: statusFor("answer"),
+    },
+  ];
+}
+
 export function getAudioTranscribeProgressSteps(
   transcribing: boolean,
   formatting: boolean,

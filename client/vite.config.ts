@@ -14,10 +14,26 @@ export default defineConfig(({ mode }) => {
   const base = rawBase.endsWith("/") ? rawBase : `${rawBase}/`;
   const baseNoSlash = base.replace(/\/$/, "");
   const apiProxyPath = `${baseNoSlash}/api`;
+  const umamiWebsiteId = env.VITE_UMAMI_WEBSITE_ID?.trim() || "";
+  const umamiScriptSrc =
+    env.VITE_UMAMI_SCRIPT_SRC?.trim() || "https://cloud.umami.is/script.js";
 
   return {
     base,
-    plugins: [react()],
+    plugins: [
+      react(),
+      {
+        name: "inject-umami",
+        transformIndexHtml(html) {
+          if (!umamiWebsiteId) return html;
+          if (!/^https:\/\/.+/i.test(umamiScriptSrc) || /["'<>]/.test(umamiScriptSrc)) {
+            return html;
+          }
+          const tag = `    <script defer src="${umamiScriptSrc}" data-website-id="${umamiWebsiteId}"></script>\n`;
+          return html.replace("</head>", `${tag}  </head>`);
+        },
+      },
+    ],
     server: {
       port: 5173,
       proxy: {

@@ -14,6 +14,8 @@ COPY package.json package-lock.json ./
 COPY client ./client
 COPY server ./server
 ENV VITE_APP_BASE_PATH=/ai/
+ENV VITE_UMAMI_SCRIPT_SRC=https://cloud.umami.is/script.js
+ENV VITE_UMAMI_WEBSITE_ID=423e42f0-9310-4efa-9a0d-30d8e0437c5f
 RUN npm run build
 
 FROM base AS runner
