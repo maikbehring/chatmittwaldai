@@ -86,9 +86,19 @@ import {
   type PriceCompareSearchResponse,
 } from "./priceCompare";
 import {
+  formatSemanticSearchPassagesText,
+  parseSemanticSearchPassages,
+  runSemanticSearchPipeline,
+  SEMANTIC_SEARCH_DEMO_PASSAGES,
+  SEMANTIC_SEARCH_DEMO_QUESTION,
+  type SemanticSearchPhase,
+  type SemanticSearchProgress,
+} from "./semanticSearch";
+import {
   getAiHostingGuideProgressSteps,
   getAudioTranscribeProgressSteps,
   getPriceCompareProgressSteps,
+  getSemanticSearchProgressSteps,
   getWeekendVisitProgressSteps,
   UseCaseProgressSteps,
 } from "./UseCaseProgressSteps";
@@ -644,6 +654,10 @@ export function App() {
   >(null);
   const [audioTranscribeProgress, setAudioTranscribeProgress] =
     useState<AudioTranscribeProgressState | null>(null);
+  const [semanticSearchPhase, setSemanticSearchPhase] =
+    useState<SemanticSearchPhase | null>(null);
+  const [semanticSearchProgress, setSemanticSearchProgress] =
+    useState<SemanticSearchProgress | null>(null);
   const [audioFileDurationSec, setAudioFileDurationSec] = useState<number | null>(null);
   const [voiceRecording, setVoiceRecording] = useState<{
     active: boolean;
@@ -1151,6 +1165,7 @@ export function App() {
   const isAiHostingGuideUseCase = activeUseCaseId === "ai-hosting-guide";
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
   const isPriceCompareUseCase = activeUseCaseId === "price-compare";
+  const isSemanticSearchUseCase = activeUseCaseId === "semantic-search";
   const aiHostingGuideComposerProgress = useMemo(() => {
     if (!isAiHostingGuideUseCase || messages.length === 0) return null;
     const last = messages[messages.length - 1];
@@ -1183,6 +1198,15 @@ export function App() {
       generating,
     );
   }, [isPriceCompareUseCase, messages, priceCompareRound, priceCompareSearchBusy, busy]);
+  const semanticSearchComposerProgress = useMemo(() => {
+    if (!isSemanticSearchUseCase || messages.length === 0) return null;
+    if (semanticSearchPhase == null && !busy) return null;
+    const last = messages[messages.length - 1];
+    if (last.role !== "assistant" || typeof last.content !== "string") return null;
+    if (!semanticSearchPhase && !(busy && last.content.length > 0)) return null;
+    return getSemanticSearchProgressSteps(semanticSearchPhase);
+  }, [isSemanticSearchUseCase, messages, semanticSearchPhase, busy]);
+  const semanticSearchProgressDetail = semanticSearchProgress?.detail ?? null;
   const audioTranscribeComposerProgress = useMemo(() => {
     if (!isAudioTranscribeUseCase || messages.length === 0) return null;
     if (audioTranscribePhase == null && !busy) return null;
@@ -1213,7 +1237,9 @@ export function App() {
   );
   const ocrPipelineBusy = ocrProgress !== null;
   const audioPipelineBusy = audioTranscribePhase !== null;
+  const semanticSearchPipelineBusy = semanticSearchPhase !== null;
   const attachmentPipelineBusy = ocrPipelineBusy || audioPipelineBusy;
+  const composerPipelineBusy = attachmentPipelineBusy || semanticSearchPipelineBusy;
   const attachmentPipelineStatus = audioPipelineBusy
     ? audioTranscribeProgress
       ? audioTranscribeStatusLine(audioTranscribeProgress)
@@ -1222,6 +1248,11 @@ export function App() {
           ? "Qwen bereinigt Volltranskript …"
           : "Transkribiere …")
     : ocrProgress ?? "Rechnung wird verarbeitet …";
+  const composerPipelineStatus = semanticSearchPipelineBusy
+    ? semanticSearchProgress?.detail
+      ? `${semanticSearchProgress.message} — ${semanticSearchProgress.detail}`
+      : semanticSearchProgress?.message ?? "Semantische Suche …"
+    : attachmentPipelineStatus;
 
   const composerFileAccept = useMemo(() => {
     if (activeUseCase?.prefersAudioFile) return AUDIO_FILE_ACCEPT;
@@ -1255,6 +1286,11 @@ export function App() {
   const showSpeechInComposer =
     speechToText?.enabled && !activeUseCase?.prefersAudioFile;
 
+  const semanticSearchPassageCount = useMemo(
+    () => parseSemanticSearchPassages(briefingValues.passagen ?? "").length,
+    [briefingValues.passagen],
+  );
+
   const canSend = useMemo(() => {
     const t = input.trim();
     const hasFile = imageFile !== null;
@@ -1263,7 +1299,9 @@ export function App() {
       ? hasFile
       : isAudioTranscribeUseCase
         ? attachmentIsAudio
-        : hasBriefing || t.length > 0 || hasFile;
+        : isSemanticSearchUseCase
+          ? semanticSearchPassageCount >= 2 && t.length > 0
+          : hasBriefing || t.length > 0 || hasFile;
     return (
       contentOk &&
       !busy &&
@@ -1275,7 +1313,8 @@ export function App() {
       !voiceRecording.active &&
       !speechTranscribing &&
       !ocrPipelineBusy &&
-      !audioPipelineBusy
+      !audioPipelineBusy &&
+      !semanticSearchPipelineBusy
     );
   }, [
     input,
@@ -1292,13 +1331,20 @@ export function App() {
     speechTranscribing,
     ocrPipelineBusy,
     audioPipelineBusy,
+    semanticSearchPipelineBusy,
     isInvoiceOcrUseCase,
     isAudioTranscribeUseCase,
+    isSemanticSearchUseCase,
+    semanticSearchPassageCount,
     attachmentIsAudio,
   ]);
 
   const composerTextareaVisible =
-    !voiceRecording.active && !speechTranscribing && !ocrPipelineBusy && !audioPipelineBusy;
+    !voiceRecording.active &&
+    !speechTranscribing &&
+    !ocrPipelineBusy &&
+    !audioPipelineBusy &&
+    !semanticSearchPipelineBusy;
   const composerTextareaWasHiddenRef = useRef(false);
   useEffect(() => {
     if (!composerTextareaVisible) {
@@ -1430,12 +1476,19 @@ export function App() {
       if (uc.defaultCompareModelB) setCompareModelB(uc.defaultCompareModelB);
       setSystemPrompt(uc.systemPrompt);
       if (uc.briefingFields?.length) {
-        setBriefingValues(emptyBriefingValues(uc.briefingFields));
+        const values = emptyBriefingValues(uc.briefingFields);
+        if (uc.id === "semantic-search") {
+          values.passagen = formatSemanticSearchPassagesText(SEMANTIC_SEARCH_DEMO_PASSAGES);
+          setInput(SEMANTIC_SEARCH_DEMO_QUESTION);
+          inputValueRef.current = SEMANTIC_SEARCH_DEMO_QUESTION;
+        } else {
+          setInput("");
+          inputValueRef.current = "";
+        }
+        setBriefingValues(values);
         const firstId = uc.briefingFields[0]?.id ?? null;
         activeBriefingFieldIdRef.current = firstId;
         setActiveBriefingFieldId(firstId);
-        setInput("");
-        inputValueRef.current = "";
       } else {
         setBriefingValues({});
         activeBriefingFieldIdRef.current = null;
@@ -1630,14 +1683,18 @@ export function App() {
     const textNow = inputValueRef.current.trim();
     const invoiceOcr = activeUseCaseId === "invoice-ocr";
     const audioTranscribe = activeUseCaseId === "audio-transcribe";
+    const semanticSearch = activeUseCaseId === "semantic-search";
     const hasBriefing = hasBriefingContent(activeUseCase?.briefingFields, briefingValues);
     const hasContent = invoiceOcr
       ? imageFileRef.current !== null
       : audioTranscribe
         ? imageFileRef.current !== null && isAudioUploadFile(imageFileRef.current)
-        : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
+        : semanticSearch
+          ? parseSemanticSearchPassages(briefingValues.passagen ?? "").length >= 2 &&
+            textNow.length > 0
+          : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
-    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy || ocrPipelineBusy || audioPipelineBusy))
+    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy || ocrPipelineBusy || audioPipelineBusy || semanticSearchPipelineBusy))
       return;
     if (sendLockRef.current) return;
 
@@ -1645,7 +1702,7 @@ export function App() {
     try {
     setAppError((prev) => (prev?.kind === "rate_limit" ? prev : null));
     let text = textNow;
-    if (activeUseCase?.briefingFields?.length) {
+    if (activeUseCaseId !== "semantic-search" && activeUseCase?.briefingFields?.length) {
       const composed = composeBriefingText(activeUseCase.briefingFields, briefingValues);
       text = textNow ? `${composed}\n\nZusatz:\n${textNow}` : composed;
     }
@@ -2065,6 +2122,186 @@ export function App() {
       return;
     }
 
+    if (semanticSearch) {
+      const passages = parseSemanticSearchPassages(briefingValues.passagen ?? "");
+      const question = textNow;
+      if (passages.length < 2) {
+        setAppError({
+          kind: "plain",
+          message: "Bitte mindestens 2 Textpassagen im Briefing (Leerzeile zwischen Absätzen).",
+        });
+        return;
+      }
+      if (question.length < 3) {
+        setAppError({
+          kind: "plain",
+          message: "Bitte eine Frage im Eingabefeld stellen.",
+        });
+        return;
+      }
+
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+
+      setInput("");
+      inputValueRef.current = "";
+
+      const userDisplay = `🔎 ${question}\n\n${passages.length} Textpassagen`;
+      const userMessage: ChatMessage = { role: "user", content: userDisplay };
+      const nextThread = [...messagesBeforeSend, userMessage];
+      setMessages([...nextThread, { role: "assistant", content: "" }]);
+      setBusy(true);
+      setSemanticSearchPhase("embed");
+      setSemanticSearchProgress(null);
+
+      const streamStart = performance.now();
+      let firstContentAt: number | null = null;
+      const deltaBatch = createRafStreamBatcher((chunk) => {
+        if (chunk.length > 0) firstContentAt ??= performance.now();
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+          const prevText = typeof last.content === "string" ? last.content : "";
+          const copy = prev.slice();
+          copy[copy.length - 1] = { role: "assistant", content: prevText + chunk };
+          return copy;
+        });
+      });
+
+      try {
+        const pipeline = await runSemanticSearchPipeline(question, passages, {
+          rateLimits: playgroundRateLimits,
+          signal: ctrl.signal,
+          onProgress: (progress) => {
+            setSemanticSearchPhase(progress.phase);
+            setSemanticSearchProgress(progress);
+          },
+        });
+
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+          copy[copy.length - 1] = {
+            role: "assistant",
+            content: `${pipeline.reportMarkdown}`,
+          };
+          return copy;
+        });
+
+        let apiMessages: ApiMessage[] = [
+          { role: "system", content: formatPlaygroundTodayContext() },
+        ];
+        if (systemPrompt.trim().length > 0) {
+          apiMessages.push({ role: "system", content: systemPrompt.trim() });
+        }
+        apiMessages.push({ role: "user", content: userDisplay });
+        apiMessages.push({ role: "user", content: pipeline.answerUserMessage });
+
+        const { messages: trimmedApiMessages, trimmedCount } = trimMessagesForApi(
+          apiMessages,
+          maxMessages,
+        );
+        apiMessages = trimmedApiMessages;
+        if (trimmedCount > 0) {
+          setContextTrimNotice(
+            `Langer Chatverlauf: ${trimmedCount} ältere Nachricht${trimmedCount === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}). „Clear chat“ setzt den Verlauf zurück.`,
+          );
+        } else {
+          setContextTrimNotice(null);
+        }
+
+        const qwenPreset = getInferencePreset(model);
+        const body: Record<string, unknown> = {
+          model,
+          messages: apiMessages,
+          temperature: qwenPreset.temperature,
+          stream: true,
+          stream_options: { include_usage: true },
+        };
+        if (typeof qwenPreset.topP === "number") body.top_p = qwenPreset.topP;
+        if (typeof qwenPreset.topK === "number") body.top_k = qwenPreset.topK;
+        if (typeof qwenPreset.presencePenalty === "number") {
+          body.presence_penalty = qwenPreset.presencePenalty;
+        }
+        if (qwenPreset.extraBody) body.extra_body = qwenPreset.extraBody;
+        const cap = qwenPreset.maxTokens ?? 8192;
+        body.max_tokens = maxTokens === null ? cap : Math.min(maxTokens, cap);
+
+        const usageSnap = await streamChatCompletion(
+          body,
+          (delta) => {
+            if (delta.length > 0) deltaBatch.push(delta);
+          },
+          ctrl.signal,
+          playgroundRateLimits,
+        );
+        deltaBatch.flush();
+
+        const streamEnd = performance.now();
+        const genSec =
+          firstContentAt != null
+            ? Math.max((streamEnd - firstContentAt) / 1000, 0.001)
+            : Math.max((streamEnd - streamStart) / 1000, 0.001);
+        const hasApiCounts =
+          usageSnap != null &&
+          (usageSnap.promptTokens != null || usageSnap.completionTokens != null);
+
+        setMessages((prev) => {
+          const copy = [...prev];
+          const last = copy[copy.length - 1];
+          if (!last || last.role !== "assistant") return prev;
+          const len = assistantPlainTextLength(last.content);
+          const roughOutTok = Math.max(1, Math.ceil(len / 4));
+          let outputTokensPerSec: number | null = null;
+          const comp = usageSnap?.completionTokens;
+          if (typeof comp === "number") {
+            outputTokensPerSec = Math.round((comp / genSec) * 10) / 10;
+          } else if (len > 0) {
+            outputTokensPerSec = Math.round((roughOutTok / genSec) * 10) / 10;
+          }
+          const co2Grams = hasApiCounts
+            ? estimateInferenceCo2Grams(
+                usageSnap?.promptTokens ?? 0,
+                usageSnap?.completionTokens ?? 0,
+                model,
+              )
+            : estimateInferenceCo2Grams(0, roughOutTok, model);
+          copy[copy.length - 1] = {
+            ...last,
+            usage: {
+              promptTokens: usageSnap?.promptTokens ?? null,
+              completionTokens: usageSnap?.completionTokens ?? null,
+              outputTokensPerSec,
+              generationSeconds: genSec,
+              co2Grams,
+              source: hasApiCounts ? "api" : "heuristic",
+            },
+          };
+          return copy;
+        });
+      } catch (e) {
+        deltaBatch.cancel();
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && last.content === "") {
+            return prev.slice(0, -1);
+          }
+          return prev;
+        });
+      } finally {
+        setBusy(false);
+        setSemanticSearchPhase(null);
+        setSemanticSearchProgress(null);
+        abortRef.current = null;
+        focusComposer();
+      }
+      return;
+    }
+
     if (invoiceOcr) {
       if (!file) {
         setAppError({
@@ -2278,6 +2515,7 @@ export function App() {
     const wantsWebSearch =
       !isModelCompareUseCase &&
       !activeUseCase?.prefersPriceCompareSearch &&
+      !activeUseCase?.prefersSemanticSearch &&
       activeThreadWebSearch &&
       typeof userContent === "string" &&
       text.length > 0 &&
@@ -3414,6 +3652,15 @@ export function App() {
                     accentClassName="violet"
                   />
                 ) : null}
+                {semanticSearchComposerProgress ? (
+                  <UseCaseProgressSteps
+                    variant="compact"
+                    steps={semanticSearchComposerProgress}
+                    detail={semanticSearchProgressDetail}
+                    ariaLabel="Semantische Suche — Fortschritt"
+                    accentClassName="violet"
+                  />
+                ) : null}
                 {audioTranscribeComposerProgress ? (
                   <UseCaseProgressSteps
                     variant="compact"
@@ -3465,7 +3712,7 @@ export function App() {
                     config={webSearchConfig}
                     active={activeThreadWebSearch}
                     searching={webSearchBusy}
-                    disabled={busy || voiceRecording.active || speechTranscribing || attachmentPipelineBusy}
+                    disabled={busy || voiceRecording.active || speechTranscribing || composerPipelineBusy}
                     onDeactivate={() => setActiveThreadWebSearch(false)}
                   />
                   {isMobileLayout ? (
@@ -3480,12 +3727,12 @@ export function App() {
                       <div className="w-full min-w-0 px-3 pt-2.5">
                         {voiceRecording.active ? (
                           <SpeechWaveform stream={voiceRecording.stream} compact />
-                        ) : attachmentPipelineBusy ? (
+                        ) : composerPipelineBusy ? (
                           <p
                             className="playground-text-small min-w-0 py-1 font-medium text-playground-muted"
                             role="status"
                           >
-                            {attachmentPipelineStatus}
+                            {composerPipelineStatus}
                           </p>
                         ) : speechTranscribing ? (
                           <SpeechTranscribingIndicator />
@@ -3511,7 +3758,7 @@ export function App() {
                       <div className="flex min-w-0 items-center gap-0.5 px-2 pb-2 pt-1">
                         <label
                           className={`flex h-9 w-9 shrink-0 cursor-pointer items-center justify-center rounded-full text-playground-ink hover:bg-playground-muted/5 ${
-                            voiceRecording.active || speechTranscribing || attachmentPipelineBusy
+                            voiceRecording.active || speechTranscribing || composerPipelineBusy
                               ? "pointer-events-none opacity-40"
                               : ""
                           }`}
@@ -3534,7 +3781,7 @@ export function App() {
                           active={activeThreadWebSearch}
                           searching={webSearchBusy}
                           disabled={
-                            busy || voiceRecording.active || speechTranscribing || attachmentPipelineBusy
+                            busy || voiceRecording.active || speechTranscribing || composerPipelineBusy
                           }
                           onToggle={toggleThreadWebSearch}
                           compact
@@ -3604,7 +3851,7 @@ export function App() {
                   >
                   <label
                     className={`flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-full text-playground-ink hover:bg-playground-muted/5 sm:h-9 sm:w-9 ${
-                      voiceRecording.active || speechTranscribing || attachmentPipelineBusy
+                      voiceRecording.active || speechTranscribing || composerPipelineBusy
                         ? "pointer-events-none opacity-40"
                         : ""
                     }`}
@@ -3626,7 +3873,7 @@ export function App() {
                     config={webSearchConfig}
                     active={activeThreadWebSearch}
                     searching={webSearchBusy}
-                    disabled={busy || voiceRecording.active || speechTranscribing || attachmentPipelineBusy}
+                    disabled={busy || voiceRecording.active || speechTranscribing || composerPipelineBusy}
                     onToggle={toggleThreadWebSearch}
                     compact={false}
                   />
@@ -3660,12 +3907,12 @@ export function App() {
                         onConfirm={() => speechInputRef.current?.stopRecording()}
                       />
                     </>
-                  ) : attachmentPipelineBusy ? (
+                  ) : composerPipelineBusy ? (
                     <p
                       className="playground-text-small min-w-0 flex-1 px-1 font-medium text-playground-muted"
                       role="status"
                     >
-                      {attachmentPipelineStatus}
+                      {composerPipelineStatus}
                     </p>
                   ) : speechTranscribing ? (
                     <SpeechTranscribingIndicator />

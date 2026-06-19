@@ -198,6 +198,18 @@ export function PlaygroundUseCaseGuide({
         </p>
       ) : null}
 
+      {useCase.id === "semantic-search" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-violet-200/80 bg-violet-50/80 px-3 py-2.5 font-medium text-violet-950 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
+          <span className="mr-1.5" aria-hidden>
+            🔎
+          </span>
+          <strong>Kurz:</strong> Demo-Texte sind vorausgefüllt — eigene Passagen mit <strong>Leerzeile</strong>{" "}
+          trennen. Die Frage stellst du unten im Eingabefeld. Pipeline:{" "}
+          <strong>Embedding</strong> (Vektorsuche) → <strong>Rerank</strong> (präzise Sortierung) →{" "}
+          <strong>Qwen-Antwort</strong> mit Vergleichstabelle.
+        </p>
+      ) : null}
+
       {useCase.id === "price-compare" ? (
         <p className="playground-text-small mb-3 rounded-xl border border-sky-200/80 bg-sky-50/80 px-3 py-2.5 font-medium text-sky-950 dark:border-sky-800 dark:bg-sky-950/40 dark:text-sky-100">
           <span className="mr-1.5" aria-hidden>
