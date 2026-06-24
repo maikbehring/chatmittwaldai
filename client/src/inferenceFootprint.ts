@@ -68,10 +68,35 @@ export const SESSION_CO2_TOOLTIP =
 /** Kurzer Kontext für KI-Antworten, wenn Nutzer nach der CO₂-Anzeige fragen. */
 export function formatPlaygroundCo2Context(): string {
   return (
-    `[Playground — CO₂-Hinweis]\n` +
-    `Der Playground zeigt unter Antworten und im Footer ungefähre CO₂eq-Werte zur Orientierung.\n` +
-    `Die Energie-Werte je Modell stammen aus Messungen an der eigenen mittwald AI-Hosting-Infrastruktur; daraus wird aus der Token-Nutzung einer Anfrage ein CO₂äquivalent abgeleitet. Trotzdem sind die angezeigten Gramm-Werte nur eine Orientierung — keine exakte Messung pro Klick und keine belastbare Ökobilanz.\n` +
-    `Wenn Nutzer danach fragen: freundlich und allgemein erklären (eigene Infrastruktur als Grundlage, aber nur Orientierung). Nicht als geprüftes Reporting verkaufen. Keine detaillierten Formeln oder Tabellen im Chat. Andere Schritte (Websuche, Sprache, OCR, Embeddings) sind nicht einbezogen.`
+    `[Playground — CO₂-Anzeige]\n` +
+    `Unter jeder Assistenten-Antwort und im Footer zeigt dieser Playground „≈ … g CO₂eq“ — ein Orientierungswert für diese Chat-Inferenz.\n` +
+    `Grundlage: Energie-Messungen an der mittwald AI-Hosting-Infrastruktur (je Modell) × Token-Nutzung der Anfrage × Strommix-Faktor. Trotzdem nur Orientierung, keine exakte Messung pro Klick, keine Ökobilanz fürs Reporting. Websuche, Whisper, OCR, Embeddings nicht einbezogen.\n` +
+    `WICHTIG: Fragt der Nutzer nach „CO₂“, „CO2“, „CO₂eq“, „CO₂-Wert“ o. Ä. ohne explizit nach globalem Klima/Industrie/Chemie zu fragen, meint er fast immer diese Playground-Anzeige.\n` +
+    `Dann: 2–4 kurze Sätze auf Deutsch — eigene Infrastruktur, Orientierung, nicht für Reporting. KEIN allgemeiner Text über Klimawandel, Verbrennung, Zement, Sensoren, Mauna Loa o. Ä.`
+  );
+}
+
+const PLAYGROUND_CO2_QUESTION_RE =
+  /\b(co[\s_\-]?2|co₂|co2eq|co₂eq|kohlendioxid|carbon\s*footprint|treibhausgas(?:e)?)\b/i;
+
+const GENERAL_CO2_TOPIC_RE =
+  /\b(klimawandel|mauna\s*loa|zement(?:produktion)?|verbrennungsmotor|atmosphäre|weltweit|global(?:e)?\s+emission|kraftwerk|entwaldung|vulkan|ccs|haber[\s-]?bosch)\b/i;
+
+export function isPlaygroundCo2Question(text: string): boolean {
+  const t = text.trim();
+  if (!t || !PLAYGROUND_CO2_QUESTION_RE.test(t)) return false;
+  return !GENERAL_CO2_TOPIC_RE.test(t);
+}
+
+/** Leitet CO₂-Nachfragen auf die Playground-Anzeige um (nicht Klimawissenschaft). */
+export function enrichUserMessageForPlaygroundCo2Question(
+  rawUserText: string,
+  messageText: string,
+): string {
+  if (!isPlaygroundCo2Question(rawUserText)) return messageText;
+  return (
+    `[Kontext: Frage zur CO₂eq-Anzeige im Mittwald KI-Playground — nur diese kurz erklären, kein allgemeiner CO₂-/Klima-Vortrag.]\n\n` +
+    messageText
   );
 }
 
