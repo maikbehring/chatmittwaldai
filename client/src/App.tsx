@@ -112,7 +112,7 @@ import {
   formatMittwaldFeatureRequestsContext,
   type MittwaldFeatureRequestsResponse,
 } from "./mittwaldFeatureRequests";
-import { formatPlaygroundTodayContext } from "./playgroundDate";
+import { formatPlaygroundBaseSystemContext } from "./playgroundSystemContext";
 import { WebSearchGlobeToggle, WebSearchModeChip } from "./WebSearchComposerControl";
 import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
 import { DeleteAllChatsDialog } from "./DeleteAllChatsDialog";
@@ -1801,7 +1801,7 @@ export function App() {
           modelBId: modelB,
           systemPrompt,
           gptOssReasoning,
-          todayContext: formatPlaygroundTodayContext(),
+          todayContext: formatPlaygroundBaseSystemContext(),
         });
 
         const { messages: trimmed, trimmedCount } = trimMessagesForApi(apiMessages, maxMessages);
@@ -2004,7 +2004,7 @@ export function App() {
         );
 
         let apiMessages: ApiMessage[] = [
-          { role: "system", content: formatPlaygroundTodayContext() },
+          { role: "system", content: formatPlaygroundBaseSystemContext() },
         ];
         if (systemPrompt.trim().length > 0) {
           apiMessages.push({ role: "system", content: systemPrompt.trim() });
@@ -2190,7 +2190,7 @@ export function App() {
         });
 
         let apiMessages: ApiMessage[] = [
-          { role: "system", content: formatPlaygroundTodayContext() },
+          { role: "system", content: formatPlaygroundBaseSystemContext() },
         ];
         if (systemPrompt.trim().length > 0) {
           apiMessages.push({ role: "system", content: systemPrompt.trim() });
@@ -2362,7 +2362,7 @@ export function App() {
         );
 
         let apiMessages: ApiMessage[] = [
-          { role: "system", content: formatPlaygroundTodayContext() },
+          { role: "system", content: formatPlaygroundBaseSystemContext() },
         ];
         if (systemPrompt.trim().length > 0) {
           apiMessages.push({ role: "system", content: systemPrompt.trim() });
@@ -2787,7 +2787,7 @@ export function App() {
 
     const buildApiMessages = (streamModelId: string): ApiMessage[] => {
       const api: ApiMessage[] = [
-        { role: "system", content: formatPlaygroundTodayContext() },
+        { role: "system", content: formatPlaygroundBaseSystemContext() },
       ];
       if (streamModelId === MODEL_GPT_OSS) {
         const line = `Reasoning: ${gptOssReasoning}`;

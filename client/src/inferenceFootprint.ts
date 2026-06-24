@@ -10,7 +10,7 @@ import {
 export const PROMPT_TOKEN_ENERGY_WEIGHT = 0.25;
 
 /**
- * Gemessene GPU-Energie pro 1 Mio. gewichtete Token (kWh), Benchmark-Tabelle Mittwald AI Hosting.
+ * Gemessene GPU-Energie pro 1 Mio. gewichtete Token (kWh) an der mittwald AI-Hosting-Infrastruktur.
  */
 export const KWH_PER_MILLION_TOKENS: Record<string, number> = {
   [MODEL_QWEN_36]: 0.55,
@@ -56,13 +56,24 @@ export function estimateInferenceCo2Grams(
 }
 
 export const CO2_FOOTPRINT_TOOLTIP =
-  "Schätzung aus Benchmark-Energie (kWh pro 1 Mio. gewichtete Token): " +
-  "Eingabe-Token × 1/4 + Ausgabe-Token, dann × deutscher Strommix (UBA 2025) 344 g CO₂/kWh. " +
+  "Orientierungswert auf Basis von Energie-Messungen an der mittwald AI-Hosting-Infrastruktur " +
+  "(kWh pro 1 Mio. gewichtete Token je Modell): Eingabe-Token × 1/4 + Ausgabe-Token, " +
+  "dann × deutscher Strommix (UBA 2025) 344 g CO₂/kWh. " +
   "kWh/Mio.: Qwen3.6 0,55 · gpt-oss 0,73 · Qwen3.5 1,31 · Ministral 1,50 · Devstral 2,50. " +
-  "Ohne API-Nutzungsdaten nur Ausgabe-Token grob geschätzt.";
+  "Keine exakte Ökobilanz — nur Chat-Inferenz; ohne API-Nutzungsdaten grob geschätzt.";
 
 export const SESSION_CO2_TOOLTIP =
   `${CO2_FOOTPRINT_TOOLTIP} Summe aller Antworten über alle Chats in diesem Browser.`;
+
+/** Kurzer Kontext für KI-Antworten, wenn Nutzer nach der CO₂-Anzeige fragen. */
+export function formatPlaygroundCo2Context(): string {
+  return (
+    `[Playground — CO₂-Hinweis]\n` +
+    `Der Playground zeigt unter Antworten und im Footer ungefähre CO₂eq-Werte zur Orientierung.\n` +
+    `Die Energie-Werte je Modell stammen aus Messungen an der eigenen mittwald AI-Hosting-Infrastruktur; daraus wird aus der Token-Nutzung einer Anfrage ein CO₂äquivalent abgeleitet. Trotzdem sind die angezeigten Gramm-Werte nur eine Orientierung — keine exakte Messung pro Klick und keine belastbare Ökobilanz.\n` +
+    `Wenn Nutzer danach fragen: freundlich und allgemein erklären (eigene Infrastruktur als Grundlage, aber nur Orientierung). Nicht als geprüftes Reporting verkaufen. Keine detaillierten Formeln oder Tabellen im Chat. Andere Schritte (Websuche, Sprache, OCR, Embeddings) sind nicht einbezogen.`
+  );
+}
 
 export function formatCo2Grams(grams: number): string {
   return grams.toLocaleString("de-DE", {
