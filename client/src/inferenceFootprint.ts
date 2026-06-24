@@ -89,7 +89,7 @@ export function isPlaygroundCo2Question(text: string): boolean {
   return !GENERAL_CO2_TOPIC_RE.test(t);
 }
 
-/** Leitet CO₂-Nachfragen auf die Playground-Anzeige um (nicht Klimawissenschaft). */
+/** Leitet CO₂-Nachfragen auf die Playground-Anzeige um (nur API — nicht in der Chat-UI anzeigen). */
 export function enrichUserMessageForPlaygroundCo2Question(
   rawUserText: string,
   messageText: string,

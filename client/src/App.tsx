@@ -2497,7 +2497,6 @@ export function App() {
       text = activeUseCase.formatSubmissionMessage(text);
     }
 
-    text = enrichUserMessageForPlaygroundCo2Question(rawTextBeforeFormat, text);
     const includeCo2Guide = isPlaygroundCo2Question(rawTextBeforeFormat);
 
     const webSearchDirectQueries =
@@ -2808,7 +2807,10 @@ export function App() {
       }
       for (const m of threadForApi) {
         if (m.role === "user" && m === userMessage && typeof m.content === "string") {
-          let enriched = m.content;
+          let enriched = enrichUserMessageForPlaygroundCo2Question(
+            rawTextBeforeFormat,
+            m.content,
+          );
           if (mittwaldFeatureRequestsPayload) {
             enriched = `${enriched}\n\n${formatMittwaldFeatureRequestsContext(mittwaldFeatureRequestsPayload)}`;
           }
