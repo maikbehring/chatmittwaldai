@@ -137,7 +137,7 @@ import {
 import { CopyTextButton, extractCopySections } from "./CopyTextButton";
 import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
 import { MittwaldLogo } from "./MittwaldLogo";
-import { PlaygroundSidebarCta } from "./PlaygroundSidebarCta";
+import { PlaygroundHostingUpsell } from "./PlaygroundHostingUpsell";
 import { ArrowUpIcon, MenuIcon, PenIcon } from "./playgroundIcons";
 import { mainFooterLinks, withDefaultBugLink, type PlaygroundLink } from "./playgroundLinks";
 import {
@@ -3256,7 +3256,7 @@ export function App() {
             type="button"
             onClick={() => setDeleteAllChatsOpen(true)}
             disabled={busy || speechBusy}
-            className={`playground-text-tiny w-full rounded-lg px-3 py-2 text-left font-medium text-playground-ink hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`playground-text-tiny w-full rounded-lg px-3 py-2 text-left font-medium text-playground-muted hover:bg-playground-muted/5 hover:text-playground-ink disabled:cursor-not-allowed disabled:opacity-40 ${
               sidebarExpanded ? "" : "px-0"
             }`}
             title="Alle Chats löschen"
@@ -3268,7 +3268,7 @@ export function App() {
             type="button"
             onClick={() => setClearBrowserCacheOpen(true)}
             disabled={busy || speechBusy}
-            className={`playground-text-tiny w-full rounded-lg px-3 py-2 text-left font-medium text-playground-ink hover:bg-playground-muted/5 disabled:cursor-not-allowed disabled:opacity-40 ${
+            className={`playground-text-tiny w-full rounded-lg px-3 py-2 text-left font-medium text-playground-muted hover:bg-playground-muted/5 hover:text-playground-ink disabled:cursor-not-allowed disabled:opacity-40 ${
               sidebarExpanded ? "" : "px-0"
             }`}
             title="Browsercache löschen"
@@ -3277,8 +3277,8 @@ export function App() {
             {sidebarExpanded ? "Browsercache löschen" : "⌫"}
           </button>
           {sidebarExpanded ? (
-            <div className="flex justify-start px-1 pt-3">
-              <PlaygroundSidebarCta href={aiHostingUrl} />
+            <div className="px-3 pt-2">
+              <PlaygroundHostingUpsell variant="sidebar" aiHostingUrl={aiHostingUrl} />
             </div>
           ) : null}
         </div>
@@ -3456,12 +3456,19 @@ export function App() {
                     }
                   />
                 ) : (
-                  <PlaygroundUseCaseCards
-                    cases={PLAYGROUND_USE_CASES}
-                    activeId={activeUseCaseId}
-                    disabled={busy || speechBusy}
-                    onSelect={activateUseCase}
-                  />
+                  <>
+                    <PlaygroundUseCaseCards
+                      cases={PLAYGROUND_USE_CASES}
+                      activeId={activeUseCaseId}
+                      disabled={busy || speechBusy}
+                      onSelect={activateUseCase}
+                    />
+                    <PlaygroundHostingUpsell
+                      variant="banner"
+                      aiHostingUrl={aiHostingUrl}
+                      className="mt-1"
+                    />
+                  </>
                 )}
               </div>
             ) : (
