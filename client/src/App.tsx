@@ -69,6 +69,7 @@ import {
 } from "./streamChatCompletion";
 import {
   CO2_FOOTPRINT_TOOLTIP,
+  enrichUserMessageForPlaygroundCo2Question,
   estimateInferenceCo2Grams,
   formatCo2Grams,
   sumCo2GramsFromAssistantMessages,
@@ -112,7 +113,7 @@ import {
   formatMittwaldFeatureRequestsContext,
   type MittwaldFeatureRequestsResponse,
 } from "./mittwaldFeatureRequests";
-import { formatPlaygroundBaseSystemContext } from "./playgroundSystemContext";
+import { formatPlaygroundBaseSystemContext, playgroundSystemContextMessages } from "./playgroundSystemContext";
 import { WebSearchGlobeToggle, WebSearchModeChip } from "./WebSearchComposerControl";
 import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
 import { DeleteAllChatsDialog } from "./DeleteAllChatsDialog";
@@ -2003,9 +2004,7 @@ export function App() {
           fileLabel,
         );
 
-        let apiMessages: ApiMessage[] = [
-          { role: "system", content: formatPlaygroundBaseSystemContext() },
-        ];
+        let apiMessages: ApiMessage[] = [...playgroundSystemContextMessages()];
         if (systemPrompt.trim().length > 0) {
           apiMessages.push({ role: "system", content: systemPrompt.trim() });
         }
@@ -2189,9 +2188,7 @@ export function App() {
           return copy;
         });
 
-        let apiMessages: ApiMessage[] = [
-          { role: "system", content: formatPlaygroundBaseSystemContext() },
-        ];
+        let apiMessages: ApiMessage[] = [...playgroundSystemContextMessages()];
         if (systemPrompt.trim().length > 0) {
           apiMessages.push({ role: "system", content: systemPrompt.trim() });
         }
@@ -2361,9 +2358,7 @@ export function App() {
           fileLabel,
         );
 
-        let apiMessages: ApiMessage[] = [
-          { role: "system", content: formatPlaygroundBaseSystemContext() },
-        ];
+        let apiMessages: ApiMessage[] = [...playgroundSystemContextMessages()];
         if (systemPrompt.trim().length > 0) {
           apiMessages.push({ role: "system", content: systemPrompt.trim() });
         }
@@ -2487,6 +2482,8 @@ export function App() {
     ) {
       text = activeUseCase.formatSubmissionMessage(text);
     }
+
+    text = enrichUserMessageForPlaygroundCo2Question(rawTextBeforeFormat, text);
 
     const webSearchDirectQueries =
       activeUseCase?.webSearchDirectQueries?.(rawTextBeforeFormat);
@@ -2786,9 +2783,7 @@ export function App() {
     const threadForApi = isolateWebSearch ? [userMessage] : nextThread;
 
     const buildApiMessages = (streamModelId: string): ApiMessage[] => {
-      const api: ApiMessage[] = [
-        { role: "system", content: formatPlaygroundBaseSystemContext() },
-      ];
+      const api: ApiMessage[] = [...playgroundSystemContextMessages()];
       if (streamModelId === MODEL_GPT_OSS) {
         const line = `Reasoning: ${gptOssReasoning}`;
         const rest = systemPrompt.trim();
