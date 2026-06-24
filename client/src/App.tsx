@@ -72,6 +72,8 @@ import {
   enrichUserMessageForPlaygroundCo2Question,
   estimateInferenceCo2Grams,
   formatCo2Grams,
+  isPlaygroundCo2Question,
+  stripHallucinatedCo2FromAssistantText,
   sumCo2GramsFromAssistantMessages,
 } from "./inferenceFootprint";
 import { SessionCo2Footprint } from "./SessionCo2Footprint";
@@ -525,7 +527,9 @@ const ChatMessageRow = memo(function ChatMessageRow({
       </div>
     );
   }
-  const assistantPlain = assistantMessagePlainText(message.content).trim();
+  const assistantPlain = stripHallucinatedCo2FromAssistantText(
+    assistantMessagePlainText(message.content),
+  ).trim();
   const isAiHostingGuide = activeUseCaseId === "ai-hosting-guide";
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
   const isPriceCompareUseCase = activeUseCaseId === "price-compare";
@@ -1802,7 +1806,11 @@ export function App() {
           modelBId: modelB,
           systemPrompt,
           gptOssReasoning,
-          todayContext: formatPlaygroundBaseSystemContext(),
+          todayContext: formatPlaygroundBaseSystemContext({
+            includeCo2Guide: isPlaygroundCo2Question(
+              typeof userContent === "string" ? userContent : text,
+            ),
+          }),
         });
 
         const { messages: trimmed, trimmedCount } = trimMessagesForApi(apiMessages, maxMessages);
@@ -1880,13 +1888,19 @@ export function App() {
                   modelId,
                 )
               : estimateInferenceCo2Grams(0, roughOutTok, modelId);
+            const prevSlot = last.compare![slot];
+            const cleanedContent =
+              typeof prevSlot.content === "string"
+                ? stripHallucinatedCo2FromAssistantText(prevSlot.content)
+                : prevSlot.content;
             const copy = prev.slice();
             copy[copy.length - 1] = {
               ...last,
               compare: {
                 ...last.compare!,
                 [slot]: {
-                  ...last.compare![slot],
+                  ...prevSlot,
+                  content: cleanedContent,
                   usage: {
                     promptTokens: usageSnap?.promptTokens ?? null,
                     completionTokens: usageSnap?.completionTokens ?? null,
@@ -2484,6 +2498,7 @@ export function App() {
     }
 
     text = enrichUserMessageForPlaygroundCo2Question(rawTextBeforeFormat, text);
+    const includeCo2Guide = isPlaygroundCo2Question(rawTextBeforeFormat);
 
     const webSearchDirectQueries =
       activeUseCase?.webSearchDirectQueries?.(rawTextBeforeFormat);
@@ -2783,7 +2798,7 @@ export function App() {
     const threadForApi = isolateWebSearch ? [userMessage] : nextThread;
 
     const buildApiMessages = (streamModelId: string): ApiMessage[] => {
-      const api: ApiMessage[] = [...playgroundSystemContextMessages()];
+      const api: ApiMessage[] = [...playgroundSystemContextMessages({ includeCo2Guide })];
       if (streamModelId === MODEL_GPT_OSS) {
         const line = `Reasoning: ${gptOssReasoning}`;
         const rest = systemPrompt.trim();
@@ -2992,8 +3007,14 @@ export function App() {
             )
           : estimateInferenceCo2Grams(0, roughOutTok, effectiveModelId);
 
+        const cleanedContent =
+          typeof last.content === "string"
+            ? stripHallucinatedCo2FromAssistantText(last.content)
+            : last.content;
+
         copy[copy.length - 1] = {
           ...last,
+          content: cleanedContent,
           usage: {
             promptTokens: usageSnap?.promptTokens ?? null,
             completionTokens: usageSnap?.completionTokens ?? null,

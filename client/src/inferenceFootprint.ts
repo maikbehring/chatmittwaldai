@@ -69,10 +69,11 @@ export const SESSION_CO2_TOOLTIP =
 export function formatPlaygroundCo2Context(): string {
   return (
     `[Playground — CO₂-Anzeige]\n` +
-    `Unter jeder Assistenten-Antwort und im Footer zeigt dieser Playground „≈ … g CO₂eq“ — ein Orientierungswert für diese Chat-Inferenz.\n` +
+    `Unter jeder Assistenten-Antwort und im Footer zeigt dieser Playground automatisch „≈ … g CO₂eq“ — ein Orientierungswert für diese Chat-Inferenz.\n` +
     `Grundlage: Energie-Messungen an der mittwald AI-Hosting-Infrastruktur (je Modell) × Token-Nutzung der Anfrage × Strommix-Faktor. Trotzdem nur Orientierung, keine exakte Messung pro Klick, keine Ökobilanz fürs Reporting. Websuche, Whisper, OCR, Embeddings nicht einbezogen.\n` +
     `WICHTIG: Fragt der Nutzer nach „CO₂“, „CO2“, „CO₂eq“, „CO₂-Wert“ o. Ä. ohne explizit nach globalem Klima/Industrie/Chemie zu fragen, meint er fast immer diese Playground-Anzeige.\n` +
-    `Dann: 2–4 kurze Sätze auf Deutsch — eigene Infrastruktur, Orientierung, nicht für Reporting. KEIN allgemeiner Text über Klimawandel, Verbrennung, Zement, Sensoren, Mauna Loa o. Ä.`
+    `Dann: 2–4 kurze Sätze auf Deutsch — eigene Infrastruktur, Orientierung, nicht für Reporting. KEIN allgemeiner Text über Klimawandel, Verbrennung, Zement, Sensoren, Mauna Loa o. Ä.\n` +
+    `NIEMALS CO₂-Zahlen, „≈ … g CO₂eq“ oder Hinweise dazu in deiner Antwort nennen — die Oberfläche berechnet und zeigt den Wert separat unter der Nachricht.`
   );
 }
 
@@ -95,9 +96,26 @@ export function enrichUserMessageForPlaygroundCo2Question(
 ): string {
   if (!isPlaygroundCo2Question(rawUserText)) return messageText;
   return (
-    `[Kontext: Frage zur CO₂eq-Anzeige im Mittwald KI-Playground — nur diese kurz erklären, kein allgemeiner CO₂-/Klima-Vortrag.]\n\n` +
+    `[Kontext: Frage zur CO₂eq-Anzeige im Mittwald KI-Playground — nur diese kurz erklären, kein allgemeiner CO₂-/Klima-Vortrag. Keine CO₂-Zahlen in der Antwort — die UI zeigt sie automatisch unter der Nachricht.]\n\n` +
     messageText
   );
+}
+
+const HALLUCINATED_CO2_SUFFIX_RE =
+  /\s*\(≈\s*[\d.,]+\s*g\s*CO₂(?:eq)?\)\s*$/i;
+
+const HALLUCINATED_CO2_HINT_RE =
+  /\n?\s*\*?\(?Hinweis:\s*Der Wert bezieht sich auf die Antwort[^*\n)]*\*?\)?\s*$/i;
+
+/** Entfernt vom Modell erfundene CO₂-Zeilen — die UI zeigt den berechneten Wert separat. */
+export function stripHallucinatedCo2FromAssistantText(text: string): string {
+  let out = text;
+  for (let i = 0; i < 3; i++) {
+    const next = out.replace(HALLUCINATED_CO2_SUFFIX_RE, "").replace(HALLUCINATED_CO2_HINT_RE, "");
+    if (next === out) break;
+    out = next;
+  }
+  return out.trimEnd();
 }
 
 export function formatCo2Grams(grams: number): string {
