@@ -1,19 +1,38 @@
+import {
+  trackUmamiEvent,
+  UMAMI_EVENT_AI_HOSTING_BOOK,
+  UMAMI_EVENT_CONSULT_CALL,
+} from "./umami";
+
 export const TARIF_CONSULT_PHONE = "+49 5772 293 150";
 export const TARIF_CONSULT_PHONE_HREF = "tel:+495772293150";
+
+type UpsellPlacement = "sidebar" | "banner";
 
 type Props = {
   aiHostingUrl: string;
   className?: string;
   /** Sidebar-Karte unten links; Banner unter den Use Cases auf der Startseite */
-  variant: "sidebar" | "banner";
+  variant: UpsellPlacement;
 };
 
-function BookCta({ href, className = "" }: { href: string; className?: string }) {
+function BookCta({
+  href,
+  placement,
+  className = "",
+}: {
+  href: string;
+  placement: UpsellPlacement;
+  className?: string;
+}) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
+      onClick={() =>
+        trackUmamiEvent(UMAMI_EVENT_AI_HOSTING_BOOK, { platzierung: placement })
+      }
       className={`playground-cta-gradient playground-text-small flex h-10 w-full items-center justify-center rounded-full px-4 font-bold !leading-5 text-white transition hover:brightness-110 ${className}`.trim()}
     >
       AI Hosting buchen
@@ -21,10 +40,19 @@ function BookCta({ href, className = "" }: { href: string; className?: string })
   );
 }
 
-function CallCta({ className = "" }: { className?: string }) {
+function CallCta({
+  placement,
+  className = "",
+}: {
+  placement: UpsellPlacement;
+  className?: string;
+}) {
   return (
     <a
       href={TARIF_CONSULT_PHONE_HREF}
+      onClick={() =>
+        trackUmamiEvent(UMAMI_EVENT_CONSULT_CALL, { platzierung: placement })
+      }
       className={`flex w-full flex-col items-center justify-center rounded-full border border-playground-border bg-playground-main/60 px-3 py-2 transition hover:border-playground-muted/25 hover:bg-playground-muted/[0.06] ${className}`.trim()}
     >
       <span className="playground-text-tiny font-bold text-playground-ink">Beratung anrufen</span>
@@ -48,8 +76,8 @@ export function PlaygroundHostingUpsell({ aiHostingUrl, variant, className = "" 
           KI fully managed in Deutschland — API-Key im mStudio, OpenAI-kompatibel.
         </p>
         <div className="mt-3 flex flex-col gap-2">
-          <BookCta href={aiHostingUrl} />
-          <CallCta />
+          <BookCta href={aiHostingUrl} placement={variant} />
+          <CallCta placement={variant} />
         </div>
       </div>
     );
@@ -69,8 +97,8 @@ export function PlaygroundHostingUpsell({ aiHostingUrl, variant, className = "" 
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
-          <BookCta href={aiHostingUrl} />
-          <CallCta />
+          <BookCta href={aiHostingUrl} placement={variant} />
+          <CallCta placement={variant} />
         </div>
       </div>
     </div>
