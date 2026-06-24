@@ -1,5 +1,6 @@
 import { ChatMarkdown } from "./ChatMarkdown";
 import { CopyTextButton } from "./CopyTextButton";
+import { stripHallucinatedCo2FromAssistantText } from "./inferenceFootprint";
 import { modelShortLabel, type ModelComparePayload, type ModelCompareUsage } from "./modelCompare";
 
 function AssistantTokenFooter({ stats }: { stats: ModelCompareUsage }) {
@@ -85,8 +86,8 @@ type Props = {
 };
 
 export function ModelCompareMessageRow({ compare, streaming }: Props) {
-  const textA = plainText(compare.modelA.content);
-  const textB = plainText(compare.modelB.content);
+  const textA = stripHallucinatedCo2FromAssistantText(plainText(compare.modelA.content)).trim();
+  const textB = stripHallucinatedCo2FromAssistantText(plainText(compare.modelB.content)).trim();
 
   return (
     <div className="flex w-full justify-start">
