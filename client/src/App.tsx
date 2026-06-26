@@ -140,6 +140,7 @@ import { CopyTextButton, extractCopySections } from "./CopyTextButton";
 import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
 import { MittwaldLogo } from "./MittwaldLogo";
 import { PlaygroundHostingUpsell } from "./PlaygroundHostingUpsell";
+import { trackUseCaseStart } from "./umami";
 import { ArrowUpIcon, MenuIcon, PenIcon } from "./playgroundIcons";
 import { mainFooterLinks, withDefaultBugLink, type PlaygroundLink } from "./playgroundLinks";
 import {
@@ -1465,6 +1466,10 @@ export function App() {
     (id: PlaygroundUseCaseId) => {
       const uc = getUseCaseById(id);
       if (!uc) return;
+      trackUseCaseStart(uc.id, {
+        category: uc.category,
+        experimental: uc.experimental,
+      });
       stop();
       setAppError(null);
       setContextTrimNotice(null);
