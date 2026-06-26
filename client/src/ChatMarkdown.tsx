@@ -96,7 +96,7 @@ function MarkdownPreWithCopy({ children }: { children: React.ReactNode }) {
 
 export function ChatMarkdown({ children }: Props) {
   return (
-    <div className="chat-markdown max-w-none text-sm leading-relaxed text-playground-ink [&_a]:text-playground-send [&_a]:underline [&_li>p]:mb-0 [&_li>p:last-child]:mb-0">
+    <div className="chat-markdown max-w-none text-sm leading-relaxed text-playground-ink [&_li>p]:mb-0 [&_li>p:last-child]:mb-0">
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
@@ -134,7 +134,7 @@ export function ChatMarkdown({ children }: Props) {
                 href={href}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="break-words underline underline-offset-2"
+                className="break-words font-medium text-playground-link underline decoration-playground-link/40 underline-offset-2 hover:text-playground-link-hover hover:decoration-playground-link-hover/60 dark:text-sky-300 dark:decoration-sky-300/50 dark:hover:text-sky-200 dark:hover:decoration-sky-200/60"
               >
                 {children}
               </a>

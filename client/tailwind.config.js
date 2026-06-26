@@ -43,6 +43,8 @@ export default {
           main: "rgb(var(--playground-main) / <alpha-value>)",
           border: "rgb(var(--playground-border) / <alpha-value>)",
           send: "rgb(var(--playground-send) / <alpha-value>)",
+          link: "rgb(var(--playground-link) / <alpha-value>)",
+          "link-hover": "rgb(var(--playground-link-hover) / <alpha-value>)",
           ink: "rgb(var(--playground-ink) / <alpha-value>)",
           muted: "rgb(var(--playground-muted) / 0.64)",
         },
