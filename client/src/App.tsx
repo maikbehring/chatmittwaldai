@@ -3387,7 +3387,7 @@ export function App() {
               open={showModelSettings}
               onOpenChange={setShowModelSettings}
               busy={busy}
-              panelMode="docked"
+              panelMode={isMobileLayout ? "fixed" : "docked"}
               buttonClassName="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-playground-muted transition hover:bg-playground-muted/5 hover:text-playground-ink disabled:opacity-40"
               modelId={model}
               onReapplyPreset={() => applyPreset(model)}
