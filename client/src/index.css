@@ -18,6 +18,8 @@
   --playground-glass-strong: 0 0 0;
   --playground-glass-strong-alpha: 0.08;
   --playground-send: 45 35 232;
+  --playground-link: 45 35 232;
+  --playground-link-hover: 61 52 240;
   --playground-cta-a: 0.88;
   --playground-limit-info: 0 0 0;
   --playground-limit-info-alpha: 0.08;
@@ -39,6 +41,8 @@ html.dark {
   --playground-glass-strong: 255 255 255;
   --playground-glass-strong-alpha: 0.16;
   --playground-send: 45 35 232;
+  --playground-link: 125 211 252;
+  --playground-link-hover: 186 230 253;
   --playground-cta-a: 0.5;
   --playground-limit-info: 255 255 255;
   --playground-limit-info-alpha: 0.16;
@@ -157,6 +161,17 @@ html.dark .playground-user-prompt-bubble {
 /* Markdown-Codeblöcke im Dark Mode: dezenter Kontrast statt hartem Schwarz */
 html.dark .chat-markdown-pre {
   background: rgb(var(--playground-glass) / 0.08);
+}
+
+/* Markdown-Links im Dark Mode: hoher Kontrast (nicht Markenblau auf dunklem Grund) */
+html.dark .chat-markdown a {
+  color: rgb(var(--playground-link));
+  text-decoration-color: rgb(var(--playground-link) / 0.45);
+}
+
+html.dark .chat-markdown a:hover {
+  color: rgb(var(--playground-link-hover));
+  text-decoration-color: rgb(var(--playground-link-hover) / 0.65);
 }
 
 /* Desktop: Typo relativ zum Main-Bereich (ohne 329px Sidebar), wie in Figma Frame 35 */

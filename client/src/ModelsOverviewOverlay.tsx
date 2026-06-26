@@ -104,7 +104,7 @@ export function ModelsOverviewOverlay({ open, onClose }: Props) {
           <p className="mb-4 text-ink-muted">
             Kurzüberblick über die im Dropdown wählbaren Modelle. Technische Details und Tarife in der{" "}
             <a
-              className="text-accent underline"
+              className="font-medium text-playground-link underline decoration-playground-link/40 underline-offset-2 hover:text-playground-link-hover"
               href={MODEL_DOCS_URL}
               target="_blank"
               rel="noreferrer"

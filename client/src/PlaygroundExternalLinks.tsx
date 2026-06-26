@@ -119,7 +119,8 @@ export function PlaygroundLinksFooter({ links, children }: InlineProps) {
   );
 }
 
-const accentClass = "text-accent underline";
+const accentClass =
+  "font-medium text-playground-link underline decoration-playground-link/40 underline-offset-2 hover:text-playground-link-hover";
 
 export function PlaygroundGlossaryLinks({ links }: { links: PlaygroundLink[] }) {
   const parts: ReactNode[] = [];
