@@ -33,7 +33,7 @@ export function formatPlaygroundMittwaldContext(): string {
     `• Tarifberatung: +49 5772 293 150\n` +
     `• mStudio-Support: +49 5772 293 600\n` +
     `• Kundencenter-Support: +49 5772 293 100\n` +
-    `• E-Mail: support@mittwald.de · Live-Chat & Statusseite über https://www.mittwald.de/unternehmen/support\n` +
+    `• E-Mail: support@mittwald.de · Live-Chat & Statusseite über https://www.mittwald.de/darum-mittwald/kundenservice\n` +
     `• Übersicht: https://www.mittwald.de\n\n` +
     `## Antwort-Regeln\n` +
     `• Keine konkreten Preise oder Rabatte nennen (ändern sich; „auf mittwald.de konfigurieren“, zzgl. USt.).\n` +
