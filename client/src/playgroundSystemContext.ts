@@ -1,3 +1,4 @@
+import { formatPlaygroundMittwaldContext } from "./playgroundMittwaldContext";
 import { formatPlaygroundCo2Context } from "./inferenceFootprint";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 
@@ -14,6 +15,7 @@ export function playgroundSystemContextMessages(
 ): PlaygroundSystemContextMessage[] {
   const msgs: PlaygroundSystemContextMessage[] = [
     { role: "system", content: formatPlaygroundTodayContext() },
+    { role: "system", content: formatPlaygroundMittwaldContext() },
   ];
   if (options?.includeCo2Guide) {
     msgs.push({ role: "system", content: formatPlaygroundCo2Context() });
@@ -25,7 +27,7 @@ export function playgroundSystemContextMessages(
 export function formatPlaygroundBaseSystemContext(
   options?: PlaygroundSystemContextOptions,
 ): string {
-  const parts = [formatPlaygroundTodayContext()];
+  const parts = [formatPlaygroundTodayContext(), formatPlaygroundMittwaldContext()];
   if (options?.includeCo2Guide) {
     parts.push(formatPlaygroundCo2Context());
   }
