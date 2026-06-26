@@ -140,6 +140,7 @@ import { CopyTextButton, extractCopySections } from "./CopyTextButton";
 import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
 import { MittwaldLogo } from "./MittwaldLogo";
 import { PlaygroundHostingUpsell } from "./PlaygroundHostingUpsell";
+import { PlaygroundNativeSelect } from "./PlaygroundNativeSelect";
 import { trackUseCaseStart } from "./umami";
 import { ArrowUpIcon, MenuIcon, PenIcon } from "./playgroundIcons";
 import { mainFooterLinks, withDefaultBugLink, type PlaygroundLink } from "./playgroundLinks";
@@ -973,6 +974,9 @@ export function App() {
       const isDark = resolveDark();
       root.classList.toggle("dark", isDark);
       root.style.colorScheme = isDark ? "dark" : "light";
+      if (document.activeElement instanceof HTMLSelectElement) {
+        document.activeElement.blur();
+      }
     };
 
     apply();
@@ -3329,7 +3333,7 @@ export function App() {
             <label htmlFor="model-select" className="sr-only">
               {isModelCompareUseCase ? "Modell A" : "Modell"}
             </label>
-            <select
+            <PlaygroundNativeSelect
               id="model-select"
               className="playground-text-small max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-8 font-bold text-playground-muted outline-none hover:bg-playground-muted/5 focus-visible:ring-2 focus-visible:ring-playground-border sm:max-w-[min(100%,14rem)]"
               value={model}
@@ -3351,7 +3355,7 @@ export function App() {
                   </option>
                 ))
               )}
-            </select>
+            </PlaygroundNativeSelect>
             {isModelCompareUseCase ? (
               <>
                 <span
@@ -3363,7 +3367,7 @@ export function App() {
                 <label htmlFor="model-select-b" className="sr-only">
                   Modell B
                 </label>
-                <select
+                <PlaygroundNativeSelect
                   id="model-select-b"
                   className="playground-text-small max-w-full min-w-0 cursor-pointer truncate rounded-lg border border-transparent bg-transparent py-1.5 pl-2 pr-8 font-bold text-playground-muted outline-none hover:bg-playground-muted/5 focus-visible:ring-2 focus-visible:ring-playground-border sm:max-w-[min(100%,14rem)]"
                   value={compareModelB}
@@ -3380,7 +3384,7 @@ export function App() {
                       </option>
                     ))
                   )}
-                </select>
+                </PlaygroundNativeSelect>
               </>
             ) : null}
             <ModelSettingsDock
@@ -3437,7 +3441,7 @@ export function App() {
             <label htmlFor="theme-select" className="sr-only">
               Design
             </label>
-            <select
+            <PlaygroundNativeSelect
               id="theme-select"
               className="playground-theme-chevron playground-text-small max-w-[6.5rem] appearance-none rounded-lg border border-transparent bg-transparent bg-[length:1rem] bg-[right_0.25rem_center] bg-no-repeat py-1.5 pl-2 pr-7 font-bold text-playground-muted outline-none focus:ring-2 focus:ring-playground-border sm:max-w-none"
               value={themePreference}
@@ -3446,7 +3450,7 @@ export function App() {
               <option value="system">System</option>
               <option value="light">Hell</option>
               <option value="dark">Dunkel</option>
-            </select>
+            </PlaygroundNativeSelect>
           </div>
         </div>
         <div className="relative flex min-h-0 flex-1 flex-col">
