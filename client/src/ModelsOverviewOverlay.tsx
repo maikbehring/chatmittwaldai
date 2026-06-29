@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import {
   getInferencePreset,
-  MODEL_DEVSTRAL,
   MODEL_GPT_OSS,
   MODEL_MINISTRAL,
   MODEL_QWEN_35,
@@ -23,12 +22,6 @@ const MODEL_ROWS: { id: string; title: string; teaser: string }[] = [
     title: "Ministral 3 (14B Instruct)",
     teaser:
       "Kompaktes Allround-Modell für Text und Vision; in der Regel eher nüchtern und konsistent eingestellt.",
-  },
-  {
-    id: MODEL_DEVSTRAL,
-    title: "Devstral Small (24B Instruct)",
-    teaser:
-      "Stärker auf Code und technische Aufgaben ausgerichtet; freundlicher Parameter‑Mix für Chat und Umsetzung.",
   },
   {
     id: MODEL_GPT_OSS,

@@ -1,5 +1,4 @@
 import {
-  MODEL_DEVSTRAL,
   MODEL_GPT_OSS,
   MODEL_MINISTRAL,
   MODEL_QWEN_35,
@@ -42,7 +41,6 @@ export type ApiMessage = { role: "system" | "user" | "assistant"; content: strin
 
 const MODEL_SHORT_LABELS: Record<string, string> = {
   [MODEL_MINISTRAL]: "Ministral 14B",
-  [MODEL_DEVSTRAL]: "Devstral 24B",
   [MODEL_GPT_OSS]: "gpt-oss 120B",
   [MODEL_QWEN_35]: "Qwen3.5 122B",
   [MODEL_QWEN_36]: "Qwen3.6 35B",
@@ -125,7 +123,7 @@ export function inferenceParamsForCompareModel(
   let effExtra = preset.extraBody ? { ...preset.extraBody } : null;
 
   if (hasVision) {
-    if (modelId === MODEL_MINISTRAL || modelId === MODEL_DEVSTRAL) {
+    if (modelId === MODEL_MINISTRAL) {
       effTemp = 0.1;
     } else if (isQwen3Model(modelId)) {
       const qv = qwenVisionOcr ? getQwenVisionOcrInference() : getQwenVisionInference();
