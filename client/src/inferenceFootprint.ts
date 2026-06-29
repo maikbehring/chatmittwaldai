@@ -1,5 +1,4 @@
 import {
-  MODEL_DEVSTRAL,
   MODEL_GPT_OSS,
   MODEL_MINISTRAL,
   MODEL_QWEN_35,
@@ -17,7 +16,6 @@ export const KWH_PER_MILLION_TOKENS: Record<string, number> = {
   [MODEL_GPT_OSS]: 0.73,
   [MODEL_QWEN_35]: 1.31,
   [MODEL_MINISTRAL]: 1.5,
-  [MODEL_DEVSTRAL]: 2.5,
 };
 
 export const DEFAULT_KWH_PER_MILLION_TOKENS = KWH_PER_MILLION_TOKENS[MODEL_MINISTRAL];
@@ -59,7 +57,7 @@ export const CO2_FOOTPRINT_TOOLTIP =
   "Orientierungswert auf Basis von Energie-Messungen an der mittwald AI-Hosting-Infrastruktur " +
   "(kWh pro 1 Mio. gewichtete Token je Modell): Eingabe-Token × 1/4 + Ausgabe-Token, " +
   "dann × deutscher Strommix (UBA 2025) 344 g CO₂/kWh. " +
-  "kWh/Mio.: Qwen3.6 0,55 · gpt-oss 0,73 · Qwen3.5 1,31 · Ministral 1,50 · Devstral 2,50. " +
+  "kWh/Mio.: Qwen3.6 0,55 · gpt-oss 0,73 · Qwen3.5 1,31 · Ministral 1,50. " +
   "Keine exakte Ökobilanz — nur Chat-Inferenz; ohne API-Nutzungsdaten grob geschätzt.";
 
 export const SESSION_CO2_TOOLTIP =

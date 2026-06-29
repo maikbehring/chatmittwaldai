@@ -17,7 +17,6 @@ export type InferencePresetSlice = {
 };
 
 export const MODEL_MINISTRAL = "Ministral-3-14B-Instruct-2512";
-export const MODEL_DEVSTRAL = "Devstral-Small-2-24B-Instruct-2512";
 export const MODEL_GPT_OSS = "gpt-oss-120b";
 export const MODEL_QWEN_35 = "Qwen3.5-122B-A10B-FP8";
 export const MODEL_QWEN_36 = "Qwen3.6-35B-A3B-FP8";
@@ -32,15 +31,6 @@ export function getInferencePreset(modelId: string): InferencePresetSlice {
         extraBody: null,
         maxTokens: 2048,
         hint: "Doku: Chat & Vision — temperature 0.1; Bilder max. 1024 px.",
-      };
-    case MODEL_DEVSTRAL:
-      return {
-        temperature: 0.7,
-        topP: 0.8,
-        topK: 20,
-        extraBody: { repetition_penalty: 1.05 },
-        maxTokens: 2048,
-        hint: "Doku: temperature 0.7, top_p 0.8, top_k 20, repetition_penalty 1.05 (extra_body); Vision oft 0.1.",
       };
     case MODEL_GPT_OSS:
       return {

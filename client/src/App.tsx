@@ -6,7 +6,6 @@ import {
   getQwenVisionOcrInference,
   isQwen3Model,
   MODEL_GPT_OSS,
-  MODEL_DEVSTRAL,
   MODEL_MINISTRAL,
   MODEL_QWEN_35,
   MODEL_QWEN_36,
@@ -2853,7 +2852,7 @@ export function App() {
         extraBody && Object.keys(extraBody).length > 0 ? { ...extraBody } : null;
 
       if (hasVision) {
-        if (streamModelId === MODEL_MINISTRAL || streamModelId === MODEL_DEVSTRAL) {
+        if (streamModelId === MODEL_MINISTRAL) {
           effTemp = 0.1;
         } else if (isQwen3Model(streamModelId)) {
           const qv = qwenVisionOcr ? getQwenVisionOcrInference() : getQwenVisionInference();

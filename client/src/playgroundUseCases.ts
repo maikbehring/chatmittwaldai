@@ -1,5 +1,5 @@
 import { formatPlaygroundShortDateBerlin } from "./playgroundDate";
-import { MODEL_DEVSTRAL, MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
+import { MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
 
 export type PlaygroundUseCaseId =
   | "alt-tags"
@@ -1626,9 +1626,10 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Fehler-Log analysieren",
     subtitle: "Debugging & Fix",
     description:
-      "Stack Trace, Konsolen-Fehler oder Code-Snippet → Diagnose, Fix-Schritte und Commit-Message. Devstral für Code.",
-    modelId: MODEL_DEVSTRAL,
-    modelLabel: "Devstral 24B",
+      "Stack Trace, Konsolen-Fehler oder Code-Snippet → Diagnose, Fix-Schritte und Commit-Message.",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B",
+    fallbackModelId: MODEL_QWEN_35,
     systemPrompt: DEV_DEBUG_SYSTEM_PROMPT,
     composerPlaceholder:
       "Stack Trace, Fehlermeldung oder Code einfügen — Screenshot per + optional …",
