@@ -58,17 +58,6 @@ body {
   @apply bg-surface text-ink min-h-screen font-sans text-sm;
 }
 
-/* Fallback — Windows rendert <option> außerhalb der CSS-Kaskade. */
-.playground-native-select option {
-  background-color: #ffffff;
-  color: #1d1e1f;
-}
-
-html.dark .playground-native-select option {
-  background-color: #141516;
-  color: #ffffff;
-}
-
 /* Figma-Typo — kompaktere Skala */
 .playground-text-tiny {
   font-size: 11px;
