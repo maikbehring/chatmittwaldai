@@ -53,12 +53,14 @@ export async function streamChatCompletion(
   onDelta: (t: string) => void,
   signal: AbortSignal,
   rateLimits?: PlaygroundRateLimits | null,
+  options?: { useCaseId?: string },
 ): Promise<StreamTokenMeter | null> {
   const res = await fetch(apiUrl("/api/chat/completions"), {
     method: "POST",
     headers: playgroundApiHeaders({
       "Content-Type": "application/json",
       Accept: "text/event-stream",
+      ...(options?.useCaseId ? { "X-Playground-Use-Case": options.useCaseId } : {}),
     }),
     body: JSON.stringify(body),
     signal,
@@ -134,6 +136,7 @@ export async function streamChatCompletionWithFirstTokenTimeout(
   parentSignal: AbortSignal,
   rateLimits?: PlaygroundRateLimits | null,
   timeoutMs: number = MODEL_FIRST_TOKEN_TIMEOUT_MS,
+  options?: { useCaseId?: string },
 ): Promise<StreamTokenMeter | null> {
   const linked = linkAbortSignal(parentSignal);
   let receivedFirstToken = false;
@@ -158,6 +161,7 @@ export async function streamChatCompletionWithFirstTokenTimeout(
       },
       linked.signal,
       rateLimits,
+      options,
     );
   } catch (e) {
     if (timedOut && !parentSignal.aborted) {
