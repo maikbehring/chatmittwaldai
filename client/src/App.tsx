@@ -217,8 +217,13 @@ export type ChatMessage = {
   compare?: ModelComparePayload;
 };
 
-const DEFAULT_MODEL = MODEL_MINISTRAL;
+const DEFAULT_MODEL = MODEL_GPT_OSS;
 const DEFAULT_MAX_MESSAGES = 60;
+
+function pickFreeChatDefaultModel(allowed: { id: string }[]): string | null {
+  if (!allowed.length) return null;
+  return allowed.find((m) => m.id === MODEL_GPT_OSS)?.id ?? allowed[0]!.id;
+}
 
 type ApiMessage = { role: Role; content: ChatMessage["content"] };
 
@@ -1097,9 +1102,11 @@ export function App() {
         setModels(list);
         const current = modelRef.current;
         if (list.length && !list.some((x) => x.id === current)) {
-          const next = list[0].id;
-          applyPreset(next);
-          setModel(next);
+          const next = pickFreeChatDefaultModel(list);
+          if (next) {
+            applyPreset(next);
+            setModel(next);
+          }
         }
       } catch (e) {
         console.error(e);
@@ -1451,7 +1458,9 @@ export function App() {
     setBriefingValues({});
     activeBriefingFieldIdRef.current = null;
     setActiveBriefingFieldId(null);
-  }, []);
+    const next = pickFreeChatDefaultModel(models);
+    if (next && next !== model) changeModel(next);
+  }, [changeModel, model, models]);
 
   const handleBriefingChange = useCallback((id: string, value: string) => {
     setBriefingValues((prev) => ({ ...prev, [id]: value }));
