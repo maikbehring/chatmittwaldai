@@ -173,6 +173,24 @@ export function getAiHostingGuideProgressSteps(
   ];
 }
 
+export function getAiHostingTariffAdvisorProgressSteps(
+  dataLoading: boolean,
+  advisoryGenerating: boolean,
+): UseCaseProgressStep[] {
+  return [
+    {
+      id: "data",
+      label: "Tarife & Modelle laden",
+      status: dataLoading ? "active" : "done",
+    },
+    {
+      id: "advisory",
+      label: "Beratung mit KI erstellen",
+      status: dataLoading ? "pending" : advisoryGenerating ? "active" : "done",
+    },
+  ];
+}
+
 function useProgressMetrics(steps: UseCaseProgressStep[]) {
   const total = steps.length;
   const doneCount = steps.filter((s) => s.status === "done").length;

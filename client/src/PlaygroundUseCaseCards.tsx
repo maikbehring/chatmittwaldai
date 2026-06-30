@@ -1,6 +1,7 @@
 import type { PlaygroundUseCase, PlaygroundUseCaseId } from "./playgroundUseCases";
 import { getUseCasesByCategory } from "./playgroundUseCases";
 import { UseCaseExperimentalBadge } from "./UseCaseExperimentalBadge";
+import { UseCaseBetaBadge } from "./UseCaseBetaBadge";
 
 type Props = {
   cases: PlaygroundUseCase[];
@@ -44,6 +45,7 @@ function UseCaseCard({
         </span>
         <div className="flex flex-col items-end gap-1">
           {uc.experimental ? <UseCaseExperimentalBadge /> : null}
+          {uc.beta ? <UseCaseBetaBadge /> : null}
           <span className="playground-text-tiny rounded-full bg-playground-muted/[0.08] px-2 py-0.5 font-medium text-playground-ink">
             {uc.modelLabel}
           </span>

@@ -14,6 +14,7 @@ import {
 import { PlaygroundUseCaseCards } from "./PlaygroundUseCaseCards";
 import { PlaygroundUseCaseGuide } from "./PlaygroundUseCaseGuide";
 import { UseCaseExperimentalBadge } from "./UseCaseExperimentalBadge";
+import { UseCaseBetaBadge } from "./UseCaseBetaBadge";
 import { ModelCompareMessageRow } from "./ModelCompareMessageRow";
 import {
   buildCompareApiMessages,
@@ -98,6 +99,7 @@ import {
 } from "./semanticSearch";
 import {
   getAiHostingGuideProgressSteps,
+  getAiHostingTariffAdvisorProgressSteps,
   getAudioTranscribeProgressSteps,
   getPriceCompareProgressSteps,
   getSemanticSearchProgressSteps,
@@ -109,6 +111,11 @@ import {
   formatMittwaldAiHostingDocsContext,
   type MittwaldAiHostingDocsResponse,
 } from "./mittwaldAiHostingDocs";
+import {
+  fetchMittwaldAiHostingTariffAdvisor,
+  formatMittwaldAiHostingTariffAdvisorContext,
+  type MittwaldAiHostingTariffAdvisorResponse,
+} from "./mittwaldAiHostingTariffAdvisor";
 import {
   fetchMittwaldFeatureRequests,
   formatMittwaldFeatureRequestsContext,
@@ -212,6 +219,7 @@ export type ChatMessage = {
   webSearch?: WebSearchResponse;
   mittwaldFeatureRequests?: MittwaldFeatureRequestsResponse;
   mittwaldAiHostingDocs?: MittwaldAiHostingDocsResponse;
+  mittwaldAiHostingTariffAdvisor?: MittwaldAiHostingTariffAdvisorResponse;
   weekendVisitData?: WeekendVisitData;
   priceCompareSearch?: PriceCompareSearchResponse;
   compare?: ModelComparePayload;
@@ -469,6 +477,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   webSearchPending,
   featureRequestsPending,
   aiHostingDocsPending,
+  aiHostingTariffAdvisorPending,
   weekendVisitPhase,
   priceComparePhase,
   priceCompareRound,
@@ -481,6 +490,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   webSearchPending?: boolean;
   featureRequestsPending?: boolean;
   aiHostingDocsPending?: boolean;
+  aiHostingTariffAdvisorPending?: boolean;
   weekendVisitPhase?: "prepare" | "sources" | "generate" | null;
   priceComparePhase?: "search" | "generate" | null;
   priceCompareRound?: { round: number; total: number } | null;
@@ -514,6 +524,13 @@ const ChatMessageRow = memo(function ChatMessageRow({
               {message.mittwaldAiHostingDocs.apiPage.endpoints.length} API-Endpunkte
             </p>
           ) : null}
+          {message.mittwaldAiHostingTariffAdvisor &&
+          message.mittwaldAiHostingTariffAdvisor.tariffs.plans.length > 0 ? (
+            <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
+              Live-Tarife · {message.mittwaldAiHostingTariffAdvisor.tariffs.plans.length} Pakete ·{" "}
+              {message.mittwaldAiHostingTariffAdvisor.modelsPage.models.length} Modelle · FAQ
+            </p>
+          ) : null}
           {message.mittwaldFeatureRequests &&
           message.mittwaldFeatureRequests.issues.length > 0 ? (
             <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
@@ -537,14 +554,20 @@ const ChatMessageRow = memo(function ChatMessageRow({
     assistantMessagePlainText(message.content),
   ).trim();
   const isAiHostingGuide = activeUseCaseId === "ai-hosting-guide";
+  const isAiHostingTariffAdvisor = activeUseCaseId === "ai-hosting-tarifberater";
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
   const isPriceCompareUseCase = activeUseCaseId === "price-compare";
   const aiHostingGuideGenerating =
     isAiHostingGuide && streaming && assistantPlain.length === 0;
+  const aiHostingTariffAdvisorGenerating =
+    isAiHostingTariffAdvisor && streaming && assistantPlain.length === 0;
   const clientWeekendGenerating =
     isClientWeekendUseCase && streaming && assistantPlain.length === 0;
   const showAiHostingProgress =
     isAiHostingGuide && (aiHostingDocsPending || aiHostingGuideGenerating);
+  const showAiHostingTariffProgress =
+    isAiHostingTariffAdvisor &&
+    (aiHostingTariffAdvisorPending || aiHostingTariffAdvisorGenerating);
   const showWeekendVisitProgress =
     isClientWeekendUseCase &&
     (weekendVisitPhase != null || clientWeekendGenerating);
@@ -558,7 +581,9 @@ const ChatMessageRow = memo(function ChatMessageRow({
     !webSearchPending &&
     !featureRequestsPending &&
     !aiHostingDocsPending &&
+    !aiHostingTariffAdvisorPending &&
     !aiHostingGuideGenerating &&
+    !aiHostingTariffAdvisorGenerating &&
     !clientWeekendGenerating &&
     !priceCompareGenerating &&
     priceComparePhase == null &&
@@ -617,6 +642,15 @@ const ChatMessageRow = memo(function ChatMessageRow({
               )}
               ariaLabel="AI Hosting Guide — Fortschritt"
               accentClassName="violet"
+            />
+          ) : showAiHostingTariffProgress ? (
+            <UseCaseProgressSteps
+              steps={getAiHostingTariffAdvisorProgressSteps(
+                Boolean(aiHostingTariffAdvisorPending),
+                aiHostingTariffAdvisorGenerating,
+              )}
+              ariaLabel="AI Hosting Tarifberater — Fortschritt"
+              accentClassName="emerald"
             />
           ) : (
             renderMessageContent(message.content, streaming, onImageOpen)
@@ -732,6 +766,7 @@ export function App() {
   const [webSearchBusy, setWebSearchBusy] = useState(false);
   const [featureRequestsBusy, setFeatureRequestsBusy] = useState(false);
   const [aiHostingDocsBusy, setAiHostingDocsBusy] = useState(false);
+  const [aiHostingTariffAdvisorBusy, setAiHostingTariffAdvisorBusy] = useState(false);
   const [weekendVisitPhase, setWeekendVisitPhase] = useState<
     "prepare" | "sources" | "generate" | null
   >(null);
@@ -798,6 +833,11 @@ export function App() {
   const closeImageLightbox = useCallback(() => setImageLightbox(null), []);
   const abortRef = useRef<AbortController | null>(null);
   const sendLockRef = useRef(false);
+  /** Tarifberater: Live-Tarife/Modelle einmal pro Thread laden, dann wiederverwenden. */
+  const aiHostingTariffAdvisorSessionRef = useRef<{
+    threadId: string;
+    data: MittwaldAiHostingTariffAdvisorResponse;
+  } | null>(null);
   const bottomRef = useRef<HTMLDivElement | null>(null);
   const chatScrollRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -829,7 +869,7 @@ export function App() {
   /** Clipboard-Bild wie in ChatGPT (Capture: greift vor Textfeld, verhindert Müll-Einfügen bei Screenshots). */
   const handleComposerPasteCapture = useCallback(
     (e: React.ClipboardEvent<HTMLDivElement>) => {
-      if (busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy || voiceRecording.active) {
+      if (busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || aiHostingTariffAdvisorBusy || weekendVisitPhase || priceCompareSearchBusy || voiceRecording.active) {
         return;
       }
       const items = e.clipboardData?.items;
@@ -847,7 +887,7 @@ export function App() {
         return;
       }
     },
-    [adjustInputHeight, busy, speechBusy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase, priceCompareSearchBusy, voiceRecording.active],
+    [adjustInputHeight, busy, speechBusy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, aiHostingTariffAdvisorBusy, weekendVisitPhase, priceCompareSearchBusy, voiceRecording.active],
   );
   const modelRef = useRef(model);
   modelRef.current = model;
@@ -951,7 +991,7 @@ export function App() {
       return;
     }
 
-    if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy) {
+    if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || aiHostingTariffAdvisorBusy || weekendVisitPhase || priceCompareSearchBusy) {
       // Während des Streams / Websuche: sofort ans Ende — kein smooth, sonst kämpft die Animation
       // mit wachsendem Inhalt und der Text „springt“.
       const id = requestAnimationFrame(() => {
@@ -964,7 +1004,7 @@ export function App() {
       bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     });
     return () => cancelAnimationFrame(id);
-  }, [messages, busy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase, priceCompareSearchBusy]);
+  }, [messages, busy, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, aiHostingTariffAdvisorBusy, weekendVisitPhase, priceCompareSearchBusy]);
 
   useEffect(() => {
     const root = document.documentElement;
@@ -1176,6 +1216,7 @@ export function App() {
   const isAudioTranscribeUseCase = activeUseCaseId === "audio-transcribe";
   const isModelCompareUseCase = activeUseCaseId === "model-compare";
   const isAiHostingGuideUseCase = activeUseCaseId === "ai-hosting-guide";
+  const isAiHostingTariffAdvisorUseCase = activeUseCaseId === "ai-hosting-tarifberater";
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
   const isPriceCompareUseCase = activeUseCaseId === "price-compare";
   const isSemanticSearchUseCase = activeUseCaseId === "semantic-search";
@@ -1187,6 +1228,17 @@ export function App() {
     if (!aiHostingDocsBusy && !guideGenerating) return null;
     return getAiHostingGuideProgressSteps(aiHostingDocsBusy, guideGenerating);
   }, [isAiHostingGuideUseCase, messages, aiHostingDocsBusy, busy]);
+  const aiHostingTariffAdvisorComposerProgress = useMemo(() => {
+    if (!isAiHostingTariffAdvisorUseCase || messages.length === 0) return null;
+    const last = messages[messages.length - 1];
+    if (last.role !== "assistant" || typeof last.content !== "string") return null;
+    const advisoryGenerating = !aiHostingTariffAdvisorBusy && busy && last.content === "";
+    if (!aiHostingTariffAdvisorBusy && !advisoryGenerating) return null;
+    return getAiHostingTariffAdvisorProgressSteps(
+      aiHostingTariffAdvisorBusy,
+      advisoryGenerating,
+    );
+  }, [isAiHostingTariffAdvisorUseCase, messages, aiHostingTariffAdvisorBusy, busy]);
   const clientWeekendComposerProgress = useMemo(() => {
     if (!isClientWeekendUseCase || messages.length === 0) return null;
     if (weekendVisitPhase == null && !busy) return null;
@@ -1321,6 +1373,7 @@ export function App() {
       !webSearchBusy &&
       !featureRequestsBusy &&
       !aiHostingDocsBusy &&
+      !aiHostingTariffAdvisorBusy &&
       !weekendVisitPhase &&
       !priceCompareSearchBusy &&
       !voiceRecording.active &&
@@ -1338,6 +1391,7 @@ export function App() {
     webSearchBusy,
     featureRequestsBusy,
     aiHostingDocsBusy,
+    aiHostingTariffAdvisorBusy,
     weekendVisitPhase,
     priceCompareSearchBusy,
     voiceRecording.active,
@@ -1429,6 +1483,7 @@ export function App() {
     abortRef.current = null;
     setBusy(false);
     setWebSearchBusy(false);
+    setAiHostingTariffAdvisorBusy(false);
     setWeekendVisitPhase(null);
     setPriceCompareSearchBusy(false);
     setPriceCompareRound(null);
@@ -1436,11 +1491,11 @@ export function App() {
 
   const changeModel = useCallback(
     (modelId: string) => {
-      if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy) stop();
+      if (busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || aiHostingTariffAdvisorBusy || weekendVisitPhase || priceCompareSearchBusy) stop();
       if (modelId !== model) setModel(modelId);
       applyPreset(modelId);
     },
-    [applyPreset, busy, model, stop, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, weekendVisitPhase, priceCompareSearchBusy],
+    [applyPreset, busy, model, stop, webSearchBusy, featureRequestsBusy, aiHostingDocsBusy, aiHostingTariffAdvisorBusy, weekendVisitPhase, priceCompareSearchBusy],
   );
 
   useEffect(() => {
@@ -1452,6 +1507,7 @@ export function App() {
   }, [activeThreadWebSearch, models, changeModel]);
 
   const clearUseCase = useCallback(() => {
+    aiHostingTariffAdvisorSessionRef.current = null;
     setActiveUseCaseId(null);
     setActiveModelFallback(null);
     setSystemPrompt("");
@@ -1483,6 +1539,7 @@ export function App() {
       setAppError(null);
       setContextTrimNotice(null);
       setActiveModelFallback(null);
+      aiHostingTariffAdvisorSessionRef.current = null;
       setActiveUseCaseId(id);
       setMessages([]);
       setImageFile(null);
@@ -1713,7 +1770,7 @@ export function App() {
             textNow.length > 0
           : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
-    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy || ocrPipelineBusy || audioPipelineBusy || semanticSearchPipelineBusy))
+    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || aiHostingTariffAdvisorBusy || weekendVisitPhase || priceCompareSearchBusy || ocrPipelineBusy || audioPipelineBusy || semanticSearchPipelineBusy))
       return;
     if (sendLockRef.current) return;
 
@@ -2503,13 +2560,12 @@ export function App() {
 
     const rawTextBeforeFormat = text;
 
-    if (
+    const apiSubmissionText =
       activeUseCase?.formatSubmissionMessage &&
-      text.length > 0 &&
+      rawTextBeforeFormat.length > 0 &&
       !file
-    ) {
-      text = activeUseCase.formatSubmissionMessage(text);
-    }
+        ? activeUseCase.formatSubmissionMessage(rawTextBeforeFormat)
+        : rawTextBeforeFormat;
 
     const includeCo2Guide = isPlaygroundCo2Question(rawTextBeforeFormat);
 
@@ -2525,12 +2581,14 @@ export function App() {
       const dataUrl = await encodeImageFile(file);
       const parts: ContentPart[] = [];
       const visionText =
-        text.length > 0 ? text : "Beschreibe dieses Bild kurz.";
+        rawTextBeforeFormat.length > 0
+          ? rawTextBeforeFormat
+          : "Beschreibe dieses Bild kurz.";
       parts.push({ type: "text", text: visionText });
       parts.push({ type: "image_url", image_url: { url: dataUrl } });
       userContent = parts;
     } else {
-      userContent = text;
+      userContent = rawTextBeforeFormat;
     }
 
     const ctrl = new AbortController();
@@ -2543,7 +2601,7 @@ export function App() {
       !activeUseCase?.prefersSemanticSearch &&
       activeThreadWebSearch &&
       typeof userContent === "string" &&
-      text.length > 0 &&
+      rawTextBeforeFormat.length > 0 &&
       !file &&
       webSearchConfig?.enabled !== false;
 
@@ -2564,14 +2622,30 @@ export function App() {
     const wantsMittwaldFeatureRequests =
       activeUseCase?.prefersMittwaldFeatureRequests &&
       typeof userContent === "string" &&
-      text.length > 0 &&
+      rawTextBeforeFormat.length > 0 &&
       !file;
 
     const wantsMittwaldAiHostingDocs =
       activeUseCase?.prefersMittwaldAiHostingDocs &&
       typeof userContent === "string" &&
-      text.length > 0 &&
+      rawTextBeforeFormat.length > 0 &&
       !file;
+
+    const wantsAiHostingTariffAdvisor =
+      activeUseCase?.prefersAiHostingTariffAdvisor &&
+      typeof userContent === "string" &&
+      rawTextBeforeFormat.length > 0 &&
+      !file;
+
+    const tariffAdvisorSessionCache =
+      wantsAiHostingTariffAdvisor &&
+      aiHostingTariffAdvisorSessionRef.current?.threadId === activeThreadId
+        ? aiHostingTariffAdvisorSessionRef.current.data
+        : undefined;
+    const needsTariffAdvisorFetch = wantsAiHostingTariffAdvisor && !tariffAdvisorSessionCache;
+    const injectTariffAdvisorContext =
+      wantsAiHostingTariffAdvisor &&
+      !messagesBeforeSend.some((m) => m.mittwaldAiHostingTariffAdvisor);
 
     const wantsWeekendVisit =
       activeUseCase?.prefersWeekendVisitData &&
@@ -2612,12 +2686,14 @@ export function App() {
 
     let mittwaldFeatureRequestsPayload: MittwaldFeatureRequestsResponse | undefined;
     let mittwaldAiHostingDocsPayload: MittwaldAiHostingDocsResponse | undefined;
+    let mittwaldAiHostingTariffAdvisorPayload: MittwaldAiHostingTariffAdvisorResponse | undefined;
     let weekendVisitPayload: WeekendVisitData | undefined;
     let priceComparePayload: PriceCompareSearchResponse | undefined;
 
     const wantsExternalPrefetch =
       wantsMittwaldFeatureRequests ||
       wantsMittwaldAiHostingDocs ||
+      needsTariffAdvisorFetch ||
       wantsWeekendVisit ||
       wantsPriceCompare ||
       useWebSearch;
@@ -2680,6 +2756,44 @@ export function App() {
           message: "AI-Hosting-Doku: keine Modelle geladen. Bitte erneut versuchen.",
         });
         return;
+      }
+    }
+
+    if (wantsAiHostingTariffAdvisor) {
+      if (tariffAdvisorSessionCache) {
+        mittwaldAiHostingTariffAdvisorPayload = tariffAdvisorSessionCache;
+      } else {
+        setAiHostingTariffAdvisorBusy(true);
+        try {
+          mittwaldAiHostingTariffAdvisorPayload = await fetchMittwaldAiHostingTariffAdvisor(
+            ctrl.signal,
+            playgroundRateLimits,
+          );
+        } catch (e) {
+          setAiHostingTariffAdvisorBusy(false);
+          setMessages(messagesBeforeSend);
+          if (isAbortError(e)) throw e;
+          const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+          if (sendErr) setAppError(sendErr);
+          return;
+        }
+        setAiHostingTariffAdvisorBusy(false);
+        if (
+          mittwaldAiHostingTariffAdvisorPayload.tariffs.plans.length === 0 ||
+          mittwaldAiHostingTariffAdvisorPayload.modelsPage.models.length === 0
+        ) {
+          setMessages(messagesBeforeSend);
+          setAppError({
+            kind: "plain",
+            message:
+              "AI-Hosting-Tarifberatung: Tarife oder Modelle konnten nicht geladen werden. Bitte erneut versuchen.",
+          });
+          return;
+        }
+        aiHostingTariffAdvisorSessionRef.current = {
+          threadId: activeThreadId,
+          data: mittwaldAiHostingTariffAdvisorPayload,
+        };
       }
     }
 
@@ -2795,6 +2909,9 @@ export function App() {
       ...(mittwaldAiHostingDocsPayload
         ? { mittwaldAiHostingDocs: mittwaldAiHostingDocsPayload }
         : {}),
+      ...(injectTariffAdvisorContext && mittwaldAiHostingTariffAdvisorPayload
+        ? { mittwaldAiHostingTariffAdvisor: mittwaldAiHostingTariffAdvisorPayload }
+        : {}),
       ...(weekendVisitPayload ? { weekendVisitData: weekendVisitPayload } : {}),
       ...(priceComparePayload ? { priceCompareSearch: priceComparePayload } : {}),
     };
@@ -2823,13 +2940,16 @@ export function App() {
         if (m.role === "user" && m === userMessage && typeof m.content === "string") {
           let enriched = enrichUserMessageForPlaygroundCo2Question(
             rawTextBeforeFormat,
-            m.content,
+            apiSubmissionText,
           );
           if (mittwaldFeatureRequestsPayload) {
             enriched = `${enriched}\n\n${formatMittwaldFeatureRequestsContext(mittwaldFeatureRequestsPayload)}`;
           }
           if (mittwaldAiHostingDocsPayload) {
             enriched = `${enriched}\n\n${formatMittwaldAiHostingDocsContext(mittwaldAiHostingDocsPayload)}`;
+          }
+          if (injectTariffAdvisorContext && mittwaldAiHostingTariffAdvisorPayload) {
+            enriched = `${enriched}\n\n${formatMittwaldAiHostingTariffAdvisorContext(mittwaldAiHostingTariffAdvisorPayload)}`;
           }
           if (weekendVisitPayload) {
             enriched = `${enriched}\n\n${formatWeekendVisitContext(weekendVisitPayload)}`;
@@ -2943,6 +3063,11 @@ export function App() {
       setContextTrimNotice(trimMsg);
     };
 
+    const streamUseCase =
+      activeUseCaseId === "ai-hosting-tarifberater"
+        ? { useCaseId: "ai-hosting-tarifberater" as const }
+        : undefined;
+
     const runStream = async (streamModelId: string, useFirstTokenTimeout: boolean) => {
       const body = buildChatStreamBody(streamModelId);
       if (!usedModelFallback) applyTrimNotice();
@@ -2956,9 +3081,10 @@ export function App() {
           ctrl.signal,
           playgroundRateLimits,
           MODEL_FIRST_TOKEN_TIMEOUT_MS,
+          streamUseCase,
         );
       }
-      return streamChatCompletion(body, onDelta, ctrl.signal, playgroundRateLimits);
+      return streamChatCompletion(body, onDelta, ctrl.signal, playgroundRateLimits, streamUseCase);
     };
 
     try {
@@ -3344,7 +3470,7 @@ export function App() {
               onChange={changeModel}
               aria-label={isModelCompareUseCase ? "Modell A" : "Modell"}
               title={
-                busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || weekendVisitPhase || priceCompareSearchBusy
+                busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || aiHostingTariffAdvisorBusy || weekendVisitPhase || priceCompareSearchBusy
                   ? "Modell wechseln (bricht die laufende Anfrage ab)"
                   : isModelCompareUseCase
                     ? "Modell A"
@@ -3374,7 +3500,7 @@ export function App() {
                   id="model-select-b"
                   value={compareModelB}
                   onChange={setCompareModelB}
-                  disabled={busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || priceCompareSearchBusy}
+                  disabled={busy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || aiHostingTariffAdvisorBusy || priceCompareSearchBusy}
                   title="Modell B"
                   aria-label="Modell B"
                   options={
@@ -3541,6 +3667,13 @@ export function App() {
                         typeof m.content === "string" &&
                         m.content === ""
                       }
+                      aiHostingTariffAdvisorPending={
+                        aiHostingTariffAdvisorBusy &&
+                        m.role === "assistant" &&
+                        i === messages.length - 1 &&
+                        typeof m.content === "string" &&
+                        m.content === ""
+                      }
                       weekendVisitPhase={
                         activeUseCaseId === "client-weekend" &&
                         m.role === "assistant" &&
@@ -3635,6 +3768,7 @@ export function App() {
                       <span className="inline-flex flex-wrap items-center gap-1.5">
                         <span className="font-bold">{activeUseCase.title}</span>
                         {activeUseCase.experimental ? <UseCaseExperimentalBadge /> : null}
+                        {activeUseCase.beta ? <UseCaseBetaBadge /> : null}
                       </span>
                       <span className="text-playground-muted">
                         {" "}
@@ -3687,6 +3821,14 @@ export function App() {
                     steps={aiHostingGuideComposerProgress}
                     ariaLabel="AI Hosting Guide — Fortschritt"
                     accentClassName="violet"
+                  />
+                ) : null}
+                {aiHostingTariffAdvisorComposerProgress ? (
+                  <UseCaseProgressSteps
+                    variant="compact"
+                    steps={aiHostingTariffAdvisorComposerProgress}
+                    ariaLabel="AI Hosting Tarifberater — Fortschritt"
+                    accentClassName="emerald"
                   />
                 ) : null}
                 {semanticSearchComposerProgress ? (

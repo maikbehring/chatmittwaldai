@@ -20,6 +20,7 @@ import { createBasePathStripMiddleware, normalizePlaygroundBasePath } from "./pl
 import { getWebSearchConfig, searchWeb, searchWebMulti } from "./webSearch.js";
 import { fetchMittwaldFeatureRequests } from "./mittwaldFeatureRequests.js";
 import { fetchMittwaldAiHostingDocs } from "./mittwaldAiHostingDocs.js";
+import { fetchMittwaldAiHostingTariffAdvisor } from "./mittwaldAiHostingTariffAdvisor.js";
 import {
   fetchWeekendVisitSources,
   prepareWeekendVisitCity,
@@ -123,7 +124,19 @@ const MAX_MESSAGES = Math.min(
   Math.max(Number(process.env.PLAYGROUND_MAX_MESSAGES || 60), 4),
   500,
 );
-const MAX_MESSAGE_CHARS = 48000;
+const MAX_MESSAGE_CHARS = Math.min(
+  Math.max(Number(process.env.PLAYGROUND_MAX_MESSAGE_CHARS || 48000), 4096),
+  200_000,
+);
+/** Höheres Limit für AI-Hosting-Tarifberater (voller FAQ-/Tarif-Kontext). */
+const MAX_MESSAGE_CHARS_TARIFF_ADVISOR = Math.min(
+  Math.max(
+    Number(process.env.PLAYGROUND_TARIFF_ADVISOR_MAX_MESSAGE_CHARS || 120_000),
+    MAX_MESSAGE_CHARS,
+  ),
+  500_000,
+);
+const TARIFF_ADVISOR_USE_CASE = "ai-hosting-tarifberater";
 const MAX_TOOLS = 16;
 
 function parseCorsOrigins(raw) {
@@ -199,7 +212,20 @@ function summarizeUpstreamError(raw) {
   return slice;
 }
 
-function validateMessages(messages) {
+function isTariffAdvisorChatRequest(req, body) {
+  const header = req?.get?.("x-playground-use-case") ?? req?.get?.("X-Playground-Use-Case");
+  if (header === TARIFF_ADVISOR_USE_CASE) return true;
+  const msgs = body?.messages;
+  if (!Array.isArray(msgs)) return false;
+  return msgs.some(
+    (m) =>
+      m?.role === "system" &&
+      typeof m.content === "string" &&
+      m.content.includes("Berater im mittwald-Kundenservice für AI Hosting"),
+  );
+}
+
+function validateMessages(messages, maxMessageChars = MAX_MESSAGE_CHARS) {
   if (!Array.isArray(messages)) return "messages muss ein Array sein.";
   if (messages.length > MAX_MESSAGES)
     return `Maximal ${MAX_MESSAGES} Nachrichten erlaubt.`;
@@ -210,13 +236,13 @@ function validateMessages(messages) {
     if (!allowedRoles.has(m.role)) return `Ungültige Rolle an Index ${i}.`;
     const c = m.content;
     if (typeof c === "string") {
-      if (c.length > MAX_MESSAGE_CHARS)
-        return `Nachricht ${i} ist zu lang (>${MAX_MESSAGE_CHARS} Zeichen).`;
+      if (c.length > maxMessageChars)
+        return `Nachricht ${i} ist zu lang (>${maxMessageChars} Zeichen).`;
     } else if (Array.isArray(c)) {
       for (const part of c) {
         if (!part || typeof part !== "object") return `Ungültiger Multipart-Inhalt bei ${i}.`;
         if (part.type === "text" && typeof part.text === "string") {
-          if (part.text.length > MAX_MESSAGE_CHARS)
+          if (part.text.length > maxMessageChars)
             return `Textteil bei Nachricht ${i} ist zu lang.`;
         }
         if (part.type === "image_url" && part.image_url?.url) {
@@ -234,7 +260,7 @@ function validateMessages(messages) {
   return null;
 }
 
-function sanitizeChatBody(body) {
+function sanitizeChatBody(body, req) {
   const out = {};
   for (const key of Object.keys(body)) {
     if (CHAT_ALLOWED_KEYS.has(key)) out[key] = body[key];
@@ -249,7 +275,10 @@ function sanitizeChatBody(body) {
   ) {
     return { error: "Dieses Modell ist für diesen Playground nicht freigegeben." };
   }
-  const msgErr = validateMessages(out.messages);
+  const maxMessageChars = isTariffAdvisorChatRequest(req, out)
+    ? MAX_MESSAGE_CHARS_TARIFF_ADVISOR
+    : MAX_MESSAGE_CHARS;
+  const msgErr = validateMessages(out.messages, maxMessageChars);
   if (msgErr) return { error: msgErr };
   if (out.tools !== undefined) {
     if (!Array.isArray(out.tools)) return { error: "tools muss ein Array sein." };
@@ -474,6 +503,27 @@ async function main() {
           502,
           "ai_hosting_docs_failed",
           e instanceof Error ? e.message : "AI-Hosting-Doku konnte nicht geladen werden.",
+        );
+      }
+    },
+  );
+
+  app.get(
+    "/api/mittwald/ai-hosting-tariff-advisor",
+    featureRequestsLimiter,
+    async (_req, res) => {
+      try {
+        const data = await fetchMittwaldAiHostingTariffAdvisor({
+          allowedModelIds: ALLOWED_MODELS,
+        });
+        res.json(data);
+      } catch (e) {
+        console.error(e);
+        return jsonError(
+          res,
+          502,
+          "ai_hosting_tariff_advisor_failed",
+          e instanceof Error ? e.message : "AI-Hosting-Tarifberatung konnte nicht geladen werden.",
         );
       }
     },
@@ -975,7 +1025,7 @@ async function main() {
     chatLimiter,
     express.json({ limit: MAX_BODY_BYTES }),
     async (req, res) => {
-    const parsed = sanitizeChatBody(req.body || {});
+    const parsed = sanitizeChatBody(req.body || {}, req);
     if (parsed.error) {
       return jsonError(res, 400, "validation_error", parsed.error);
     }

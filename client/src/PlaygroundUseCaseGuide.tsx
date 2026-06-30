@@ -3,6 +3,12 @@ import { MODEL_GPT_OSS } from "./modelPresets";
 import { WHISPER_CHUNK_MAX_SECONDS } from "./blobToWav";
 import { OCR_MAX_PAGES } from "./pdfToOcrImages";
 import { UseCaseExperimentalBadge } from "./UseCaseExperimentalBadge";
+import { UseCaseBetaBadge } from "./UseCaseBetaBadge";
+import {
+  MITTWALD_SALES_URL,
+  MITTWALD_TARIF_CONSULT_PHONE,
+  MITTWALD_TARIF_CONSULT_PHONE_TEL,
+} from "./playgroundSalesLinks";
 
 type Props = {
   useCase: PlaygroundUseCase;
@@ -47,10 +53,15 @@ export function PlaygroundUseCaseGuide({
               <span className="inline-flex flex-wrap items-center gap-2">
                 {useCase.title}
                 {useCase.experimental ? <UseCaseExperimentalBadge /> : null}
+                {useCase.beta ? <UseCaseBetaBadge /> : null}
               </span>
             </h2>
             <p className="playground-text-tiny mt-0.5 font-medium text-playground-muted">
-              Modell: {useCase.modelLabel}
+              {useCase.id !== "ai-hosting-tarifberater" ? (
+                <>Modell: {useCase.modelLabel}</>
+              ) : (
+                <>Persönliche Beratung zu AI Hosting</>
+              )}
             </p>
             {useCase.description ? (
               <p className="playground-text-small mt-2 max-w-prose text-playground-muted">
@@ -167,6 +178,33 @@ export function PlaygroundUseCaseGuide({
           >
             API-Endpunkte
           </a>
+        </p>
+      ) : null}
+
+      {useCase.id === "ai-hosting-tarifberater" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-2.5 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
+          <strong className="font-semibold text-playground-ink">Welcher Tarif passt zu dir?</strong>{" "}
+          Beschreib kurz dein Projekt — du bekommst eine persönliche Empfehlung zu Tarif und Modell.{" "}
+          Antworten laufen mit <strong className="text-playground-ink">Qwen3.6</strong>; falls nicht erreichbar,
+          automatisch <strong className="text-playground-ink">gpt-oss 120B</strong> als Fallback.{" "}
+          <span className="text-playground-muted">
+            Beta, nur zur Orientierung — für Kaufentscheidungen:{" "}
+            <a
+              href={MITTWALD_TARIF_CONSULT_PHONE_TEL}
+              className="font-semibold text-playground-ink underline underline-offset-2"
+            >
+              {MITTWALD_TARIF_CONSULT_PHONE}
+            </a>
+            {" · "}
+            <a
+              href={MITTWALD_SALES_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-semibold text-playground-ink underline underline-offset-2"
+            >
+              Beratung vereinbaren
+            </a>
+          </span>
         </p>
       ) : null}
 
@@ -301,7 +339,7 @@ export function PlaygroundUseCaseGuide({
         </div>
       ) : null}
 
-      {useCase.copyableOutput ? (
+      {useCase.copyableOutput && useCase.id !== "ai-hosting-tarifberater" ? (
         <p className="playground-text-small mb-3 rounded-xl border border-playground-border bg-playground-main px-3 py-2.5 font-medium text-playground-muted">
           <span className="mr-1.5" aria-hidden>
             ⧉
