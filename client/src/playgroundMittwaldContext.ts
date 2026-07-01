@@ -19,15 +19,18 @@ export function formatPlaygroundMittwaldContext(): string {
     `Mehr: https://mstudio.mittwald.de/\n\n` +
     `## Hosting-Produkte (Kurz)\n` +
     `• **Webhosting** — Managed Hosting für typisch **ein** CMS-/Shop-Projekt; shared, konfigurierbar (vCPU/RAM/Storage). ` +
-    `https://www.mittwald.de/hosting/webhosting\n` +
+    `https://www.mittwald.de/webhosting\n` +
     `• **vServer** — Eigene VM + dedizierte DB-Instanz; **viele Projekte** auf gemeinsamen Ressourcen, skalierbar, Container möglich. ` +
-    `Ideal wenn mehrere Kundenprojekte auf einer Instanz. https://www.mittwald.de/hosting/vserver\n` +
+    `Ideal wenn mehrere Kundenprojekte auf einer Instanz. https://www.mittwald.de/vserver\n` +
     `• **Dedicated Server** — 100 % isolierte Ressourcen, hohe Performance, für anspruchsvolle Shops/Peaks; Container & API. ` +
-    `https://www.mittwald.de/hosting/dedicated-server\n` +
+    `https://www.mittwald.de/dedicated-server\n` +
+    `• **E-Mail** — im Hosting inklusive, DSGVO-konform in DE; Migration: https://www.mittwald.de/lp/e-mail-migration\n` +
+    `• **mStudio** — Verwaltung: https://mstudio.mittwald.de/ · Produktinfo: https://www.mittwald.de/mstudio\n` +
     `• **CMS-/Shop-Hosting** — u. a. TYPO3, WordPress, Joomla!, Shopware, Magento, WooCommerce (eigene Produktseiten auf mittwald.de).\n` +
     `• **AI Hosting** — OpenAI-kompatible API, Modelle fully managed in Deutschland, Verwaltung im mStudio. ` +
     `Technik/Doku: https://developer.mittwald.de/de/docs/v2/platform/aihosting/ · Produkt: https://www.mittwald.de/mstudio/ai-hosting\n` +
-    `• **Container Hosting, n8n Hosting** — weitere mStudio-Produkte (Details auf mittwald.de).\n\n` +
+    `• **Container Hosting** — Docker-Container im mStudio, Vorlagen, kombinierbar mit AI Hosting: https://www.mittwald.de/mstudio/container-hosting\n` +
+    `• **n8n Hosting** — weitere mStudio-Produkte (Details auf mittwald.de).\n\n` +
     `## Support & Beratung\n` +
     `Bei Produkt-, Tarif- oder Vertragsfragen nicht raten — verweisen:\n` +
     `• Tarifberatung: +49 5772 293 150\n` +

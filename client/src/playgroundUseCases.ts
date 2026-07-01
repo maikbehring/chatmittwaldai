@@ -1,10 +1,17 @@
 import { formatPlaygroundShortDateBerlin } from "./playgroundDate";
 import { MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
 import {
+  formatMittwaldHostingProductLinksBlock,
   MITTWALD_AI_HOSTING_TARIFF_URL,
+  MITTWALD_CONTAINER_HOSTING_URL,
+  MITTWALD_DEDICATED_SERVER_URL,
+  MITTWALD_EMAIL_MIGRATION_URL,
+  MITTWALD_MSTUDIO_PRODUCT_URL,
   MITTWALD_MSTUDIO_URL,
   MITTWALD_SALES_URL,
   MITTWALD_TARIF_CONSULT_PHONE,
+  MITTWALD_VSERVER_URL,
+  MITTWALD_WEBHOSTING_URL,
   MITTWALD_WEBSITE_URL,
 } from "./playgroundSalesLinks";
 
@@ -838,7 +845,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 4. **Nächste Schritte:** Nur wenn zur Frage passend — konkrete **Klickpfade**, z. B.:
    - Tarif buchen: **Tarifseite (Website)** ${MITTWALD_AI_HOSTING_TARIFF_URL} — Tarif wählen; **oder** als Bestandskunde im **mStudio** (${MITTWALD_MSTUDIO_URL}) → AI Hosting
    - API-Key anlegen: mStudio → AI Hosting → API-Keys
-5. **Follow-up / Zustimmung (Pflicht):** Schreibt der Nutzer nur **„Ja“**, **„Ok“**, **„Gerne“**, **„Bitte“** o. ä. → beziehe dich auf deine **letzte** Nachricht im Chatverlauf. Hast **du** nach Buchung, API-Key oder Vertrieb gefragt und der Nutzer stimmt zu → **sofort beide Buchungswege** nennen (siehe Buchungsregel): **(A) Tarifseite** ${MITTWALD_AI_HOSTING_TARIFF_URL} **und (B) mStudio** ${MITTWALD_MSTUDIO_URL} (kostenlos anmelden, falls noch kein Konto) → AI Hosting → Tarif. Danach **API-Key** im mStudio. **Nicht** nur mStudio-Menüschritte ohne Tarifseite. **Tarif-Empfehlung nicht wiederholen.** Playground: echte Buchung über Tarifseite oder mStudio, nicht hier.
+5. **Follow-up / Zustimmung (Pflicht):** Schreibt der Nutzer nur **„Ja“**, **„Ok“**, **„Gerne“**, **„Bitte“** o. ä. → **Chatverlauf lesen**, was du zuletzt angeboten hast. **Tarif-Empfehlung nicht wiederholen.**\n   - **Letztes Thema = AI Hosting** (Tarif, API-Key, Buchung) → **beide Buchungswege:** **(A) Tarifseite** ${MITTWALD_AI_HOSTING_TARIFF_URL} **und (B) mStudio** ${MITTWALD_MSTUDIO_URL} → AI Hosting → Tarif. Danach **API-Key** im mStudio.\n   - **Letztes Thema = Webhosting / E-Mail / Cloud / Container / Verein / Ehrenamt OHNE KI** → **konkrete Produktlinks** (siehe Hosting-Produktlinks im Kontext) — **Verboten:** AI-Hosting-Tarifseite, API-Key, „keine zentrale Tarifseite“ ohne Links. **Pflicht-Links:** Webhosting ${MITTWALD_WEBHOSTING_URL} · vServer ${MITTWALD_VSERVER_URL} · Container ${MITTWALD_CONTAINER_HOSTING_URL} · E-Mail ${MITTWALD_EMAIL_MIGRATION_URL} · mStudio Produkt ${MITTWALD_MSTUDIO_PRODUCT_URL} · mStudio Login ${MITTWALD_MSTUDIO_URL}. Dedicated nur wenn im Verlauf relevant: ${MITTWALD_DEDICATED_SERVER_URL}.
 5b. **Follow-up Tariffrage (Pflicht):** Fragt der Nutzer nach einem **bereits beschriebenen** Use Case nur noch nach dem **passenden Tarif** (z. B. „Was wäre der passende Tarif?“) → **Chatverlauf nutzen**, **konkrete Empfehlung** (Starter/Pro/Business) mit **Preis & Kontingent aus Live-Tarifdaten** + **Begründung** zum Use Case. **Verboten:** abwehrend mit „ohne konkrete Zahlen nicht seriös“ — wenn RAG/Website-Chatbot/ähnlicher Standard-Use Case im Verlauf steht, ist eine seriöse Faustregel-Empfehlung möglich. **Nicht** einladen („Fragen zum Tarif?“) und dann die Tariffrage abblocken.
 6. **Proaktivität:** Nur **ein** kurzer Zusatz-Tipp, wenn er die **gestellte Frage** direkt ergänzt — kein Sammelsurium ungefragter Hinweise.
 7. **Kanalentscheidung:** Nur bei Vertrags-/Kauf-/Dedicated-Themen oder wenn die Frage es erfordert:
@@ -851,7 +858,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 1. **Live-Tarife (Shared)** von mittwald.de/mstudio/ai-hosting — Starter, Pro, Business, Enterprise-Hinweis
 2. **Dedicated AI Hosting (Vertriebsinfos)** — M/L/XL mit RTX 6000 PRO, Preise, VRAM, Erweiterungen (noch nicht vollständig auf der Landingpage)
 3. **Live-Modellliste** vom Developer Portal (Typ, Modalitäten, Context)
-4. **Kuratiertes FAQ** (83 Antworten — als Wissensbasis, nicht wörtlich vorlesen)
+4. **Kuratiertes FAQ** (84 Antworten — als Wissensbasis, nicht wörtlich vorlesen)
 5. **Mittwald-Kurzprofil** (Hosting-Produkte, mStudio, Support — für Fragen außerhalb AI Hosting)
 6. **Container-Vorlagen & AI Hosting** (direkte Anbindung, RAG-Bausteine, typische Stacks — wird laufend erweitert)
 
@@ -961,15 +968,16 @@ export function formatAiHostingTariffAdvisorSubmission(text: string): string {
     ? "Anrede: **Sie-Form Pflicht** — der Nutzer schreibt mit Sie (z. B. Guten Tag, Können Sie). Antworte durchgängig mit Sie/Ihnen/Ihr — **kein** du/dir/dein/euch/ihr in der gesamten Antwort."
     : "Anrede: **Du** — außer der Nutzer schreibt mit Sie, dann Sie spiegeln.";
   const followUp = isTariffAdvisorFollowUpAffirmation(text)
-    ? "Kontext: **Kurze Zustimmung** (z. B. „Ja“) — **Buchungsschritte jetzt**, Tarif-Empfehlung **nicht** wiederholen. **Pflicht — beide Wege mit Links:**\n" +
-      "A) **Tarifseite:** " +
+    ? "Kontext: **Kurze Zustimmung** (z. B. „Ja“) — **Chatverlauf lesen**. Tarif-Empfehlung **nicht** wiederholen.\n\n" +
+      "**Wenn letztes Thema AI Hosting war** (Tarif/API/Buchung) — beide Wege:\n" +
+      "A) Tarifseite: " +
       MITTWALD_AI_HOSTING_TARIFF_URL +
-      " — Tarif wählen & Bestellung (auch ohne Konto)\n" +
-      "B) **mStudio:** " +
+      "\nB) mStudio: " +
       MITTWALD_MSTUDIO_URL +
-      " — kostenlos anmelden falls nötig → AI Hosting → Tarif\n" +
-      "Danach: **API-Key** im mStudio unter AI Hosting → API-Keys\n" +
-      "**Verboten:** nur mStudio-Menü ohne Tarifseite; Tarifseite als „mStudio“ bezeichnen.\n"
+      " → AI Hosting → Tarif\nDanach API-Key im mStudio unter AI Hosting → API-Keys.\n\n" +
+      "**Wenn letztes Thema Webhosting/E-Mail/Cloud/Container/Verein/Ehrenamt OHNE KI war** — **keine** AI-Hosting-Tarifseite, **kein** API-Key. **Diese Produktlinks nennen:**\n" +
+      formatMittwaldHostingProductLinksBlock() +
+      "\n**Verboten:** vage „auf mittwald.de suchen“ ohne Links; behaupten es gäbe „keine Tarifseite“.\n"
     : "";
   const tariffFollowUp =
     isTariffAdvisorFollowUpTariffQuestion(text) && !isTariffAdvisorFollowUpAffirmation(text)
