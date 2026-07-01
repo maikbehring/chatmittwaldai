@@ -7,5 +7,5 @@ export const MITTWALD_SALES_URL = "https://www.mittwald.de/darum-mittwald/vertri
 /** AI-Hosting-Tarifseite (Website) — Tarif wählen & buchen. */
 export const MITTWALD_AI_HOSTING_TARIFF_URL = "https://www.mittwald.de/mstudio/ai-hosting";
 
-/** mStudio-Kundenportal — Anmeldung, API-Keys, Tarifwechsel für Bestandskunden. */
-export const MITTWALD_MSTUDIO_URL = "https://www.mittwald.de/mstudio";
+/** mStudio-Kundenportal — Anmeldung (auch kostenlos neu), API-Keys, Tarifwechsel. */
+export const MITTWALD_MSTUDIO_URL = "https://mstudio.mittwald.de/";

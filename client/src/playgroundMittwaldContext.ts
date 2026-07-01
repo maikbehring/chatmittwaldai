@@ -16,7 +16,7 @@ export function formatPlaygroundMittwaldContext(): string {
     `Arbeitsplatz für laufenden Betrieb (nicht nur Vertragsverwaltung wie das klassische Kundencenter). ` +
     `Für Agenturen/Teams: Projekte, Domains, SSL, E-Mail, Container, AI Hosting, Benutzer & Rollen, Marketplace-Extensions, API/CLI.\n` +
     `Neue Produkte (vServer, Container Hosting, AI Hosting) werden im mStudio verwaltet.\n` +
-    `Mehr: https://www.mittwald.de/mstudio\n\n` +
+    `Mehr: https://mstudio.mittwald.de/\n\n` +
     `## Hosting-Produkte (Kurz)\n` +
     `• **Webhosting** — Managed Hosting für typisch **ein** CMS-/Shop-Projekt; shared, konfigurierbar (vCPU/RAM/Storage). ` +
     `https://www.mittwald.de/hosting/webhosting\n` +
