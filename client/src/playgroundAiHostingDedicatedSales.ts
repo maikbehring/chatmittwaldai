@@ -57,7 +57,8 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
       tokens: "Unlimited Tokens",
       provisioning: "Bereitstellung ca. 2–4 Wochen",
       minTerm: "Mindestlaufzeit: 3 Monate",
-      modelSizeHint: "Modellgröße grob: bis ca. 30B–70B (je nach Quantisierung)",
+      modelSizeHint:
+        "Aktuell alle Katalog-Modelle — Ausnahme: Mistral-Medium-3.5-128B und Qwen3.5-122B-A10B-FP8 (→ mindestens L)",
     },
     {
       id: "L",
@@ -69,7 +70,8 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
       tokens: "Unlimited Tokens",
       provisioning: "Bereitstellung ca. 2–4 Wochen",
       minTerm: "Mindestlaufzeit: 6 Monate",
-      modelSizeHint: "Modellgröße grob: bis ca. 70B–120B (je nach Quantisierung/Verteilung)",
+      modelSizeHint:
+        "Mindestens für Mistral-Medium-3.5-128B und Qwen3.5-122B-A10B-FP8 (2 GPUs); auch Load Balancing / Sharding",
     },
     {
       id: "XL",
@@ -96,17 +98,30 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
     "Shared AI Hosting (Starter/Pro/Business): monatliche Laufzeit, automatische Verlängerung zum Monatsende, Kündigung mit 30 Tagen Frist zum Monatsende.\n\n" +
     "Dedicated AI M (1 GPU): Mindestlaufzeit 3 Monate.\n" +
     "Dedicated AI L/XL (ab 2 GPUs): Mindestlaufzeit 6 Monate — mehr Planung, Einrichtung und laufende Abstimmung; Infrastruktur wird langfristig reserviert.",
+  dedicatedModelCatalog:
+    "**Aktueller Stand (Dedicated, eigene GPU):**\n" +
+    "- **Dedicated AI M (1 GPU):** Laufen **alle** Modelle aus dem Katalog — **Ausnahme:** **Mistral-Medium-3.5-128B** und **Qwen3.5-122B-A10B-FP8** (diese benötigen **mindestens 2 GPUs**).\n" +
+    "- **Dedicated AI L (2 GPUs):** Erforderlich für **Mistral-Medium-3.5-128B** und **Qwen3.5-122B-A10B-FP8**; auch für Load Balancing / Model-Sharding bei hoher Last.\n" +
+    "- **gpt-oss-120b** und die übrigen Katalog-Modelle laufen auf **Dedicated M**.\n" +
+    "Bei Dedicated-Modellfragen: **sachlich antworten**, konkrete Konfiguration und Vertrag mit dem **Vertrieb** klären (+49 5772 293 150).",
+  customModels:
+    "**Eigene & spezielle Modelle (nur Dedicated):**\n" +
+    "Auf **Shared AI Hosting** (Starter/Pro/Business) gelten die Modelle aus der **Live-Modellliste**.\n" +
+    "Bei **Dedicated AI Hosting** sind darüber hinaus **eigene oder kundenspezifische Modelle** möglich — auch solche, die wir im klassischen AI Hosting **nicht** im Standard-Katalog anbieten.\n" +
+    "**Ablauf:** Modellwunsch mit dem **Vertrieb** besprechen → wir **prüfen**, ob es auf unserer Infrastruktur (RTX 6000 PRO, DE-Hosting) **funktioniert** → passt es technisch, **richten wir es ein** und stellen die API bereit.\n" +
+    "Einmalige Einrichtung kundenspezifischer Modelle: **199 €** (laut Erweiterungen). **Keine** pauschale Ablehnung mit „nur Live-Liste“ bei Dedicated-Fragen.",
   sizingGuidance:
     "Dedicated-Stufenleiter (kleinster passender Schritt zuerst):\n" +
     "1. **Shared (Starter/Pro/Business)** — Standard für die meisten Projekte, auch SaaS mit moderatem Traffic. Business bei hoher Last (Rate Limits, Token-Kontingent).\n" +
-    "2. **Dedicated AI M (1 GPU)** — Einstieg Dedicated: unlimited Tokens, eigene GPU, typische Shared-Modelle (z. B. bis ~70B je nach Quantisierung). Nicht direkt L empfehlen.\n" +
-    "3. **Dedicated AI L (2 GPUs)** — nur wenn konkret nötig: Load Balancing (mehr parallele Anfragen), Model-Sharding / größere Modelle (~70B–120B), oder 1 GPU reicht nachweislich nicht.\n" +
-    "4. **Dedicated AI XL (4 GPUs)** — sehr große Modelle oder extreme Last.\n" +
+    "2. **Dedicated AI M (1 GPU)** — Einstieg Dedicated: unlimited Tokens, eigene GPU; **aktuell alle Katalog-Modelle** außer Mistral-Medium-3.5-128B und Qwen3.5-122B-A10B-FP8.\n" +
+    "3. **Dedicated AI L (2 GPUs)** — wenn **Mistral-Medium-3.5-128B** oder **Qwen3.5-122B-A10B-FP8** auf Dedicated, oder Load Balancing / Sharding / nachweislich 1 GPU nicht reicht.\n" +
+    "4. **Dedicated AI XL (4 GPUs)** — sehr große Sonderkonfigurationen oder extreme Last.\n" +
     "„Viele Anfragen“ allein rechtfertigt nicht automatisch 2 GPUs — erst Business prüfen, dann ggf. Dedicated M.",
   modelSizing:
+    "Hardware: **RTX 6000 PRO** = **96 GB VRAM pro GPU** (nicht 48 GB — nicht mit anderen GPU-Modellen verwechseln).\n" +
     "35 % VRAM reservieren wir für Context Caching (stabile, schnelle Antworten bei parallelen Anfragen). " +
     "Nur ca. 65 % des VRAM sind für das Modell selbst eingeplant: " +
-    "M → ca. 62 GB · L → ca. 125 GB · XL → ca. 250 GB. " +
+    "M (1 GPU) → **96 GB gesamt**, ca. 62 GB fürs Modell · L (2 GPUs) → 192 GB gesamt, ca. 125 GB fürs Modell · XL (4 GPUs) → 384 GB gesamt, ca. 250 GB fürs Modell. " +
     "Die genaue Modellgröße hängt von Quantisierung, Architektur und Betriebsmodus (Single, Load Balancing, Model-Sharding) ab — " +
     "die Werte sind praxisnahe Orientierung.",
   onboarding: [
@@ -144,12 +159,15 @@ export function formatPlaygroundAiHostingDedicatedSalesContext(): string {
 
   return (
     `[Playground — Dedicated AI Hosting (Vertriebsinfos, RTX 6000 PRO — noch nicht vollständig auf der öffentlichen Landingpage)]\n` +
-    `WICHTIG: Dedicated-Preise (M/L/XL) und Erweiterungen NUR aus diesem Block — nicht aus Live-Tarifdaten erfinden oder Shared-Tarife (Starter/Pro/Business) verwechseln.\n\n` +
+    `WICHTIG: Dedicated-Preise (M/L/XL) und Erweiterungen NUR aus diesem Block — nicht aus Live-Tarifdaten erfinden oder Shared-Tarife (Starter/Pro/Business) verwechseln. ` +
+    `Dedicated M = 1× RTX 6000 PRO = **96 GB VRAM gesamt** (nicht 48 GB).\n\n` +
     `## ${d.title}\n${d.subtitle}\n\n${d.pitch}\n\n` +
     `### Warum Dedicated AI Hosting?\n${d.benefits.map((b) => `- ${b}`).join("\n")}\n\n` +
     `### Einfach erklärt\n${glossary}\n\n` +
     `### Tarife (RTX 6000 PRO)\n${plans}\n\n` +
     `### Größe / Empfehlungslogik\n${d.sizingGuidance}\n\n` +
+    `### Modell-Zuordnung Dedicated (aktuell)\n${d.dedicatedModelCatalog}\n\n` +
+    `### Eigene Modelle (Dedicated)\n${d.customModels}\n\n` +
     `### Skalierungsoptionen & Erweiterungen\n${extensions}\n\n` +
     `### Vertragslaufzeit\n${d.contractDuration}\n\n` +
     `### Wie groß darf das Modell sein?\n${d.modelSizing}\n\n` +
