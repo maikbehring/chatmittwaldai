@@ -109,8 +109,21 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
     "**Eigene & spezielle Modelle (nur Dedicated):**\n" +
     "Auf **Shared AI Hosting** (Starter/Pro/Business) gelten die Modelle aus der **Live-Modellliste**.\n" +
     "Bei **Dedicated AI Hosting** sind darüber hinaus **eigene oder kundenspezifische Modelle** möglich — auch solche, die wir im klassischen AI Hosting **nicht** im Standard-Katalog anbieten.\n" +
-    "**Ablauf:** Modellwunsch mit dem **Vertrieb** besprechen → wir **prüfen**, ob es auf unserer Infrastruktur (RTX 6000 PRO, DE-Hosting) **funktioniert** → passt es technisch, **richten wir es ein** und stellen die API bereit.\n" +
-    "Einmalige Einrichtung kundenspezifischer Modelle: **199 €** (laut Erweiterungen). **Keine** pauschale Ablehnung mit „nur Live-Liste“ bei Dedicated-Fragen.",
+    "**Einrichtung durch mittwald:** Modelle werden **von uns für den Kunden eingerichtet** — **kein** Self-Service, der Kunde deployt die Modelle **nicht** selbst. Ablauf: Dedicated-Tarif (M/L/XL) buchen → Modellwünsche mit **Vertrieb** besprechen → wir **prüfen** Machbarkeit (VRAM, GPU-Stufe, parallel vs. Wechsel) → wir **richten ein** und stellen die API bereit.\n" +
+    "**Erweiterungen:** Jedes **zusätzliche Modell** (über das Basis-Setup) = **199 € einmalig** Einrichtungspauschale (kundenspezielle Modelle ebenfalls). Load Balancing / Model-Sharding: **199 €/Monat**.\n" +
+    "**VRAM:** GPU-Ressourcen sind begrenzt — welche Modelle **parallel** auf welcher Stufe (M/L/XL) sinnvoll laufen, klären wir **im Vorfeld gemeinsam** mit dem Kunden im Vertriebsgespräch.",
+  dedicatedModelSetup:
+    "**Mehrere Modelle auf Dedicated (Antwort-Muster):**\n" +
+    "Ja, grundsätzlich möglich. Du buchst **Dedicated AI Hosting** (M, L oder XL). **Wir richten die gewünschten Modelle für dich ein** — als **Erweiterungen** zum Dedicated-Tarif. Pro **zusätzliches Modell**: **199 € einmalig** Einrichtung.\n" +
+    "Da VRAM begrenzt ist, prüfen wir **vorab gemeinsam**, welche Modelle parallel auf welcher GPU-Stufe sinnvoll laufen. Konkrete Konfiguration und Buchung: **Vertrieb** +49 5772 293 150 · https://www.mittwald.de/darum-mittwald/vertrieb\n" +
+    "**Verboten:** suggerieren, der Kunde richte Modelle selbst ein („du richtest … ein“).",
+  monitoring:
+    "**Auslastung, API-Keys & mStudio (Dedicated — aktueller Stand):**\n" +
+    "- **Managed Betrieb:** Bei Dedicated AI Hosting **kümmern wir uns**, dass alles sauber läuft. Bei **erhöhter Auslastung** melden wir uns **proaktiv**.\n" +
+    "- **mStudio heute:** Für Dedicated **kein** Self-Service wie bei Shared. **Aktuell nicht** im mStudio: Token-Statistiken, Live-Auslastungs-Dashboard, **API-Key-Verwaltung** — Keys und Setup **übernehmen wir** für den Kunden (mit Vertrieb).\n" +
+    "- **Grafana (optional):** Auf Wunsch **dediziertes Grafana-Dashboard** — Anfrage über **Vertrieb** (+49 5772 293 150).\n" +
+    "- **Produktentwicklung:** Dedicated wird **stetig weiterentwickelt**. Themen wie **Auslastungsanzeige**, **Key-Verwaltung** u. ä. **können künftig** ins mStudio kommen — **ohne** Terminzusage oder Roadmap-Versprechen.\n" +
+    "**Verboten:** mStudio-Live-Dashboard, Token-Statistiken oder API-Key-Self-Service für Dedicated behaupten.",
   sizingGuidance:
     "Dedicated-Stufenleiter (kleinster passender Schritt zuerst):\n" +
     "1. **Shared (Starter/Pro/Business)** — Standard für die meisten Projekte, auch SaaS mit moderatem Traffic. Business bei hoher Last (Rate Limits, Token-Kontingent).\n" +
@@ -169,6 +182,8 @@ export function formatPlaygroundAiHostingDedicatedSalesContext(): string {
     `### Größe / Empfehlungslogik\n${d.sizingGuidance}\n\n` +
     `### Modell-Zuordnung Dedicated (aktuell)\n${d.dedicatedModelCatalog}\n\n` +
     `### Eigene Modelle (Dedicated)\n${d.customModels}\n\n` +
+    `### Modell-Einrichtung (Dedicated)\n${d.dedicatedModelSetup}\n\n` +
+    `### Auslastung & mStudio (Dedicated)\n${d.monitoring}\n\n` +
     `### Skalierungsoptionen & Erweiterungen\n${extensions}\n\n` +
     `### Vertragslaufzeit\n${d.contractDuration}\n\n` +
     `### Wie groß darf das Modell sein?\n${d.modelSizing}\n\n` +
