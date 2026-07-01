@@ -104,6 +104,12 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
     "- **Dedicated AI L (2 GPUs):** Erforderlich für **Mistral-Medium-3.5-128B** und **Qwen3.5-122B-A10B-FP8**; auch für Load Balancing / Model-Sharding bei hoher Last.\n" +
     "- **gpt-oss-120b** und die übrigen Katalog-Modelle laufen auf **Dedicated M**.\n" +
     "Bei Dedicated-Modellfragen: **sachlich antworten**, konkrete Konfiguration und Vertrag mit dem **Vertrieb** klären (+49 5772 293 150).",
+  customModels:
+    "**Eigene & spezielle Modelle (nur Dedicated):**\n" +
+    "Auf **Shared AI Hosting** (Starter/Pro/Business) gelten die Modelle aus der **Live-Modellliste**.\n" +
+    "Bei **Dedicated AI Hosting** sind darüber hinaus **eigene oder kundenspezifische Modelle** möglich — auch solche, die wir im klassischen AI Hosting **nicht** im Standard-Katalog anbieten.\n" +
+    "**Ablauf:** Modellwunsch mit dem **Vertrieb** besprechen → wir **prüfen**, ob es auf unserer Infrastruktur (RTX 6000 PRO, DE-Hosting) **funktioniert** → passt es technisch, **richten wir es ein** und stellen die API bereit.\n" +
+    "Einmalige Einrichtung kundenspezifischer Modelle: **199 €** (laut Erweiterungen). **Keine** pauschale Ablehnung mit „nur Live-Liste“ bei Dedicated-Fragen.",
   sizingGuidance:
     "Dedicated-Stufenleiter (kleinster passender Schritt zuerst):\n" +
     "1. **Shared (Starter/Pro/Business)** — Standard für die meisten Projekte, auch SaaS mit moderatem Traffic. Business bei hoher Last (Rate Limits, Token-Kontingent).\n" +
@@ -161,6 +167,7 @@ export function formatPlaygroundAiHostingDedicatedSalesContext(): string {
     `### Tarife (RTX 6000 PRO)\n${plans}\n\n` +
     `### Größe / Empfehlungslogik\n${d.sizingGuidance}\n\n` +
     `### Modell-Zuordnung Dedicated (aktuell)\n${d.dedicatedModelCatalog}\n\n` +
+    `### Eigene Modelle (Dedicated)\n${d.customModels}\n\n` +
     `### Skalierungsoptionen & Erweiterungen\n${extensions}\n\n` +
     `### Vertragslaufzeit\n${d.contractDuration}\n\n` +
     `### Wie groß darf das Modell sein?\n${d.modelSizing}\n\n` +
