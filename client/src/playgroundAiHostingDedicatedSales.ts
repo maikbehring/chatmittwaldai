@@ -117,6 +117,12 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
     "Ja, grundsätzlich möglich. Du buchst **Dedicated AI Hosting** (M, L oder XL). **Wir richten die gewünschten Modelle für dich ein** — als **Erweiterungen** zum Dedicated-Tarif. Pro **zusätzliches Modell**: **199 € einmalig** Einrichtung.\n" +
     "Da VRAM begrenzt ist, prüfen wir **vorab gemeinsam**, welche Modelle parallel auf welcher GPU-Stufe sinnvoll laufen. Konkrete Konfiguration und Buchung: **Vertrieb** +49 5772 293 150 · https://www.mittwald.de/darum-mittwald/vertrieb\n" +
     "**Verboten:** suggerieren, der Kunde richte Modelle selbst ein („du richtest … ein“).",
+  monitoring:
+    "**Auslastung & Monitoring (Dedicated):**\n" +
+    "- **Betrieb:** Bei Dedicated AI Hosting **kümmern wir uns**, dass alles sauber läuft. Bei **erhöhter Auslastung** melden wir uns **proaktiv** beim Kunden.\n" +
+    "- **mStudio:** Dort kann der **Tarif verwaltet** werden (z. B. API-Keys). **Aktuell keine Token-Statistiken** und **kein Live-Auslastungs-Dashboard** für Dedicated AI Hosting im mStudio.\n" +
+    "- **Grafana (optional):** Auf Wunsch können wir ein **dediziertes Grafana-Dashboard** zur Verfügung stellen — Anfrage über **Vertrieb** (+49 5772 293 150).\n" +
+    "**Verboten:** behaupten, im mStudio gäbe es Live-Auslastung, Logs oder Token-Statistiken für Dedicated.",
   sizingGuidance:
     "Dedicated-Stufenleiter (kleinster passender Schritt zuerst):\n" +
     "1. **Shared (Starter/Pro/Business)** — Standard für die meisten Projekte, auch SaaS mit moderatem Traffic. Business bei hoher Last (Rate Limits, Token-Kontingent).\n" +
@@ -176,6 +182,7 @@ export function formatPlaygroundAiHostingDedicatedSalesContext(): string {
     `### Modell-Zuordnung Dedicated (aktuell)\n${d.dedicatedModelCatalog}\n\n` +
     `### Eigene Modelle (Dedicated)\n${d.customModels}\n\n` +
     `### Modell-Einrichtung (Dedicated)\n${d.dedicatedModelSetup}\n\n` +
+    `### Auslastung & Monitoring (Dedicated)\n${d.monitoring}\n\n` +
     `### Skalierungsoptionen & Erweiterungen\n${extensions}\n\n` +
     `### Vertragslaufzeit\n${d.contractDuration}\n\n` +
     `### Wie groß darf das Modell sein?\n${d.modelSizing}\n\n` +

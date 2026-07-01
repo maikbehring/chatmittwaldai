@@ -177,6 +177,12 @@ export const PLAYGROUND_AI_HOSTING_TARIFF_FAQ: TariffFaqEntry[] = [
     answer: "**Ja, das ist grundsätzlich möglich.**\n\nDu buchst einen **Dedicated-Tarif** (M, L oder XL) über den **Vertrieb** (+49 5772 293 150). Die gewünschten Modelle richten **wir für dich ein** — als **Erweiterungen** zum Dedicated-Setup. **Du richtest die Modelle nicht selbst ein.**\n\n**Kosten:** Pro **zusätzliches Modell** fällt einmalig **199 €** Einrichtungspauschale an (kundenspezielle Modelle ebenfalls).\n\n**VRAM:** GPU-Ressourcen sind begrenzt. Deshalb prüfen wir **im Vorfeld gemeinsam mit dir**, welche Modelle **parallel** auf welcher GPU-Stufe (M/L/XL) sinnvoll laufen — und ob z. B. ein Modell auf Dedicated und ein anderes über **Shared** (API) die bessere Lösung ist.\n\n**Nächster Schritt:** Konkrete Konfiguration und Buchung mit dem **Vertrieb**: +49 5772 293 150 · https://www.mittwald.de/darum-mittwald/vertrieb",
   },
   {
+    id: 80,
+    section: "Integration",
+    question: "Wie kann ich im Dedicated AI Hosting die Auslastung überwachen?",
+    answer: "**Kurz:** Dedicated wird von **uns betrieben und überwacht** — kein Self-Service-Dashboard wie bei Shared im mStudio.\n\n**So läuft es:**\n\n- **Proaktives Monitoring:** Wir kümmern uns darum, dass alles sauber läuft. Bei **erhöhter Auslastung** melden wir uns bei dir.\n- **mStudio:** Dort kannst du den **Tarif verwalten** (z. B. API-Keys). **Aktuell gibt es keine Token-Statistiken** und **kein Live-Auslastungs-Dashboard** für Dedicated AI Hosting im mStudio.\n- **Grafana (optional):** Auf Wunsch stellen wir ein **dediziertes Grafana-Dashboard** zur Verfügung — Anfrage über den **Vertrieb**: +49 5772 293 150.\n\n**Nicht verwechseln:** Token-Verbrauch und Hinweise im mStudio bei **Shared-Tarifen** (Starter/Pro/Business) gelten **nicht** für Dedicated (unlimited Tokens, anderer Betriebsmodell).\n\n**Merksatz:** Dedicated = managed Betrieb durch mittwald + optional Grafana — **nicht** „Live-Auslastung im mStudio-Dashboard“.",
+  },
+  {
     id: 56,
     section: "Tarifwahl",
     question: "Welche Dedicated AI Hosting Tarife gibt es — M, L, XL im Überblick?",
