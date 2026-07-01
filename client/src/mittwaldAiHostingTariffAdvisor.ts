@@ -2,6 +2,7 @@ import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { formatPlaygroundAiHostingDedicatedSalesContext } from "./playgroundAiHostingDedicatedSales";
 import { formatPlaygroundAiHostingTariffFaqContext } from "./playgroundAiHostingTariffFaq";
+import { formatPlaygroundMittwaldContext } from "./playgroundMittwaldContext";
 import {
   MITTWALD_AI_HOSTING_TARIFF_URL,
   MITTWALD_MSTUDIO_URL,
@@ -110,6 +111,8 @@ export function formatMittwaldAiHostingTariffAdvisorContext(
     `\n\n## Modell-Empfehlungen (Doku)\n` +
     recLines.join("\n") +
     (data.modelsPage.tip ? `\n\nTipp (Doku): ${data.modelsPage.tip}` : "") +
+    `\n\n` +
+    formatPlaygroundMittwaldContext() +
     `\n\n` +
     formatPlaygroundAiHostingTariffFaqContext()
   );
