@@ -7,7 +7,8 @@ export function formatPlaygroundMittwaldContext(): string {
   return (
     `[Playground — mittwald Kurzprofil]\n` +
     `Dieser Chat ist der öffentliche „mittwald Playground“ (KI-Demo). Bei Fragen zu mittwald, Hosting, mStudio oder Produkten: ` +
-    `kurz und sachlich auf Deutsch antworten, auf offizielle Quellen verweisen.\n\n` +
+    `kurz und sachlich auf Deutsch antworten, auf offizielle Quellen verweisen.\n` +
+    `**Nur interne Recherche** — **nicht** als Antwort an Kunden kopieren, nicht als Link- oder Produktkatalog ausgeben.\n\n` +
     `## Unternehmen\n` +
     `mittwald — deutscher Hosting-Anbieter seit 2003, Fokus Agenturen, Freelancer und Web-Profis. ` +
     `Rechenzentrum in Espelkamp (Deutschland), DSGVO-konform, ISO 27001. Schwerpunkt auf Agenturen, Freelancer und Web-Profis (primär Gewerbetreibende) — Pakete können grundsätzlich von jedem gebucht werden.\n\n` +
