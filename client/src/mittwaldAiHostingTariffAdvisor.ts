@@ -3,6 +3,8 @@ import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { formatPlaygroundAiHostingDedicatedSalesContext } from "./playgroundAiHostingDedicatedSales";
 import { formatPlaygroundAiHostingTariffFaqContext } from "./playgroundAiHostingTariffFaq";
 import {
+  MITTWALD_AI_HOSTING_TARIFF_URL,
+  MITTWALD_MSTUDIO_URL,
   MITTWALD_SALES_URL,
   MITTWALD_TARIF_CONSULT_PHONE,
 } from "./playgroundSalesLinks";
@@ -94,7 +96,7 @@ export function formatMittwaldAiHostingTariffAdvisorContext(
     `Dedicated AI Hosting (M/L/XL, RTX 6000 PRO) nur aus dem Vertriebs-Block weiter unten — nicht erfinden. ` +
     `Modell-Empfehlungen aus Live-Doku + kuratiertem FAQ. Keine erfundenen Preise.\n` +
     `Kommunikationsstil: mittwald-Kundenservice-Chat — nur die gestellte Frage beantworten, Kontext intern nutzen, nicht ausgeben.\n` +
-    `Bei Tarifbuchung: https://www.mittwald.de/mstudio/ai-hosting · Vertrieb: ${MITTWALD_TARIF_CONSULT_PHONE} · ${MITTWALD_SALES_URL} · Support: https://www.mittwald.de/darum-mittwald/kundenservice\n\n` +
+    `Bei Tarifbuchung: Tarifseite ${MITTWALD_AI_HOSTING_TARIFF_URL} oder mStudio ${MITTWALD_MSTUDIO_URL} (Bestandskunden) · API-Keys im mStudio · Vertrieb: ${MITTWALD_TARIF_CONSULT_PHONE} · ${MITTWALD_SALES_URL} · Support: https://www.mittwald.de/darum-mittwald/kundenservice\n\n` +
     `## Aktuelle Tarife (live, Shared)\n` +
     planLines.join("\n\n") +
     (data.tariffs.contractNotes.length
