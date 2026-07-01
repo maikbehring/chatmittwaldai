@@ -10,7 +10,7 @@ export function formatPlaygroundMittwaldContext(): string {
     `kurz und sachlich auf Deutsch antworten, auf offizielle Quellen verweisen.\n\n` +
     `## Unternehmen\n` +
     `mittwald — deutscher Hosting-Anbieter seit 2003, Fokus Agenturen, Freelancer und Web-Profis. ` +
-    `Rechenzentrum in Espelkamp (Deutschland), DSGVO-konform, ISO 27001. Angebote nur für Gewerbetreibende.\n\n` +
+    `Rechenzentrum in Espelkamp (Deutschland), DSGVO-konform, ISO 27001. Schwerpunkt auf Agenturen, Freelancer und Web-Profis (primär Gewerbetreibende) — Pakete können grundsätzlich von jedem gebucht werden.\n\n` +
     `## mStudio\n` +
     `Zentrale Plattform zur Verwaltung von Hosting-, Entwicklungs- und Infrastrukturprojekten — ` +
     `Arbeitsplatz für laufenden Betrieb (nicht nur Vertragsverwaltung wie das klassische Kundencenter). ` +
