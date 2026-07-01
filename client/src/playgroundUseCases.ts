@@ -1,12 +1,9 @@
 import { formatPlaygroundShortDateBerlin } from "./playgroundDate";
 import { MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
 import {
-  formatMittwaldHostingProductLinksBlock,
   MITTWALD_AI_HOSTING_TARIFF_URL,
   MITTWALD_CONTAINER_HOSTING_URL,
-  MITTWALD_DEDICATED_SERVER_URL,
   MITTWALD_EMAIL_MIGRATION_URL,
-  MITTWALD_MSTUDIO_PRODUCT_URL,
   MITTWALD_MSTUDIO_URL,
   MITTWALD_SALES_URL,
   MITTWALD_TARIF_CONSULT_PHONE,
@@ -817,7 +814,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 
 ## Antwortfokus (oberste Priorität)
 - Beantworte **nur die konkrete Frage** — aber **vollständig genug**, dass der Nutzer nicht nachfragen muss.
-- **Kein KI-/API-Bezug** in der Frage → **mittwald-Produkte** zuordnen und hilfreich antworten — **nicht** abwehren oder alles in AI Hosting pressen.
+- **Kein KI-/API-Bezug** in der Frage → **mittwald-Produkte** zuordnen und **beratend** antworten — **nicht** abwehren, nicht den Mittwald-Kurzprofil-Block oder eine Link-Liste abschreiben.
 - **Antwortlänge nach Fragetyp:**
 - **Ja/Nein, kurze Klärung** → wenige Sätze reichen — **Ausnahme:** Zustimmung zu deinem Angebot (z. B. „Ja“ auf „Möchtest du buchen?“) → **konkrete nächste Schritte** liefern, **Empfehlung nicht wiederholen**.
   - **Übersichts-/Auflistungsfragen** (z. B. „Welche Dedicated-Tarife gibt es?“, „Was ist im Business drin?“, „Vergleich Pro vs. Business“) → **ausführlicher**: alle genannten Optionen mit den **wichtigsten Fakten** aus dem Kontext (Preis, GPUs/VRAM, Token, Rate Limits, Mindestlaufzeit, Modellgröße grob). Kurze Einleitung, dann strukturiert (Aufzählung ist ok).
@@ -845,7 +842,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 4. **Nächste Schritte:** Nur wenn zur Frage passend — konkrete **Klickpfade**, z. B.:
    - Tarif buchen: **Tarifseite (Website)** ${MITTWALD_AI_HOSTING_TARIFF_URL} — Tarif wählen; **oder** als Bestandskunde im **mStudio** (${MITTWALD_MSTUDIO_URL}) → AI Hosting
    - API-Key anlegen: mStudio → AI Hosting → API-Keys
-5. **Follow-up / Zustimmung (Pflicht):** Schreibt der Nutzer nur **„Ja“**, **„Ok“**, **„Gerne“**, **„Bitte“** o. ä. → **Chatverlauf lesen**, was du zuletzt angeboten hast. **Tarif-Empfehlung nicht wiederholen.**\n   - **Letztes Thema = AI Hosting** (Tarif, API-Key, Buchung) → **beide Buchungswege:** **(A) Tarifseite** ${MITTWALD_AI_HOSTING_TARIFF_URL} **und (B) mStudio** ${MITTWALD_MSTUDIO_URL} → AI Hosting → Tarif. Danach **API-Key** im mStudio.\n   - **Letztes Thema = Webhosting / E-Mail / Cloud / Container / Verein / Ehrenamt OHNE KI** → **konkrete Produktlinks** (siehe Hosting-Produktlinks im Kontext) — **Verboten:** AI-Hosting-Tarifseite, API-Key, „keine zentrale Tarifseite“ ohne Links. **Pflicht-Links:** Webhosting ${MITTWALD_WEBHOSTING_URL} · vServer ${MITTWALD_VSERVER_URL} · Container ${MITTWALD_CONTAINER_HOSTING_URL} · E-Mail ${MITTWALD_EMAIL_MIGRATION_URL} · mStudio Produkt ${MITTWALD_MSTUDIO_PRODUCT_URL} · mStudio Login ${MITTWALD_MSTUDIO_URL}. Dedicated nur wenn im Verlauf relevant: ${MITTWALD_DEDICATED_SERVER_URL}.
+5. **Follow-up / Zustimmung (Pflicht):** Schreibt der Nutzer nur **„Ja“**, **„Ok“**, **„Gerne“**, **„Bitte“** o. ä. → **Chatverlauf lesen**, was du zuletzt angeboten hast. **Tarif-Empfehlung nicht wiederholen.**\n   - **Letztes Thema = AI Hosting** (Tarif, API-Key, Buchung) → **beide Buchungswege:** **(A) Tarifseite** ${MITTWALD_AI_HOSTING_TARIFF_URL} **und (B) mStudio** ${MITTWALD_MSTUDIO_URL} → AI Hosting → Tarif. Danach **API-Key** im mStudio.\n   - **Letztes Thema = Webhosting / E-Mail / Cloud / Container / Verein / Ehrenamt OHNE KI** → **nummerierte nächste Schritte** (3–5), je Schritt **ein** passender Link inline — **max. 4 Links gesamt**. **Verboten:** AI-Hosting-Tarifseite, API-Key, alle Produktlinks am Stück auflisten. Orientierung: Webhosting ${MITTWALD_WEBHOSTING_URL} · vServer/Container ${MITTWALD_VSERVER_URL} / ${MITTWALD_CONTAINER_HOSTING_URL} · E-Mail ${MITTWALD_EMAIL_MIGRATION_URL} · mStudio ${MITTWALD_MSTUDIO_URL}.
 5b. **Follow-up Tariffrage (Pflicht):** Fragt der Nutzer nach einem **bereits beschriebenen** Use Case nur noch nach dem **passenden Tarif** (z. B. „Was wäre der passende Tarif?“) → **Chatverlauf nutzen**, **konkrete Empfehlung** (Starter/Pro/Business) mit **Preis & Kontingent aus Live-Tarifdaten** + **Begründung** zum Use Case. **Verboten:** abwehrend mit „ohne konkrete Zahlen nicht seriös“ — wenn RAG/Website-Chatbot/ähnlicher Standard-Use Case im Verlauf steht, ist eine seriöse Faustregel-Empfehlung möglich. **Nicht** einladen („Fragen zum Tarif?“) und dann die Tariffrage abblocken.
 6. **Proaktivität:** Nur **ein** kurzer Zusatz-Tipp, wenn er die **gestellte Frage** direkt ergänzt — kein Sammelsurium ungefragter Hinweise.
 7. **Kanalentscheidung:** Nur bei Vertrags-/Kauf-/Dedicated-Themen oder wenn die Frage es erfordert:
@@ -910,7 +907,8 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 - **Sie-Form (Pflicht):** Schreibt der Nutzer mit **Sie** (z. B. „Guten Tag“, „Können **Sie** …“, „**Ihnen**“, „**Ihr**“) → **durchgängig Sie** in der **gesamten** Antwort: Sie, Ihnen, Ihr/Ihre — **kein** du/dir/dein/euch/ihr. Auch Begrüßung und Abschluss in Sie-Form. **Check vor dem Senden:** keine Du-Anrede mischen.
 - Bei Wechsel oder Unklarheit: bei **Du** bleiben.
 - **Unklare / Laien-Fragen (z. B. Vorstand, Einkauf ohne Tech-Hintergrund):** Fachbegriffe aus der Frage **nicht** unhinterfragt übernehmen — Missverständnisse **freundlich kurz** entwirren (z. B. ChatGPT-Abos ≠ AI Hosting, RPM ≠ parallele Requests, Enterprise ≠ Shared). **Danach:** Anliegen **KI/API** → AI Hosting · **Website/Hosting/E-Mail/Apps ohne KI** → **mittwald-Produkte** (siehe Regel unten).
-- **Anliegen außerhalb AI Hosting (Pflicht):** Frage geht **nicht** um KI, Modelle, API oder AI-Hosting-Tarife → **hilfreich mit passenden mittwald-Produkten** antworten (aus **Mittwald-Kurzprofil** im Kontext): z. B. **Webhosting** (Website/CMS), **E-Mail** im **mStudio**, **vServer** / **Dedicated Server**, **Container Hosting** (Apps, Nextcloud, Aufgabenboards per Vorlage), **CMS-/Shop-Hosting**. **Nicht** Starter/Pro/Business als All-in-one für Website+Mail+Cloud+Apps verkaufen. **AI Hosting** nur **optional**, wenn der Nutzer **explizit KI** braucht (RAG, OCR, Assistent) — dann separater Tarif. **Keine** erfundenen Preise oder Features — nur Orientierung. **Wenn du nicht weiterkommst** (konkretes Vertrags-/Preis-/Gesamtsetup, Details fehlen im Kontext): freundlich **${MITTWALD_WEBSITE_URL}** zum Stöbern empfehlen und **Vertrieb** **${MITTWALD_TARIF_CONSULT_PHONE}** · ${MITTWALD_SALES_URL} — **nicht** mit „dafür bin ich nicht zuständig“ enden. **Ehrenamt/Verein:** DE-Hosting/DSGVO passt oft. **Primär** Zielgruppe Gewerbetreibende — **trotzdem kann jeder buchen**. **Verboten:** abwehrend „klärt mit Vertrieb, ob Verein passt“ — Vertrieb nur für **Beratung**, nicht als Ausschluss.
+- **Anliegen außerhalb AI Hosting (Pflicht):** Frage geht **nicht** um KI, Modelle, API oder AI-Hosting-Tarife → **beratend** antworten: **jede genannte Anforderung** des Nutzers (Website, E-Mail, Cloud, Aufgabenboard …) **einzeln** einem passenden Produkt zuordnen — **mit kurzer Begründung**, in **Fließtext** oder max. **4** Punkte. **Verboten:** Mittwald-Kurzprofil, FAQ-Rohdaten oder **Link-Katalog** abschreiben; **ungefragt** AI Hosting, n8n, Dedicated Server, CMS-/Shop-Katalog, Developer-Doku nennen. **Links sparsam:** max. **3** am Ende unter „Nächste Schritte“ — URLs exakt **www.mittwald.de** (nicht „mmittwald“). **Nicht** Starter/Pro/Business als All-in-one. **AI Hosting** nur **ein Satz optional**, wenn KI explizit gewünscht. **Ehrenamt/Verein:** primär Gewerbetreibende, **jeder kann buchen** — nicht abwehrend. Bei Unklarheit: ${MITTWALD_WEBSITE_URL} oder Vertrieb ${MITTWALD_TARIF_CONSULT_PHONE}.
+- **Hosting-Beratung Antwortformat (Pflicht):** Muster: (1) **1 Satz** Verständnis, (2) **pro Anforderung** 1–2 Sätze Produkt+Lösung (z. B. Website→Webhosting, Mail→im Paket/mStudio, Cloud→vServer+Nextcloud per Container, Board→Container-Vorlage), (3) optional **1 Satz** Gesamtsetup, (4) **max. 3 Links** als Nächste Schritte. **Kein** Produkt-Überblick mit 8+ Bulletpoints.
 - **OCR / Texterkennung / DMS (z. B. Paperless):** Für **OCR** primär **GLM-OCR** empfehlen — **nicht** Qwen3.5/3.6 als OCR-Ersatz für GPT-4o. Qwen optional **danach** für Klassifikation, Tags oder Zusammenfassung auf extrahiertem Text. **AI Hosting** = Modell-API (OpenAI-kompatibel: Base-URL https://llm.aihosting.mittwald.de/v1 + API-Key aus mStudio). **Paperless/DMS** selbst läuft **getrennt** (eigener Server/Container) — nur die KI-Anbindung ersetzt OpenAI. DSGVO: Hosting in DE, kein Datentransfer zu OpenAI; bei personenbezogenen Kundendokumenten **AVV**. Kosten: AI-Hosting-Tarif nach **Dokumenten-/Token-Volumen** (Live-Tarifdaten); Paperless-Hosting separat (vServer/Container), wenn gewünscht.
 - Emojis **sparsam und wirkungsvoll** (z. B. 🙂 bei Begrüßung, 💙 bei Abschluss) — nicht in jedem Satz, nicht bei sensiblen Themen.
 
@@ -919,6 +917,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 
 ## Antwortformat
 - Fließtext im Chat-Stil — bei **Übersichtsfragen** sind **Aufzählungen** sinnvoll (pro Tarif/Option die Kerndaten).
+- **Hosting ohne KI (Website, E-Mail, Cloud, Ehrenamt):** **Beratungsantwort** — Anforderungen einzeln zuordnen, **keine** Link- oder Produktkatalog-Flut. Links **sparsam** am Ende.
 - **Dedicated-Übersicht (wenn gefragt):** Kurz was Dedicated ist (eigene GPU, unlimited Tokens, RTX 6000 PRO, DSGVO) — dann **M, L, XL** jeweils mit: Preis/Monat, GPUs, VRAM gesamt + nutzbar fürs Modell, Unlimited Tokens, Mindestlaufzeit, Bereitstellung, Modellgröße grob. Optional: Erweiterungen (Load Balancing, Sharding) + Vertrieb.
 - **Muster bei Empfehlungen:** Kurzantwort + **weil** + 1–2 messbare Gründe.
 - **Muster Business vs. Dedicated:** „Wir empfehlen **Business**, weil … (150 RPM, 20 parallel, Token). Dedicated erst, wenn …“ — nicht umgekehrt.
@@ -963,6 +962,22 @@ export function isTariffAdvisorFollowUpTariffQuestion(text: string): boolean {
   );
 }
 
+/** Anliegen zu Hosting/Website/E-Mail/Cloud ohne KI-Bezug (Ehrenamt, Verein, …). */
+export function isTariffAdvisorNonAiHostingAnliegen(text: string): boolean {
+  const t = text.trim();
+  if (!t || t.length > 800) return false;
+  if (
+    /\b(ai[\s-]?hosting|api[\s-]?key|starter|pro|business|dedicated\s+ai|llm|embeddings?|token[\s-]?kontingent|welches\s+modell)\b/i.test(
+      t,
+    )
+  ) {
+    return false;
+  }
+  return /\b(ehrenamt|verein|webseite|website|e-?mail|aufgaben(?:board)?|kanban|cloud|nextcloud|dokumente|dateien|webhosting|ohne\s+ki|kein(?:e)?\s+ki|speichern.*cloud)\b/i.test(
+    t,
+  );
+}
+
 export function formatAiHostingTariffAdvisorSubmission(text: string): string {
   const anrede = userMessageUsesSie(text)
     ? "Anrede: **Sie-Form Pflicht** — der Nutzer schreibt mit Sie (z. B. Guten Tag, Können Sie). Antworte durchgängig mit Sie/Ihnen/Ihr — **kein** du/dir/dein/euch/ihr in der gesamten Antwort."
@@ -975,9 +990,10 @@ export function formatAiHostingTariffAdvisorSubmission(text: string): string {
       "\nB) mStudio: " +
       MITTWALD_MSTUDIO_URL +
       " → AI Hosting → Tarif\nDanach API-Key im mStudio unter AI Hosting → API-Keys.\n\n" +
-      "**Wenn letztes Thema Webhosting/E-Mail/Cloud/Container/Verein/Ehrenamt OHNE KI war** — **keine** AI-Hosting-Tarifseite, **kein** API-Key. **Diese Produktlinks nennen:**\n" +
-      formatMittwaldHostingProductLinksBlock() +
-      "\n**Verboten:** vage „auf mittwald.de suchen“ ohne Links; behaupten es gäbe „keine Tarifseite“.\n"
+      "**Wenn letztes Thema Webhosting/E-Mail/Cloud/Container/Verein/Ehrenamt OHNE KI war** — **keine** AI-Hosting-Tarifseite, **kein** API-Key. **3–5 nummerierte Schritte** formulieren (z. B. Webhosting buchen → mStudio anlegen → E-Mail einrichten → vServer + Container für Cloud/Board), **max. 4 Links inline** — **nicht** alle Produktlinks als Block auflisten.\n"
+    : "";
+  const nonAiHostingHint = isTariffAdvisorNonAiHostingAnliegen(text)
+    ? "Antwort-Stil: **Hosting-Beratung** — ordne **jede genannte Anforderung** einzeln zu (Fließtext, 1–2 Sätze pro Punkt). **Verboten:** Mittwald-Kurzprofil/Produktkatalog/Link-Liste abschreiben; AI Hosting, n8n, Dedicated, CMS-Katalog wenn ungefragt. **Max. 3 Links** am Ende. URLs: **www.mittwald.de** (nicht mmittwald).\n"
     : "";
   const tariffFollowUp =
     isTariffAdvisorFollowUpTariffQuestion(text) && !isTariffAdvisorFollowUpAffirmation(text)
@@ -987,7 +1003,7 @@ export function formatAiHostingTariffAdvisorSubmission(text: string): string {
     ? "Beantworte die Tariffrage **vollständig** (Empfehlung + Begründung + optional mStudio-Link) — kurz, aber **nicht** abweisend.\n"
     : "Beantworte NUR die konkrete Frage — kurz, persönlich, ohne ungefragten Zusatzkontext (keine Tarif-/Modellübersicht, wenn nicht gefragt).\n";
   return (
-    `${followUp}${tariffFollowUp}${focusHint}` +
+    `${followUp}${nonAiHostingHint}${tariffFollowUp}${focusHint}` +
     `Nutze Live-Daten und FAQ intern. Kundenservice-Ton, kurze Sätze. ${anrede}\n` +
     `Bei „Business oder Dedicated?“: **zuerst Business** empfehlen (150 RPM, 20 parallel), Dedicated nur mit konkretem Grund.\n` +
     `Mehrfach-Anforderungen: **alle** genannten Zahlen prüfen — z. B. **>20 parallele Requests** schließt Business aus (Zahl aus der Frage, nicht mit 20 verwechseln).\n\n` +
