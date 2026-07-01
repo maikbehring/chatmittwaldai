@@ -1,6 +1,7 @@
 import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { formatPlaygroundAiHostingDedicatedSalesContext } from "./playgroundAiHostingDedicatedSales";
+import { formatPlaygroundAiHostingContainerTemplatesContext } from "./playgroundAiHostingContainerTemplates";
 import { formatPlaygroundAiHostingTariffFaqContext } from "./playgroundAiHostingTariffFaq";
 import { formatPlaygroundMittwaldContext } from "./playgroundMittwaldContext";
 import {
@@ -105,6 +106,8 @@ export function formatMittwaldAiHostingTariffAdvisorContext(
       : "") +
     `\n\n` +
     formatPlaygroundAiHostingDedicatedSalesContext() +
+    `\n\n` +
+    formatPlaygroundAiHostingContainerTemplatesContext() +
     `\n\n## Verfügbare Modelle (live, Developer-Doku)\n` +
     (data.modelsPage.intro.length ? `${data.modelsPage.intro.join(" ")}\n\n` : "") +
     modelLines.join("\n\n") +
