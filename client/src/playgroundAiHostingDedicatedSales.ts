@@ -103,6 +103,7 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
     "- **Dedicated AI M (1 GPU):** Laufen **alle** Modelle aus dem Katalog — **Ausnahme:** **Mistral-Medium-3.5-128B** und **Qwen3.5-122B-A10B-FP8** (diese benötigen **mindestens 2 GPUs**).\n" +
     "- **Dedicated AI L (2 GPUs):** Erforderlich für **Mistral-Medium-3.5-128B** und **Qwen3.5-122B-A10B-FP8**; auch für Load Balancing / Model-Sharding bei hoher Last.\n" +
     "- **gpt-oss-120b** und die übrigen Katalog-Modelle laufen auf **Dedicated M**.\n" +
+    "**Mehrere große Modelle gleichzeitig:** Nicht „1 GPU pro Modell“ — aber **VRAM-Budget** begrenzt, was **parallel geladen** sein kann. **gpt-oss-120b** (~60 GB) + **Qwen3.5-122B-A10B-FP8** (mindestens **2 GPUs**, nutzt großteils das L-Budget ~125 GB) **gleichzeitig auf Dedicated L (2 GPUs) reicht in der Regel nicht** — Summe deutlich über 125 GB modellnutzbar. Für **beide parallel**: eher **XL** oder Architektur mit Vertrieb klären; **nur eines von beiden auf Dedicated + anderes auf Shared** kann sinnvoll sein.\n" +
     "Bei Dedicated-Modellfragen: **sachlich antworten**, konkrete Konfiguration und Vertrag mit dem **Vertrieb** klären (+49 5772 293 150).",
   customModels:
     "**Eigene & spezielle Modelle (nur Dedicated):**\n" +
