@@ -183,12 +183,11 @@ export function PlaygroundUseCaseGuide({
 
       {useCase.id === "ai-hosting-tarifberater" ? (
         <p className="playground-text-small mb-3 rounded-xl border border-emerald-200/80 bg-emerald-50/80 px-3 py-2.5 text-emerald-950 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-100">
-          <strong className="font-semibold text-playground-ink">Welcher Tarif passt zu dir?</strong>{" "}
-          Beschreib kurz dein Projekt — du bekommst eine persönliche Empfehlung zu Tarif und Modell.{" "}
-          Antworten laufen mit <strong className="text-playground-ink">Qwen3.6</strong>; falls nicht erreichbar,
-          automatisch <strong className="text-playground-ink">gpt-oss 120B</strong> als Fallback.{" "}
+          <strong className="font-semibold text-playground-ink">Welcher Tarif passt zu deinem Projekt?</strong>{" "}
+          Beschreib kurz deinen Use Case — du bekommst eine persönliche Empfehlung zu Tarif, Setup und passenden
+          Modellen, orientiert an aktuellen Live-Tarifen und Praxis-Wissen.{" "}
           <span className="text-playground-muted">
-            Beta, nur zur Orientierung — für Kaufentscheidungen:{" "}
+            Beta im Playground — bei konkreten Kaufentscheidungen unterstützt dich unser Vertrieb gerne:{" "}
             <a
               href={MITTWALD_TARIF_CONSULT_PHONE_TEL}
               className="font-semibold text-playground-ink underline underline-offset-2"

@@ -850,20 +850,20 @@ export function App() {
   imageFileRef.current = imageFile;
 
   const INPUT_MAX_HEIGHT_PX = 208; // entspricht max-h-52
+  const [composerTall, setComposerTall] = useState(false);
 
   const adjustInputHeight = useCallback(() => {
     const el = inputRef.current;
     if (!el) return;
     const minHeight = isMobileLayout ? 36 : 40;
-    const isSingleLine = !el.value.includes("\n");
     el.style.height = "0px";
-    const next = Math.min(el.scrollHeight, INPUT_MAX_HEIGHT_PX);
-    if (isSingleLine) {
-      el.style.height = `${minHeight}px`;
-    } else {
-      el.style.height = `${Math.max(next, minHeight)}px`;
-    }
-    el.style.overflowY = el.scrollHeight > INPUT_MAX_HEIGHT_PX ? "auto" : "hidden";
+    const scrollH = el.scrollHeight;
+    const next = Math.min(Math.max(scrollH, minHeight), INPUT_MAX_HEIGHT_PX);
+    el.style.height = `${next}px`;
+    el.style.overflowY = scrollH > INPUT_MAX_HEIGHT_PX ? "auto" : "hidden";
+    const tall =
+      el.value.length > 0 && (el.value.includes("\n") || scrollH > minHeight + 1);
+    setComposerTall((prev) => (prev === tall ? prev : tall));
   }, [isMobileLayout]);
 
   /** Clipboard-Bild wie in ChatGPT (Capture: greift vor Textfeld, verhindert Müll-Einfügen bei Screenshots). */
@@ -1345,8 +1345,6 @@ export function App() {
   }, [activeUseCase, isMobileLayout]);
 
   const sendButtonTitle = activeUseCase?.sendButtonLabel ?? "Senden";
-
-  const composerTall = input.includes("\n");
 
   const showSpeechInComposer =
     speechToText?.enabled && !activeUseCase?.prefersAudioFile;

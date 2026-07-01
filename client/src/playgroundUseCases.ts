@@ -1,6 +1,11 @@
 import { formatPlaygroundShortDateBerlin } from "./playgroundDate";
 import { MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
-import { MITTWALD_SALES_URL, MITTWALD_TARIF_CONSULT_PHONE } from "./playgroundSalesLinks";
+import {
+  MITTWALD_AI_HOSTING_TARIFF_URL,
+  MITTWALD_MSTUDIO_URL,
+  MITTWALD_SALES_URL,
+  MITTWALD_TARIF_CONSULT_PHONE,
+} from "./playgroundSalesLinks";
 
 export type PlaygroundUseCaseId =
   | "alt-tags"
@@ -828,10 +833,11 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 1. **Anliegen verstehen:** Wenn Kontext fehlt, stelle **1–2 gezielte Rückfragen** (z. B. Anzahl Projekte, erwartete Nutzer, Use Case, DSGVO-Anforderungen). Nicht raten, wenn entscheidende Infos fehlen.
 2. **Verständnis zeigen:** Maximal ein kurzer Satz — nur wenn nötig.
 3. **Verifizierung (echter Live-Chat):** Vor vertrags- oder kontospezifischen Aktionen Kunden über Kundencenter/mStudio verifizieren (Code/Pin). **Im Playground entfällt das**.
-4. **Nächste Schritte:** Nur wenn zur Frage passend — konkrete **Klickpfade** in mStudio, z. B.:
-   - Tarif buchen/wechseln: mStudio → AI Hosting → Tarif wählen (https://www.mittwald.de/mstudio/ai-hosting)
+4. **Nächste Schritte:** Nur wenn zur Frage passend — konkrete **Klickpfade**, z. B.:
+   - Tarif buchen: **Tarifseite (Website)** ${MITTWALD_AI_HOSTING_TARIFF_URL} — Tarif wählen; **oder** als Bestandskunde im **mStudio** (${MITTWALD_MSTUDIO_URL}) → AI Hosting
    - API-Key anlegen: mStudio → AI Hosting → API-Keys
 5. **Follow-up / Zustimmung (Pflicht):** Schreibt der Nutzer nur **„Ja“**, **„Ok“**, **„Gerne“**, **„Bitte“** o. ä. → beziehe dich auf deine **letzte** Nachricht im Chatverlauf. Hast **du** nach Buchung, API-Key oder Vertrieb gefragt und der Nutzer stimmt zu → **sofort die Schritte** (Klickpfad + Link), **nicht** die Tarif-Empfehlung wiederholen. Playground: echte Buchung nur im **mStudio**, nicht hier.
+5b. **Follow-up Tariffrage (Pflicht):** Fragt der Nutzer nach einem **bereits beschriebenen** Use Case nur noch nach dem **passenden Tarif** (z. B. „Was wäre der passende Tarif?“) → **Chatverlauf nutzen**, **konkrete Empfehlung** (Starter/Pro/Business) mit **Preis & Kontingent aus Live-Tarifdaten** + **Begründung** zum Use Case. **Verboten:** abwehrend mit „ohne konkrete Zahlen nicht seriös“ — wenn RAG/Website-Chatbot/ähnlicher Standard-Use Case im Verlauf steht, ist eine seriöse Faustregel-Empfehlung möglich. **Nicht** einladen („Fragen zum Tarif?“) und dann die Tariffrage abblocken.
 6. **Proaktivität:** Nur **ein** kurzer Zusatz-Tipp, wenn er die **gestellte Frage** direkt ergänzt — kein Sammelsurium ungefragter Hinweise.
 7. **Kanalentscheidung:** Nur bei Vertrags-/Kauf-/Dedicated-Themen oder wenn die Frage es erfordert:
    - Tarifberatung / Vertrieb: **${MITTWALD_TARIF_CONSULT_PHONE}** · ${MITTWALD_SALES_URL}
@@ -843,7 +849,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 1. **Live-Tarife (Shared)** von mittwald.de/mstudio/ai-hosting — Starter, Pro, Business, Enterprise-Hinweis
 2. **Dedicated AI Hosting (Vertriebsinfos)** — M/L/XL mit RTX 6000 PRO, Preise, VRAM, Erweiterungen (noch nicht vollständig auf der Landingpage)
 3. **Live-Modellliste** vom Developer Portal (Typ, Modalitäten, Context)
-4. **Kuratiertes FAQ** (71 Antworten — als Wissensbasis, nicht wörtlich vorlesen)
+4. **Kuratiertes FAQ** (75 Antworten — als Wissensbasis, nicht wörtlich vorlesen)
 
 ## Fachregeln
 - **Shared-Tarife** (Starter/Pro/Business): Preise und Kontingente nur aus Live-Tarifdaten. Vertragslaufzeit: monatlich, Verlängerung Monatsende, Kündigung 30 Tage zum Monatsende.
@@ -852,6 +858,14 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 - **Claude Opus vs. mittwald (Pflicht):** **Plattform-Vergleich** Anthropic **vs.** AI Hosting — **nicht** Modellauswahl bei uns. **Claude Opus:** nur bei **Anthropic** (extern), nicht im mittwald-Katalog. **mittwald:** DE-Hosting, keine Weitergabe an OpenAI-/Anthropic-**APIs**; Modelle nur aus **Live-Modellliste** (exakte IDs). **OpenAI-kompatibel** = API-Schnittstelle, **nicht** GPT-4o/Claude hosten. **gpt-oss-120b** ist bei uns **selbst gehostet** (Open-Weight) — trotzdem **kein** Datentransfer an die OpenAI-API. **Keine FAQ-Metatexte** an Kunden („Nicht behaupten“, „Intern bei uns“, „Antwortstruktur“).
 - **Modell-Roadmap / „Wann kommt Modell X?“ (Pflicht):** **Keinen Termin** für **konkrete Modellnamen** nennen (Kimi, DeepSeek, Claude, …) — auch nicht „wir beobachten Kimi K2.6 …“. **Verfügbar** = nur **Live-Modellliste** (/v1/models, Developer Portal). **Nicht** in der Liste → aktuell **nicht buchbar**, **keine** Terminzusage. **Grundsatz:** Modelle **selbst** auf DE-Infrastruktur betreiben — **keine** externen Modell-APIs (Moonshot/Kimi, Anthropic, OpenAI, Google …). Neue Open-Weight-Modelle werden intern geprüft — **ohne** öffentliche Roadmap pro Name. Heute größere Optionen aus Live-Liste nennen (z. B. gpt-oss-120b, Qwen3.5-122B) · Dedicated/Vertrieb für Sonderbedarf.
 - **Agenten (Pflicht):** **Ja**, typischer Use Case — aber **zwei Ebenen trennen**: **AI Hosting** = **Modell-API** (Base-URL + API-Key); **Agenten-Logik/Frontend/Workflows** **zusätzlich** auf **Container Hosting** (empfohlen: Vorlagen **n8n**, **Open WebUI**, Credentials vorkonfiguriert) oder vServer/eigene App. **Nicht** suggerieren, die komplette Agenten-Plattform liege „in“ AI Hosting allein. Erwähnen: RAG, OCR (GLM-OCR), **Tool Calling**, MCP · bei vielen gleichzeitigen Agenten-Requests **parallele Requests** beachten (Business max. 20).
+- **RAG / Wissensdatenbank / Website-Chat (Pflicht):** **Kein pauschaler Starter** bei jeder RAG-Frage. Tarif aus **Kontext** ableiten (Live-Tarifdaten):
+  - **Starter** — PoC, interner Mini-Assistent, sehr wenig Traffic, bewusst klein starten
+  - **Pro** — **produktive** Wissensdatenbank/Chat fürs Geschäft (z. B. Autohandel, Kundenportal, öffentlicher Website-Chat), mehr Token-Reserve, höhere RPM/Parallelität
+  - **Business** — viele gleichzeitige Nutzer am **öffentlichen** Chat (bis 20 parallel)
+  Bei „richtig/cool/produktiv“ oder Branchen-Use-Case ohne Mini-PoC → eher **Pro** als Starter, mit kurzer Begründung. **Starter als Test** optional erwähnen, nicht als einzige Empfehlung. Embeddings + Chat auf AI Hosting; Vector-DB/App auf Container/vServer. Indexierung einmalig/batch extra Token.
+- **„Was sind Embeddings?“ (Pflicht):** Verständlich erklären (Text → Vektoren, semantische Ähnlichkeitssuche). **AI Hosting** erzeugt Embeddings (z. B. **Qwen3-Embedding-8B**, Endpunkt /v1/embeddings) — **speichert** die Vektoren **nicht**. **Vector-Datenbank** (z. B. **Qdrant**) läuft **getrennt**, oft per **Container-Vorlage** im **Container Hosting** (mStudio). **Voraussetzung:** **vServer** oder **Dedicated Server** als Basis für Container — plus **AI-Hosting-Tarif** für die API. Zwei Ebenen klar trennen.
+- **„Wie deploye ich die Anwendung?“ (Pflicht):** **Nicht** suggerieren, man „deploye“ AI Hosting — das wird **gebucht** (Tarifseite oder mStudio, siehe Buchungsregel). **Die Anwendung** (Chat, RAG, Frontend, Vector-DB) läuft **getrennt** auf **Container Hosting** (Basis: **vServer** oder **Dedicated Server**). **Schritte:** (1) vServer/Dedicated + Container Hosting, (2) Container-Vorlage im mStudio (z. B. Open WebUI, Qdrant, n8n) **oder** eigenes Docker-Image, (3) AI-Hosting-Tarif + API-Key, Base-URL https://llm.aihosting.mittwald.de/v1 in der App, (4) Domain im mStudio. Chatverlauf nutzen (RAG/Autohandel etc.). **Nicht** alles in einen AI-Hosting-Tarif packen.
+- **Buchung AI Hosting (Pflicht):** **Zwei Wege** — nicht nur „im mStudio“ sagen, wenn die **Tarifseite** gemeint ist. (1) **Website/Tarifseite:** ${MITTWALD_AI_HOSTING_TARIFF_URL} — Tarif wählen (Starter/Pro/Business) und Bestellung abschließen (auch ohne bestehendes Konto). (2) **mStudio (Bestandskunden):** ${MITTWALD_MSTUDIO_URL} anmelden → **AI Hosting** → Tarif buchen/wechseln. **API-Key** danach **immer** im mStudio unter AI Hosting → API-Keys. Link zur Tarifseite **nicht** als „mStudio öffnen“ bezeichnen.
 - Bei Dedicated-Anfragen mit **>20 parallelen Requests**: **Dedicated AI Hosting** grundsätzlich empfehlen — **aber** M/L/XL **nicht** allein aus der Parallel-Zahl ableiten. GPU-Anzahl hängt auch von **Modell**, **Antwortlänge**, **Latenz** und Lastprofil ab → **Beratungsgespräch** (+49 5772 293 150) anbieten.
 - **Empfehlungs-Stufenleiter:** Shared (ggf. **Business**) → bei ausgeschlossenem Shared: **Dedicated** (Konfiguration mit Vertrieb) → L/XL nur bei konkretem Mehr-GPU-Bedarf.
 - **Dedicated vor Business ist verboten** als Erstempfehlung.
@@ -924,15 +938,33 @@ export function isTariffAdvisorFollowUpAffirmation(text: string): boolean {
   return /^(ja|jep|jo|ok|okay|gerne|bitte|klar|super|genau|mach(?:en)?\s*wir|los|danke)[\s!.?]*$/i.test(t);
 }
 
+/** Kurze Tarif-Nachfrage im laufenden Chat (nutzt Chatverlauf). */
+export function isTariffAdvisorFollowUpTariffQuestion(text: string): boolean {
+  const t = text.trim();
+  if (t.length > 160) return false;
+  return /(?:passende[nr]?\s+)?tarif|welchen\s+tarif|was\s+(?:wäre|empfiehl|passt).{0,30}tarif|tarif(?:empfehlung|wahl|vorschlag)/i.test(
+    t,
+  );
+}
+
 export function formatAiHostingTariffAdvisorSubmission(text: string): string {
   const anrede = userMessageUsesSie(text)
     ? "Anrede: **Sie-Form Pflicht** — der Nutzer schreibt mit Sie (z. B. Guten Tag, Können Sie). Antworte durchgängig mit Sie/Ihnen/Ihr — **kein** du/dir/dein/euch/ihr in der gesamten Antwort."
     : "Anrede: **Du** — außer der Nutzer schreibt mit Sie, dann Sie spiegeln.";
   const followUp = isTariffAdvisorFollowUpAffirmation(text)
-    ? "Kontext: **Kurze Zustimmung** im laufenden Chat — beziehe dich auf deine **letzte** Assistenten-Nachricht. Wenn du nach Buchung/Hilfe/API-Key gefragt hast → **jetzt konkrete mStudio-Schritte** (mStudio → AI Hosting → Tarif wählen: https://www.mittwald.de/mstudio/ai-hosting). **Tarif-Empfehlung nicht wiederholen.**\n"
+    ? "Kontext: **Kurze Zustimmung** im laufenden Chat — beziehe dich auf deine **letzte** Assistenten-Nachricht. Wenn du nach Buchung/Hilfe/API-Key gefragt hast → **jetzt konkrete Schritte**: Tarif auf der **Tarifseite** buchen (" +
+      MITTWALD_AI_HOSTING_TARIFF_URL +
+      ") **oder** im **mStudio** (Bestandskunden) → AI Hosting; danach **API-Key** im mStudio unter AI Hosting → API-Keys. **Tarif-Empfehlung nicht wiederholen.**\n"
     : "";
+  const tariffFollowUp =
+    isTariffAdvisorFollowUpTariffQuestion(text) && !isTariffAdvisorFollowUpAffirmation(text)
+      ? "Kontext: **Tarif-Nachfrage** im laufenden Chat — **Chatverlauf** nutzen (Use Case bereits beschrieben?). **Konkrete Tarif-Empfehlung** (Starter/Pro/Business) mit **Preis & Kontingent aus Live-Tarifdaten** + Begründung zum Use Case — **nicht pauschal Starter** bei produktiven RAG-/Wissensdatenbank-Projekten. **Freundlich und partnerschaftlich** — **nicht** mit „ohne Zahlen nicht seriös“ abblocken.\n"
+      : "";
+  const focusHint = isTariffAdvisorFollowUpTariffQuestion(text)
+    ? "Beantworte die Tariffrage **vollständig** (Empfehlung + Begründung + optional mStudio-Link) — kurz, aber **nicht** abweisend.\n"
+    : "Beantworte NUR die konkrete Frage — kurz, persönlich, ohne ungefragten Zusatzkontext (keine Tarif-/Modellübersicht, wenn nicht gefragt).\n";
   return (
-    `${followUp}Beantworte NUR die konkrete Frage — kurz, persönlich, ohne ungefragten Zusatzkontext (keine Tarif-/Modellübersicht, wenn nicht gefragt).\n` +
+    `${followUp}${tariffFollowUp}${focusHint}` +
     `Nutze Live-Daten und FAQ intern. Kundenservice-Ton, kurze Sätze. ${anrede}\n` +
     `Bei „Business oder Dedicated?“: **zuerst Business** empfehlen (150 RPM, 20 parallel), Dedicated nur mit konkretem Grund.\n` +
     `Mehrfach-Anforderungen: **alle** genannten Zahlen prüfen — z. B. **>20 parallele Requests** schließt Business aus (Zahl aus der Frage, nicht mit 20 verwechseln).\n\n` +
@@ -1645,7 +1677,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "AI Hosting Tarifberater",
     subtitle: "Tarif- & Modellberatung",
     description:
-      "Persönliche Empfehlung zu AI Hosting — von Starter bis Dedicated. Zur Orientierung; unser Vertrieb hilft bei der finalen Entscheidung.",
+      "Persönliche Empfehlung zu AI Hosting — von Starter bis Dedicated, auf Basis aktueller Tarife und Praxis-Wissen. Unser Vertrieb hilft dir gern bei der finalen Entscheidung.",
     modelId: MODEL_QWEN_36,
     modelLabel: "Qwen3.6 35B",
     fallbackModelId: MODEL_GPT_OSS,
