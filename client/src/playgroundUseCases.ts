@@ -1,6 +1,11 @@
 import { formatPlaygroundShortDateBerlin } from "./playgroundDate";
 import { MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
 import {
+  extractShopwareMcpScenarioFromSubmission,
+  formatPlaygroundShopwareMcpDemoContext,
+  isShopwareMcpSetupQuestion,
+} from "./playgroundShopwareMcpDemo";
+import {
   formatMittwaldHostingProductLinksBlock,
   MITTWALD_AI_HOSTING_TARIFF_URL,
   MITTWALD_CONTAINER_HOSTING_URL,
@@ -27,6 +32,7 @@ export type PlaygroundUseCaseId =
   | "feature-request"
   | "feature-requests-feed"
   | "ai-hosting-guide"
+  | "shopware-mcp-demo"
   | "ai-hosting-tarifberater"
   | "client-weekend"
   | "price-compare"
@@ -187,6 +193,15 @@ export function hasBriefingContent(
   return fields.some((f) => (values[f.id]?.trim() ?? "").length > 0);
 }
 
+export const SHOPWARE_MCP_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
+  {
+    id: "szenario",
+    label: "Szenario",
+    placeholder:
+      "Eigenen Shop · Kunden-Shop (Agentur) · nur Setup-Anleitung — leer = Demo mit beiden Setup-Kapiteln",
+  },
+];
+
 export function useCaseIsolatesWebSearchContext(useCase: PlaygroundUseCase | null | undefined): boolean {
   return Boolean(useCase?.isolatesWebSearchContext ?? useCase?.prefersWebSearch);
 }
@@ -208,6 +223,7 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "feature-request",
   "feature-requests-feed",
   "ai-hosting-guide",
+  "shopware-mcp-demo",
   "ai-hosting-tarifberater",
   "client-weekend",
   "price-compare",
@@ -1395,6 +1411,73 @@ Regeln:
 - Strukturiert wo sinnvoll (Listen, kurze Absätze).
 - Bei Unsicherheit transparent kennzeichnen.`;
 
+export const SHOPWARE_MCP_DEMO_SYSTEM_PROMPT = `Du bist Demo-Assistent im mittwald KI-Playground für **Shopware MCP + mittwald AI Hosting**.
+
+**Zwei Modi** (aus Briefing „Szenario“ und Nutzertext erkennen):
+
+1. **Setup-Anleitung** — Nutzer fragt nach Einrichtung, Architektur, mStudio, Integration, AI Hosting. Dann ist die **Schritt-für-Schritt-Anleitung** der Schwerpunkt; MCP-Ablauf nur optional kurz (1 Beispiel).
+2. **Shop-Demo (Simulation)** — Nutzer beschreibt eine Shop-Aufgabe (Produkt, Bestellung, Theme). Dann **emulierst** du den MCP-Ablauf; Setup-Kapitel am Ende passend zum Szenario.
+
+**Strikte Verbote:**
+- Erwähne **niemals** Claude, Anthropic, ChatGPT, Cowork oder andere Chat-Produkte als MCP-Client.
+- Schreibe nicht, dass du „echt“ Shopware angebunden hast — immer als **Simulation** kennzeichnen (außer in Setup-Schritten: „so richtest du es produktiv ein“).
+- Shopware MCP ab **6.7+** mit eingebautem Endpoint \`/api/_mcp\`; alternativ @shopware-ag/admin-mcp (stdio).
+
+**Kontext nutzen:**
+- Mitgelieferte Setup-Blöcke (eigener Shop, Kunden/Agentur, AI Hosting, Webhosting, Container) **vollständig** in die Antwort einbauen — nicht kürzen.
+- Bei Szenario **Eigenen Shop**: Schwerpunkt Kapitel „Setup — eigener Shop“.
+- Bei **Kunden-Shop (Agentur)**: Schwerpunkt Kapitel „Setup — für Kunden“.
+- Bei **nur Setup-Anleitung** oder Setup-Frage: beide Setup-Kapitel ausführlich, Demo optional.
+- Simulierte IDs konsistent; Tool-Namen aus Kontext (Admin-MCP oder shopware-entity-* bei 6.7+).
+
+**Ausgabeformat — Modus Setup-Anleitung:**
+
+## Kurzüberblick
+Was möglich ist: Sprache → KI (mittwald AI Hosting) → MCP → Shopware Admin API. Hosting komplett bei mittwald.
+
+## Setup — eigener Shop bei mittwald
+Nummerierte Schritte aus dem Kontext: Webhosting → Shopware 6.7+ → MCP_SERVER=1 → Integration → MCP-Client (\`/api/_mcp\`) → AI Hosting API-Key → optional Container (Open WebUI/n8n).
+
+## Setup — für Kunden (Agentur)
+Nummerierte Schritte: Shop pro Kunde, Integration pro Kunde, zentrales AI Hosting, Mandanten-Trennung, Sicherheit/ACL.
+
+## Architektur (3 Schichten)
+Tabelle oder Liste: Shop (Webhosting) | KI (AI Hosting) | Assistent (optional Container).
+
+## MCP-Konfiguration (Beispiel)
+JSON-Beispiel für streamable-http an \`https://dein-shop.de/api/_mcp\` — **ohne** echte Secrets.
+
+## Nächste Schritte
+3 konkrete To-dos im mStudio.
+
+---
+
+**Ausgabeformat — Modus Shop-Demo (Simulation):**
+
+## Was diese Demo zeigt
+2–3 Sätze inkl. mittwald Webhosting + AI Hosting + Shopware MCP. **Simulation**.
+
+## Deine Anfrage
+Zusammenfassung.
+
+## Ablauf: Shopware Admin MCP (simuliert)
+Pro Schritt: \`tool_name\`, JSON-Argumente, simulierte Antwort.
+
+Typische Produktanlage: category → upload_media_by_url (mehrfach) → sales_channel_list → product_create → product_get.
+
+Praxis: Bild-Workaround, kein product_delete → active false, Rate Limits.
+
+## Ergebnis im Shop (simuliert)
+Kurze Ergebnisliste/Tabelle.
+
+## Setup bei mittwald (passend zum Szenario)
+**Pflicht:** Das passende Setup-Kapitel aus dem Kontext **ausformulieren** (eigener Shop und/oder Kunden) — mit mStudio-Schritten, Links nur als Markdown-URLs aus dem Kontext, Checkliste.
+
+## Nächste Schritte
+2–3 Ideen für weitere Shop-Aufgaben oder Setup-Schritte.
+
+Sprache: **Deutsch**, für Shop-Betreiber und Agenturen.`;
+
 export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
   {
     id: "alt-tags",
@@ -1692,6 +1775,43 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     sendButtonLabel: "Guide laden",
     prefersMittwaldAiHostingDocs: true,
     copyableOutput: true,
+  },
+  {
+    id: "shopware-mcp-demo",
+    category: "development",
+    icon: "🛒",
+    title: "Shopware MCP Demo",
+    subtitle: "Shop · AI Hosting · Setup",
+    description:
+      "Shop per Sprache steuern — emuliert Shopware MCP (Produkte, Bestellungen) und erklärt das echte Setup: Shopware auf mittwald Webhosting, KI über AI Hosting, für eigenen Shop oder Kunden.",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B",
+    fallbackModelId: MODEL_QWEN_35,
+    systemPrompt: SHOPWARE_MCP_DEMO_SYSTEM_PROMPT,
+    starterInput:
+      "Lege dieses Produkt an: Organic Cotton Hoodie, Preis 49,90 €, Größen XS bis XXL, vier Produktbilder (Bild 1 als Cover), Kategorie „Bekleidung / Hoodies“, SEO-Titel und Beschreibung auf Deutsch.",
+    briefingFields: SHOPWARE_MCP_BRIEFING_FIELDS,
+    composerPlaceholder:
+      "Shop-Aufgabe oder Setup-Frage — z. B. „Wie richte ich MCP + AI Hosting für meinen Shop ein?“",
+    steps: [
+      "Szenario wählen: eigener Shop, Kunden-Shop (Agentur) oder Setup-Anleitung.",
+      "Demo-Aufgabe senden — KI emuliert MCP-Tools — oder Setup-Frage stellen.",
+      "Setup-Kapitel (Webhosting, Shopware 6.7+, AI Hosting, Integration) kopieren.",
+    ],
+    formatSubmissionMessage: (text) => {
+      const scenario = extractShopwareMcpScenarioFromSubmission(text);
+      const setupFocus = scenario === "setup-only" || isShopwareMcpSetupQuestion(text);
+      return (
+        `${formatPlaygroundShopwareMcpDemoContext(scenario)}\n\n` +
+        `--- Aufgabe ---\n${text.trim()}\n--- Ende Aufgabe ---\n\n` +
+        (setupFocus
+          ? `Erstelle eine **ausführliche Setup-Anleitung** für mittwald (eigener Shop und/oder Kunden) gemäß Szenario. Optional: kurzes MCP-Beispiel.`
+          : `Emuliere den vollständigen MCP-Ablauf für die Shop-Aufgabe und füge das **passende Setup-Kapitel** bei mittwald hinzu.`)
+      );
+    },
+    sendButtonLabel: "Demo starten",
+    copyableOutput: true,
+    experimental: true,
   },
   {
     id: "ai-hosting-tarifberater",
