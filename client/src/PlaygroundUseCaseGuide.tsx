@@ -5,10 +5,19 @@ import { OCR_MAX_PAGES } from "./pdfToOcrImages";
 import { UseCaseExperimentalBadge } from "./UseCaseExperimentalBadge";
 import { UseCaseBetaBadge } from "./UseCaseBetaBadge";
 import {
+  MITTWALD_AI_HOSTING_TARIFF_URL,
+  MITTWALD_CONTAINER_HOSTING_URL,
+  MITTWALD_MSTUDIO_URL,
   MITTWALD_SALES_URL,
   MITTWALD_TARIF_CONSULT_PHONE,
   MITTWALD_TARIF_CONSULT_PHONE_TEL,
+  MITTWALD_WEBHOSTING_URL,
 } from "./playgroundSalesLinks";
+import {
+  MITTWALD_AI_HOSTING_DOCS_URL,
+  SHOPWARE_ADMIN_MCP_GITHUB_URL,
+  SHOPWARE_MCP_DOCS_URL,
+} from "./playgroundShopwareMcpDemo";
 
 type Props = {
   useCase: PlaygroundUseCase;
@@ -177,6 +186,79 @@ export function PlaygroundUseCaseGuide({
             className="font-semibold text-playground-ink underline underline-offset-2"
           >
             API-Endpunkte
+          </a>
+        </p>
+      ) : null}
+
+      {useCase.id === "shopware-mcp-demo" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-orange-200/80 bg-orange-50/80 px-3 py-2.5 font-medium text-orange-950 dark:border-orange-800 dark:bg-orange-950/40 dark:text-orange-100">
+          <span className="mr-1.5" aria-hidden>
+            🛒
+          </span>
+          <strong>Kurz:</strong> Zwei Ebenen — <strong>Demo</strong> (simulierte MCP-Tool-Aufrufe) und{" "}
+          <strong>Setup-Anleitung</strong> für die Praxis bei mittwald.{" "}
+          <strong>Shop:</strong> Shopware 6.7+ auf{" "}
+          <a
+            href={MITTWALD_WEBHOSTING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            Webhosting
+          </a>
+          , MCP unter <code className="text-xs">/api/_mcp</code>. <strong>KI:</strong>{" "}
+          <a
+            href={MITTWALD_AI_HOSTING_TARIFF_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            AI Hosting
+          </a>{" "}
+          (Tool Calling). Optional Assistent auf{" "}
+          <a
+            href={MITTWALD_CONTAINER_HOSTING_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            Container Hosting
+          </a>
+          . Im Briefing <strong>Szenario</strong> wählen: eigener Shop, Kunden-Shop oder nur Setup.{" "}
+          <a
+            href={SHOPWARE_MCP_DOCS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            Shopware MCP
+          </a>
+          {" · "}
+          <a
+            href={MITTWALD_AI_HOSTING_DOCS_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            AI Hosting Doku
+          </a>
+          {" · "}
+          <a
+            href={MITTWALD_MSTUDIO_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            mStudio
+          </a>
+          {" · "}
+          <a
+            href={SHOPWARE_ADMIN_MCP_GITHUB_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-semibold text-playground-ink underline underline-offset-2"
+          >
+            Admin MCP (stdio)
           </a>
         </p>
       ) : null}

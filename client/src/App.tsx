@@ -147,7 +147,7 @@ import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
 import { MittwaldLogo } from "./MittwaldLogo";
 import { PlaygroundHostingUpsell } from "./PlaygroundHostingUpsell";
 import { PlaygroundSelect } from "./PlaygroundSelect";
-import { trackUseCaseStart } from "./umami";
+import { trackPlaygroundUseCaseSend, trackPlaygroundUseCaseStart } from "./umami";
 import { ArrowUpIcon, MenuIcon, PenIcon } from "./playgroundIcons";
 import { mainFooterLinks, withDefaultBugLink, type PlaygroundLink } from "./playgroundLinks";
 import {
@@ -1529,10 +1529,7 @@ export function App() {
     (id: PlaygroundUseCaseId) => {
       const uc = getUseCaseById(id);
       if (!uc) return;
-      trackUseCaseStart(uc.id, {
-        category: uc.category,
-        experimental: uc.experimental,
-      });
+      trackPlaygroundUseCaseStart(uc);
       stop();
       setAppError(null);
       setContextTrimNotice(null);
@@ -1826,6 +1823,7 @@ export function App() {
       inputValueRef.current = "";
       setMessages([...nextThread, compareAssistant]);
       setBusy(true);
+      trackPlaygroundUseCaseSend(activeUseCase);
       focusComposer();
 
       const hasVision =
@@ -2044,6 +2042,7 @@ export function App() {
       const nextThread = [...messagesBeforeSend, userMessage];
       setMessages([...nextThread, { role: "assistant", content: "" }]);
       setBusy(true);
+      trackPlaygroundUseCaseSend(activeUseCase);
       setAudioTranscribePhase("transcribe");
       setAudioTranscribeProgress(null);
       setSpeechTranscribeStatus(null);
@@ -2233,6 +2232,7 @@ export function App() {
       const nextThread = [...messagesBeforeSend, userMessage];
       setMessages([...nextThread, { role: "assistant", content: "" }]);
       setBusy(true);
+      trackPlaygroundUseCaseSend(activeUseCase);
       setSemanticSearchPhase("embed");
       setSemanticSearchProgress(null);
 
@@ -2408,6 +2408,7 @@ export function App() {
       const nextThread = [...messagesBeforeSend, userMessage];
       setMessages([...nextThread, { role: "assistant", content: "" }]);
       setBusy(true);
+      trackPlaygroundUseCaseSend(activeUseCase);
       setOcrProgress("Dokument wird vorbereitet …");
 
       const streamStart = performance.now();
@@ -2687,6 +2688,8 @@ export function App() {
     let mittwaldAiHostingTariffAdvisorPayload: MittwaldAiHostingTariffAdvisorResponse | undefined;
     let weekendVisitPayload: WeekendVisitData | undefined;
     let priceComparePayload: PriceCompareSearchResponse | undefined;
+
+    trackPlaygroundUseCaseSend(activeUseCase);
 
     const wantsExternalPrefetch =
       wantsMittwaldFeatureRequests ||
