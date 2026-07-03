@@ -11,6 +11,9 @@ client/dist
 # Lokale Test-PDFs (z. B. Rechnungs-OCR im Workspace-Root)
 /*.pdf
 
+# CRM-Rohdaten (personenbezogen — nicht committen, nicht deployen)
+docs/customer.js
+
 # Lokale Railpack-Artefakte (mw experimental deploy)
 railpack-info.json
 railpack-plan.json
