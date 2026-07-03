@@ -9,14 +9,17 @@ let cache = null;
 let cacheAt = 0;
 
 const PLAN_MARKERS = [
-  { displayName: "Starter", marker: "Starter</span></h3>" },
-  { displayName: "Pro", marker: ">Pro</span></h3>" },
-  { displayName: "Business", marker: "Business</span></h3>" },
+  { displayName: "Starter", marker: "Starter</span></h2>" },
+  { displayName: "Pro", marker: "Pro</span></h2>" },
+  { displayName: "Business", marker: "Business</span></h2>" },
   {
     displayName: "Enterprise Dedicated",
-    marker: '<div class="label__inner">ENTERPRISE</div></div></div><div class="content-flow',
+    marker: "Managed Dedicated</span></h2>",
   },
 ];
+
+/** Zeichen vor dem Plan-Titel — Preis steht auf der Seite oberhalb der h2-Überschrift. */
+const PLAN_PRICE_LOOKBACK = 1200;
 
 function decodeHtml(s) {
   return String(s ?? "")
@@ -32,13 +35,18 @@ function stripTags(html) {
   return decodeHtml(String(html ?? "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim());
 }
 
-function parsePlanChunk(chunk, displayName) {
-  const priceMatch = chunk.match(/<strong>([0-9]+ €)<\/strong>/);
-  const taglineMatch = chunk.match(
-    /<div class="cc cc--mw-navy atom text text--size-m"><div class="text__inner"><p>([^<]*)<\/p>/,
-  );
+function parsePlanChunk(chunk, displayName, markerOffset) {
+  const planBody = markerOffset >= 0 ? chunk.slice(markerOffset) : chunk;
+  const priceMatch =
+    chunk.match(/headline__block'>ab ([0-9]+ €)<\/span>/) ??
+    chunk.match(/<strong>([0-9]+ €)<\/strong>/);
+  const taglineMatch =
+    planBody.match(/<p><strong>([^<]*)<\/strong>/) ??
+    planBody.match(
+      /<div class="cc cc--mw-navy atom text text--size-m"><div class="text__inner"><p>([^<]*)<\/p>/,
+    );
   const features = [
-    ...chunk.matchAll(/<div class="label__inner"><p>([^<]*)<\/p><\/div>/g),
+    ...planBody.matchAll(/<div class="label__inner"><p>([^<]*)<\/p><\/div>/g),
   ]
     .map((m) => stripTags(m[1]))
     .filter(Boolean);
@@ -60,9 +68,10 @@ function parseTariffPlans(html) {
   positions.sort((a, b) => a.index - b.index);
 
   return positions.map((pos, i) => {
+    const start = Math.max(0, pos.index - PLAN_PRICE_LOOKBACK);
     const end = positions[i + 1]?.index ?? pos.index + 12_000;
-    const chunk = html.slice(pos.index, end);
-    return parsePlanChunk(chunk, pos.displayName);
+    const chunk = html.slice(start, end);
+    return parsePlanChunk(chunk, pos.displayName, pos.index - start);
   });
 }
 
