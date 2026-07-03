@@ -175,7 +175,8 @@ export function formatPlaygroundAiHostingDedicatedSalesContext(): string {
   return (
     `[Playground — Dedicated AI Hosting (Vertriebsinfos, RTX 6000 PRO — noch nicht vollständig auf der öffentlichen Landingpage)]\n` +
     `WICHTIG: Dedicated-Preise (M/L/XL) und Erweiterungen NUR aus diesem Block — nicht aus Live-Tarifdaten erfinden oder Shared-Tarife (Starter/Pro/Business) verwechseln. ` +
-    `Dedicated M = 1× RTX 6000 PRO = **96 GB VRAM gesamt** (nicht 48 GB).\n\n` +
+    `Dedicated M = 1× RTX 6000 PRO = **96 GB VRAM gesamt** (nicht 48 GB).\n` +
+    `**Preis-Tabelle (exakt, nicht schätzen):** M **999 €** · L **1.899 €** · XL **3.599 €** pro Monat zzgl. USt. — **niemals** 2.999 € oder andere erfundene XL-Preise.\n\n` +
     `## ${d.title}\n${d.subtitle}\n\n${d.pitch}\n\n` +
     `### Warum Dedicated AI Hosting?\n${d.benefits.map((b) => `- ${b}`).join("\n")}\n\n` +
     `### Einfach erklärt\n${glossary}\n\n` +
