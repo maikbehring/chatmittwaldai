@@ -123,7 +123,8 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
     "- **mStudio heute:** Für Dedicated **kein** Self-Service wie bei Shared. **Aktuell nicht** im mStudio: Token-Statistiken, Live-Auslastungs-Dashboard, **API-Key-Verwaltung** — Keys und Setup **übernehmen wir** für den Kunden (mit Vertrieb).\n" +
     "- **Grafana (optional):** Auf Wunsch **dediziertes Grafana-Dashboard** — Anfrage über **Vertrieb** (+49 5772 293 150).\n" +
     "- **Produktentwicklung:** Dedicated wird **stetig weiterentwickelt**. Themen wie **Auslastungsanzeige**, **Key-Verwaltung** u. ä. **können künftig** ins mStudio kommen — **ohne** Terminzusage oder Roadmap-Versprechen.\n" +
-    "**Verboten:** mStudio-Live-Dashboard, Token-Statistiken oder API-Key-Self-Service für Dedicated behaupten.",
+    "- **LLM-Observability (LangSmith, W&B o. ä.):** Wenn der Kunde **eigene** App-Observability meint → in der **Anwendung** umsetzbar — **nicht** behaupten, GPU-Metriken/Fehlerlogs lägen **im mStudio** oder die Infrastruktur stelle dafür ein Self-Service-Log-Portal bereit.\n" +
+    "**Verboten (häufige Halluzination):** „Dedicated-Projekt im mStudio“, „Echtzeit-Einblicke“, „GPU-Auslastung/Antwortzeiten/Fehlerlogs im mStudio“, „Infrastruktur stellt Logs bereit“ für Dedicated-Monitoring im mStudio.",
   sizingGuidance:
     "Dedicated-Stufenleiter (kleinster passender Schritt zuerst):\n" +
     "1. **Shared (Starter/Pro/Business)** — Standard für die meisten Projekte, auch SaaS mit moderatem Traffic. Business bei hoher Last (Rate Limits, Token-Kontingent).\n" +
