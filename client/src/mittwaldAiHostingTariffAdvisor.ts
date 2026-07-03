@@ -25,11 +25,14 @@ export type MittwaldAiHostingTariffAdvisorResponse = {
   fetchedAt: string;
   sources: string[];
   apiBaseUrl: string;
+  warnings?: string[];
   tariffs: {
     fetchedAt: string;
     url: string;
     plans: AiHostingTariffPlan[];
     contractNotes: string[];
+    live?: boolean;
+    parseWarning?: string | null;
   };
   modelsPage: {
     url: string;
@@ -88,22 +91,34 @@ export function formatMittwaldAiHostingTariffAdvisorContext(
 
   const recLines = data.modelsPage.recommendations.map((r, i) => `[R${i + 1}] ${r}`);
 
+  const liveTariffsAvailable = data.tariffs.plans.length > 0;
+  const liveTariffsSection = liveTariffsAvailable
+    ? `## Aktuelle Tarife (live, Shared)\n` +
+      planLines.join("\n\n") +
+      (data.tariffs.contractNotes.length
+        ? `\n\nVertragsdetails Shared-Tarife (Seite): ${data.tariffs.contractNotes.join(" · ")}`
+        : "")
+    : `## Aktuelle Tarife (live, Shared)\n` +
+      `**Hinweis:** Live-Tarifdaten derzeit nicht verfügbar` +
+      (data.tariffs.parseWarning ? ` (${data.tariffs.parseWarning})` : "") +
+      `. Orientierung über **kuratiertes FAQ**, **Dedicated-Vertriebsblock** und Tarifseite ${MITTWALD_AI_HOSTING_TARIFF_URL} — **keine erfundenen Shared-Preise**.`;
+
+  const liveTariffRule = liveTariffsAvailable
+    ? `Shared-Tarifpreise (Starter/Pro/Business) nur aus den Live-Tarifdaten unten. `
+    : `Live-Tarifdaten fehlen — Shared-Preise/Kontingente nur aus **FAQ** (wo hinterlegt) oder Tarifseite/Vertrieb nennen, **nicht erfinden**. `;
+
   return (
     `${formatPlaygroundTodayContext()}\n\n` +
     `[Playground — AI Hosting Tarifberatung (live, Stand: ${formatIssueDate(data.fetchedAt)})]\n` +
     `BETA: Orientierung im Playground — keine verbindliche Angebotsberatung. Kaufentscheidung: Vertrieb ${MITTWALD_TARIF_CONSULT_PHONE} · ${MITTWALD_SALES_URL}\n` +
-    `Quellen:\n- ${data.tariffs.url}\n- ${data.modelsPage.url}\n` +
+    `Quellen:\n- ${data.tariffs.url}${liveTariffsAvailable ? " (live)" : " (Parse fehlgeschlagen — FAQ/Dedicated nutzen)"}\n- ${data.modelsPage.url}\n` +
     `API-Base-URL: ${data.apiBaseUrl}\n\n` +
-    `WICHTIG: Shared-Tarifpreise (Starter/Pro/Business) nur aus den Live-Tarifdaten unten. ` +
+    `WICHTIG: ${liveTariffRule}` +
     `Dedicated AI Hosting (M/L/XL, RTX 6000 PRO) nur aus dem Vertriebs-Block weiter unten — nicht erfinden. ` +
     `Modell-Empfehlungen aus Live-Doku + kuratiertem FAQ. Keine erfundenen Preise.\n` +
     `Kommunikationsstil: mittwald-Kundenservice-Chat — nur die gestellte Frage beantworten, Kontext intern nutzen, nicht ausgeben.\n` +
     `Bei Tarifbuchung (Shared): Tarifseite ${MITTWALD_AI_HOSTING_TARIFF_URL} · mStudio ${MITTWALD_MSTUDIO_URL} · API-Keys im mStudio (nur Shared). Dedicated: Vertrieb · Keys/Einrichtung durch mittwald · Vertrieb: ${MITTWALD_TARIF_CONSULT_PHONE} · ${MITTWALD_SALES_URL} · Support: https://www.mittwald.de/darum-mittwald/kundenservice\n\n` +
-    `## Aktuelle Tarife (live, Shared)\n` +
-    planLines.join("\n\n") +
-    (data.tariffs.contractNotes.length
-      ? `\n\nVertragsdetails Shared-Tarife (Seite): ${data.tariffs.contractNotes.join(" · ")}`
-      : "") +
+    liveTariffsSection +
     `\n\n` +
     formatPlaygroundAiHostingDedicatedSalesContext() +
     `\n\n` +
