@@ -102,7 +102,7 @@ export const PLAYGROUND_AI_HOSTING_TARIFF_FAQ: TariffFaqEntry[] = [
     id: 67,
     section: "Integration",
     question: "Paperless-ngx (oder DMS) mit OpenAI GPT-4o für OCR — wie wechsle ich auf DSGVO-konformes AI Hosting?",
-    answer: "**Kurz:** Ihr ersetzt die **OpenAI-Anbindung** durch **mittwald AI Hosting** — die Dokumente verarbeiten bleibt in eurer Verantwortung (AVV, Zweckbindung).\n\n**Was ihr braucht (nur KI-API):**\n\n1. **AI-Hosting-Tarif** buchen — **Tarifseite** (https://www.mittwald.de/mstudio/ai-hosting) **oder** im **mStudio** (Bestandskunden) → AI Hosting; Starter/Pro/Business je nach OCR-Volumen\n2. **API-Key** im mStudio anlegen\n3. In Paperless (oder eurem DMS) statt OpenAI: **OpenAI-kompatible API** mit Base-URL `https://llm.aihosting.mittwald.de/v1` und eurem API-Key\n\n**Modelle:**\n\n- **OCR / Texterkennung:** **GLM-OCR** (speziell für Text aus PDF, Bildern, Scans) — **nicht** GPT-4o und nicht primär Qwen-Chat-Modelle\n- **Optional danach:** Qwen3.6 o. ä. für Klassifikation, Tags oder Auswertung auf **bereits extrahiertem** Text\n\n**DSGVO / White-Label für Kunden:**\n\n- Verarbeitung in **Deutschland**, **kein** Datentransfer zu OpenAI\n- Bei personenbezogenen Dokumenten: **AVV** mit mittwald\n- Paperless-Hosting und Kundendaten im DMS liegen bei euch — AI Hosting speichert **keine** Prompt-/Dokumentinhalte dauerhaft\n\n**Paperless selbst hosten?** AI Hosting ersetzt **nicht** Paperless. Läuft Paperless schon woanders, reicht AI Hosting. Soll Paperless **auch** bei mittwald laufen → zusätzlich **vServer**, **Container Hosting** o. ä. ( separates Produkt, separate Kosten).\n\n**Kosten (Orientierung):**\n\n- **AI Hosting:** Preise aus Live-Tarifdaten (z. B. Starter ab 9 €/Monat, Pro 39 €/Monat, Business 149 €/Monat) — Tarif nach **monatlichem OCR-/Token-Volumen** wählen; monatlich wechselbar\n- **Paperless-Infrastruktur:** nur wenn neu/gehostet — vServer/Container extra\n\nBei größerem OCR-Volumen oder Architekturfragen: **Vertrieb** +49 5772 293 150.",
+    answer: "**Kurz:** Ihr ersetzt die **OpenAI-Anbindung** durch **mittwald AI Hosting** — die Dokumente verarbeiten bleibt in eurer Verantwortung (AVV, Zweckbindung).\n\n**Was ihr braucht (nur KI-API):**\n\n1. **AI-Hosting-Tarif** buchen — **Tarifseite** (https://www.mittwald.de/mstudio/ai-hosting) **oder** im **mStudio** (Bestandskunden) → AI Hosting; Starter/Pro/Business je nach OCR-Volumen\n2. **API-Key** im mStudio anlegen\n3. In Paperless (oder eurem DMS) statt OpenAI: **OpenAI-kompatible API** mit Base-URL `https://llm.aihosting.mittwald.de/v1` und eurem API-Key\n\n**Modelle:**\n\n- **OCR / Texterkennung:** **GLM-OCR** (speziell für Text aus PDF, Bildern, Scans) — **nicht** GPT-4o und nicht primär Qwen-Chat-Modelle. **Qwen3.5/3.6** eignen sich für Text **nach** der Erkennung (Klassifikation, Tags, Zusammenfassung), nicht als primäres OCR-Ersatzmodell für gpt-4o Vision/OCR.\n- **Optional danach:** Qwen3.6 o. ä. für Klassifikation, Tags oder Auswertung auf **bereits extrahiertem** Text\n\n**DSGVO / White-Label für Kunden:**\n\n- Verarbeitung in **Deutschland**, **kein** Datentransfer zu OpenAI\n- Bei personenbezogenen Dokumenten: **AVV** mit mittwald\n- Paperless-Hosting und Kundendaten im DMS liegen bei euch — AI Hosting speichert **keine** Prompt-/Dokumentinhalte dauerhaft\n\n**Paperless selbst hosten?** AI Hosting ersetzt **nicht** Paperless. Läuft Paperless schon woanders, reicht AI Hosting. Soll Paperless **auch** bei mittwald laufen → zusätzlich **vServer**, **Container Hosting** o. ä. ( separates Produkt, separate Kosten).\n\n**Kosten (Orientierung):**\n\n- **AI Hosting:** Preise aus Live-Tarifdaten (z. B. Starter ab 9 €/Monat, Pro 39 €/Monat, Business 149 €/Monat) — Tarif nach **monatlichem OCR-/Token-Volumen** wählen; monatlich wechselbar\n- **Paperless-Infrastruktur:** nur wenn neu/gehostet — vServer/Container extra\n\nBei größerem OCR-Volumen oder Architekturfragen: **Vertrieb** +49 5772 293 150.",
   },
   {
     id: 68,
@@ -205,6 +205,65 @@ export const PLAYGROUND_AI_HOSTING_TARIFF_FAQ: TariffFaqEntry[] = [
     section: "Integration",
     question: "„Ja, legen wir los“ — Hosting ohne KI: welche Links und nächsten Schritte?",
     answer: "**Kurz:** Bei **Webhosting, E-Mail, Cloud oder Container ohne KI** — **nicht** die AI-Hosting-Tarifseite und **kein** API-Key. Stattdessen **konkrete Produktlinks**:\n\n- **Webhosting** (Website/CMS): https://www.mittwald.de/webhosting\n- **vServer** (mehrere Projekte, Basis für Container): https://www.mittwald.de/vserver\n- **Dedicated Server** (hohe Last/Isolation): https://www.mittwald.de/dedicated-server\n- **E-Mail** (inkl. Migration): https://www.mittwald.de/lp/e-mail-migration\n- **mStudio** (Produktinfo): https://www.mittwald.de/mstudio\n- **mStudio anmelden** (Verwaltung, kostenlos testen): https://mstudio.mittwald.de/\n- **Container Hosting** (Nextcloud, Aufgabenboards, Vorlagen): https://www.mittwald.de/mstudio/container-hosting\n\n**Typischer Ablauf Ehrenamt/Verein:** Webhosting für die **Website** buchen → **E-Mail** im mStudio einrichten → für **Cloud/Aufgabenboard** **vServer** + **Container Hosting** mit passender Vorlage.\n\n**Verboten:** „Keine zentrale Tarifseite“ ohne Links; AI Hosting erwähnen, wenn im Chat **kein KI-Bedarf** war.\n\n**Beratung:** Vertrieb +49 5772 293 150 · https://www.mittwald.de/darum-mittwald/vertrieb",
+  },
+  {
+    id: 85,
+    section: "Integration",
+    question: "Was kostet AI Hosting insgesamt — brauche ich noch vServer, Webhosting oder Container?",
+    answer:
+      "AI Hosting ist **nur die KI-API** (OpenAI-kompatibel). Du buchst einen **Tarif** (Starter / Pro / Business) — das ist **nicht** die Hosting-Umgebung für deine App.\n\n**Typische Gesamtkosten:**\n\n| Szenario | AI Hosting | Zusätzlich | Wofür |\n|----------|------------|------------|--------|\n| **API in bestehender App** (Paperless, TYPO3, eigene Software woanders) | Tarif nach Volumen (Live-Tarifdaten) | — | Nur Modell-API ersetzen |\n| **Chat-Oberfläche schnell** (Open WebUI) | Tarif nach Token | **vServer** + Container Hosting | UI + optional RAG |\n| **Workflows / Agenten** (n8n) | Tarif nach Token | oft vServer + Container | Automation neben der API |\n| **Klassische Website + KI** | Tarif | **Webhosting** (Shop/CMS) getrennt | Shop ≠ AI Hosting |\n\n**mStudio** brauchst du für AI Hosting (Tarif, API-Keys, Verbrauch). **Webhosting** nur, wenn du zusätzlich eine Website oder einen Shop betreibst.\n\nGesamtpreis = **AI-Hosting-Tarif** + optional **vServer/Dedicated** (Basis für Container) + optional **Webhosting** — nicht alles in einem Paket.",
+  },
+  {
+    id: 86,
+    section: "Integration",
+    question:
+      "Ich habe Open WebUI angelegt — musste keinen API-Key eingeben. Hängt das am Starter-Tarif? Ist die Nutzung gedeckelt?",
+    answer:
+      "Bei **Container-Vorlagen** im mStudio (z. B. **Open WebUI**) sind **AI-Hosting-Zugangsdaten oft vorkonfiguriert** — du trägst keinen Key manuell ein. Das ersetzt **nicht** die Tarifbuchung: Verbrauch läuft über deinen **gebuchten AI-Hosting-Tarif** (Token-Kontingent).\n\n**Kurz:**\n\n- **Tarif** = Token-Kontingent + Rate Limits (Starter/Pro/Business)\n- **Container** = Oberfläche/App — nutzt die API im Hintergrund\n- **Gedeckelt?** Ja, über das **monatliche Token-Limit** deines Tarifs — nicht „unlimited“, nur weil Open WebUI sofort antwortet\n\nToken-Verbrauch im **mStudio → AI Hosting** prüfen. Bei PoC reicht oft **Starter**; bei Dauerbetrieb oder mehreren Nutzern früh **Pro** einplanen.",
+  },
+  {
+    id: 87,
+    section: "Agentur",
+    question: "Wie rechne ich Tokenverbrauch — auch wenn ich AI Hosting an meine Kunden weitergebe?",
+    answer:
+      "**Grundlage:** Tokens = Ein- + Ausgabe des Modells (ca. 1 Token ≈ ¾ Wort DE). Verbrauch siehst du im **mStudio** (AI Hosting → Auslastung).\n\n**Für Agentur / Wiederverkauf:**\n\n1. **Eigenen AI-Hosting-Tarif** buchen (pro Endkunde kein separater Shared-Tarif zwingend nötig — aber **eigene Integration/Mandant** pro Kunde bei API-Zugriff auf Kundendaten)\n2. **PoC:** Starter testen, Verbrauch 2–4 Wochen messen\n3. **Kalkulation:** Monatliche Tokens ÷ Kundenprojekte; Puffer 30–50 % für Spitzen\n4. **Abrechnung an Kunden:** Pauschale im Wartungsvertrag oder nach gemessenem Volumen — **AVV** mit Endkunden klären\n\nEs gibt **kein** separates Reseller-Dashboard pro Mandant im Shared-Tarif — Messung läuft über **einen** Tarif; Mandanten-Trennung ist **technisch/vertraglich** eure Aufgabe.\n\nBei unsicherem Volumen oder vielen parallelen Projekten: **Pro/Business** oder Beratung (+49 5772 293 150).",
+  },
+  {
+    id: 88,
+    section: "Agentur",
+    question: "Gibt es ein Partnerprogramm, White Label oder eigene Subdomain für AI Hosting?",
+    answer:
+      "Ein **formales White-Label-Programm** (eigene Marke, Subdomain der API, Mittwald unsichtbar) gibt es **nicht** als Standardprodukt.\n\n**Was Agenturen typisch machen:**\n\n- **AI Hosting** im eigenen Namen an Kunden verkaufen (Wartungsvertrag, Pauschale)\n- **Endkunde** sieht eure App (Open WebUI, Portal, n8n) — nicht die Roh-API\n- **Eigene Domain** für die **App** (Container/Webhosting) — nicht für `llm.aihosting.mittwald.de`\n- **Ein Tarif** für die Agentur, **pro Kunde** eigene Keys/Configs/AVV\n\n**Partner-Konstellation:** Kein Self-Service-Partner-Tier im mStudio — bei vielen Kunden oder Reselling-Architektur **Beratung** mit dem Vertrieb (+49 5772 293 150).\n\nInteresse an **vielen Kunden** → Tarif **Pro/Business**, Mandanten-Trennung und Setup mit Vertrieb besprechen.",
+  },
+  {
+    id: 89,
+    section: "Integration",
+    question:
+      "Tools bei verschiedenen Anbietern (z. B. Automation, Cloud, Dateien) — kann ich alles DSGVO-konform bei mittwald bündeln?",
+    answer:
+      "Ja — typisches **Agentur-Motiv**: mehrere Tools bei verschiedenen Anbietern → **eine DSGVO-konforme Plattform** in Deutschland.\n\n**Empfohlener Weg:**\n\n1. **vServer** oder **Dedicated** als Basis\n2. **Container Hosting** im mStudio — n8n, Nextcloud, Open WebUI, Qdrant u. a. als Vorlagen\n3. **AI Hosting** separat buchen — API-Key, Anbindung an n8n/Open WebUI (oft vorkonfiguriert)\n4. **Webhosting** zusätzlich, wenn Kunden-Websites/Shops dazu gehören\n\n**Vorteil:** Rechenzentrum DE, **AVV** mit mittwald, ein mStudio für Betrieb.\n\nMigration schrittweise (z. B. zuerst Automation + AI Hosting, dann Cloud-Dateien).",
+  },
+  {
+    id: 90,
+    section: "Integration",
+    question: "Wir laufen auf Heroku oder AWS — passt mittwald Container Hosting + AI Hosting?",
+    answer:
+      "**AI Hosting** ersetzt **nicht** Heroku/AWS — es ersetzt **OpenAI & Co.** (LLM-API).\n\n**Typische Migration:**\n\n| Bisher | Bei mittwald |\n|--------|--------------|\n| PaaS (Build + Deploy) | **Container Hosting** (Docker, mStudio/CLI) |\n| Cloud-LLM / OpenAI | **AI Hosting** (`https://llm.aihosting.mittwald.de/v1`) |\n| Cloud-VMs/Container | **vServer/Dedicated** + Container |\n\nEntwickler-Workflow: Docker-Image bauen, im mStudio deployen, AI Hosting per API-Key anbinden. **DSGVO:** Hosting in DE statt US-Cloud — häufiges Motiv bei Agenturen.\n\n**Dedicated AI Hosting** nur bei GPU-/Limit-Bedarf — nicht automatisch nur wegen „wir kommen von AWS/Heroku“.",
+  },
+  {
+    id: 91,
+    section: "Tarifwahl",
+    question:
+      "n8n, Open WebUI und ein weiteres LLM-Tool laufen parallel — warum ist mein Token-Limit so schnell voll?",
+    answer:
+      "Jede Anbindung an **dieselbe AI-Hosting-API** zählt auf **ein** Token-Kontingent:\n\n- **n8n**-Workflows (viele kleine Calls)\n- **Open WebUI** (Chat + ggf. RAG)\n- **Weitere Apps** (Experimente, parallele Integrationen)\n\n**In der Praxis** unterschätzen viele parallele Integrationen das Volumen — Upgrade-Hinweise kommen oft nahe **Starter-Kontingent** oder bei **deutlicher Überschreitung** (siehe FAQ #5: kein harter API-Stop).\n\n**Empfehlung:**\n\n1. Verbrauch im mStudio prüfen\n2. Test-/Experiment-Tools temporär abklemmen\n3. **Pro** einplanen, wenn n8n produktiv + UI parallel\n4. Getrennte API-Keys pro Umgebung (Prod vs. Test) — trotzdem ein Tarif\n\nBei dauerhaft höherem Bedarf: Tarifwechsel oder Vertrieb (+49 5772 293 150).",
+  },
+  {
+    id: 92,
+    section: "Modelle",
+    question: "Welches Modell für OCR und Handschrift — Qwen oder GLM-OCR?",
+    answer:
+      "**Unterschiedlich je nach Aufgabe:**\n\n| Aufgabe | Modell | Hinweis |\n|---------|--------|--------|\n| **OCR / Text aus PDF, Scan, Bild** | **GLM-OCR** | Speziell für Texterkennung — **nicht** Chat-Modelle als Ersatz |\n| **Handschrift / schwierige Scans** | **GLM-OCR** testen | Ggf. Nachbearbeitung mit Qwen auf **extrahiertem** Text |\n| **Klassifikation, Tags, Zusammenfassung** nach OCR | **Qwen3.6**, **Ministral** | Auf bereits erkanntem Text |\n\n**Paperless / DMS:** App hostet ihr **getrennt** (eigener Server/Container) — AI Hosting = **nur KI-API**. OpenAI durch mittwald ersetzen = Base-URL + API-Key tauschen, **GLM-OCR** für Erkennung.\n\nBei personenbezogenen Dokumenten: **AVV** + Zweckbindung — unabhängig vom Tarif.",
   },
   {
     id: 56,
@@ -330,7 +389,7 @@ export const PLAYGROUND_AI_HOSTING_TARIFF_FAQ: TariffFaqEntry[] = [
     id: 24,
     section: "Modelle",
     question: "Welches Modell nutze ich für OCR oder Rechnungen – und ist das im Tarif enthalten?",
-    answer: "Für OCR-Anwendungen empfiehlt sich **GLM-OCR**.\n\nEs eignet sich zum Extrahieren von Text aus:\n\n- PDF\n- DOCX\n- PPTX\n- XLSX\n- HTML\n- SVG\n- Bildern\n- gescannten Rechnungen\n- Verträgen\n- Formularen\n\nGLM-OCR gehört zu den verfügbaren AI-Modellen und kann innerhalb des gebuchten AI-Hosting-Tarifs genutzt werden.\n\nDa sich GLM-OCR aktuell noch in der Testphase befindet, können sich Funktionen noch ändern.",
+    answer: "Für OCR-Anwendungen empfiehlt sich **GLM-OCR**.\n\nEs eignet sich zum Extrahieren von Text aus:\n\n- PDF\n- DOCX\n- PPTX\n- XLSX\n- HTML\n- SVG\n- Bildern\n- gescannten Rechnungen\n- Verträgen\n- Formularen\n\n**Handschrift / schwierige Scans:** mit **GLM-OCR** testen — Qualität projektabhängig; ggf. Nachbearbeitung mit Qwen auf **bereits extrahiertem** Text.\n\n**Nicht** Qwen-Chat-Modelle als primären OCR-Ersatz für gpt-4o verwenden — Qwen optional **danach** für Auswertung.\n\nGLM-OCR gehört zu den verfügbaren AI-Modellen und kann innerhalb des gebuchten AI-Hosting-Tarifs genutzt werden.\n\nDa sich GLM-OCR aktuell noch in der Testphase befindet, können sich Funktionen noch ändern.",
   },
   {
     id: 25,
