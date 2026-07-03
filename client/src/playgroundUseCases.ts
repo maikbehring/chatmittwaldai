@@ -879,7 +879,8 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 6. **Container-Vorlagen & AI Hosting** (direkte Anbindung, RAG-Bausteine, typische Stacks — wird laufend erweitert)
 
 ## Fachregeln
-- **Shared-Tarife** (Starter/Pro/Business): Preise und Kontingente nur aus Live-Tarifdaten. Vertragslaufzeit: monatlich, Verlängerung Monatsende, Kündigung 30 Tage zum Monatsende.
+- **Live-Tarife fehlen (Fallback):** Wenn im Kontext **keine** Live-Tarifdaten (Shared) stehen → **trotzdem antworten** auf Basis von **FAQ**, **Dedicated-Vertriebsblock**, **Modellliste** und **Mittwald-Kurzprofil**. Shared-Preise/Kontingente **nicht erfinden** — bei Bedarf Tarifseite ${MITTWALD_AI_HOSTING_TARIFF_URL} oder Vertrieb nennen. **Verboten:** mit Fehler/Abbruch reagieren, nur weil Parse der Tarifseite fehlgeschlagen ist.
+- **Shared-Tarife** (Starter/Pro/Business): Preise und Kontingente nur aus Live-Tarifdaten (wenn im Kontext vorhanden) bzw. FAQ — sonst nicht schätzen. Vertragslaufzeit: monatlich, Verlängerung Monatsende, Kündigung 30 Tage zum Monatsende.
 - **Dedicated AI Hosting** (M/L/XL): eigene Mindestlaufzeiten (M: 3 Monate, L/XL: 6 Monate) — nicht mit Shared-Kündigungsregeln verwechseln.
 - **Modelle (Shared):** Auf **Shared** (Starter/Pro/Business) nur Modelle aus **Live-Modellliste** + FAQ — **keine erfundenen Modellnamen**. **Verboten:** behaupten, **Claude** (Opus/Sonnet), **GPT-4o**, **ChatGPT**, **Gemini** oder **Llama** seien bei mittwald **Shared** buchbar — das sind **externe** Anbieter-APIs, nicht unser Katalog.
 - **Claude Opus vs. mittwald (Pflicht):** **Plattform-Vergleich** Anthropic **vs.** AI Hosting — **nicht** Modellauswahl bei uns. **Claude Opus:** nur bei **Anthropic** (extern), nicht im mittwald-Katalog. **mittwald:** DE-Hosting, keine Weitergabe an OpenAI-/Anthropic-**APIs**; Modelle nur aus **Live-Modellliste** (exakte IDs). **OpenAI-kompatibel** = API-Schnittstelle, **nicht** GPT-4o/Claude hosten. **gpt-oss-120b** ist bei uns **selbst gehostet** (Open-Weight) — trotzdem **kein** Datentransfer an die OpenAI-API. **Keine FAQ-Metatexte** an Kunden („Nicht behaupten“, „Intern bei uns“, „Antwortstruktur“).
@@ -1749,6 +1750,30 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     copyableOutput: true,
   },
   {
+    id: "ai-hosting-tarifberater",
+    category: "development",
+    icon: "💶",
+    title: "AI Hosting Tarifberater",
+    subtitle: "Tarif- & Modellberatung",
+    description:
+      "Persönliche Empfehlung zu AI Hosting — von Starter bis Dedicated, auf Basis aktueller Tarife und Praxis-Wissen. Unser Vertrieb hilft dir gern bei der finalen Entscheidung.",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B",
+    fallbackModelId: MODEL_GPT_OSS,
+    systemPrompt: AI_HOSTING_TARIFF_ADVISOR_SYSTEM_PROMPT,
+    composerPlaceholder:
+      "Dein Anliegen — z. B. Tarifwahl, Chatbot, DSGVO, Dedicated …",
+    steps: [
+      "Anliegen eingeben und absenden.",
+      "Beim ersten Mal werden Tarife & Modelle geladen — danach nur noch deine Fragen.",
+    ],
+    formatSubmissionMessage: formatAiHostingTariffAdvisorSubmission,
+    sendButtonLabel: "Beratung laden",
+    prefersAiHostingTariffAdvisor: true,
+    copyableOutput: true,
+    beta: true,
+  },
+  {
     id: "ai-hosting-guide",
     category: "development",
     icon: "🤖",
@@ -1813,30 +1838,6 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     sendButtonLabel: "Demo starten",
     copyableOutput: true,
     experimental: true,
-  },
-  {
-    id: "ai-hosting-tarifberater",
-    category: "development",
-    icon: "💶",
-    title: "AI Hosting Tarifberater",
-    subtitle: "Tarif- & Modellberatung",
-    description:
-      "Persönliche Empfehlung zu AI Hosting — von Starter bis Dedicated, auf Basis aktueller Tarife und Praxis-Wissen. Unser Vertrieb hilft dir gern bei der finalen Entscheidung.",
-    modelId: MODEL_QWEN_36,
-    modelLabel: "Qwen3.6 35B",
-    fallbackModelId: MODEL_GPT_OSS,
-    systemPrompt: AI_HOSTING_TARIFF_ADVISOR_SYSTEM_PROMPT,
-    composerPlaceholder:
-      "Dein Anliegen — z. B. Tarifwahl, Chatbot, DSGVO, Dedicated …",
-    steps: [
-      "Anliegen eingeben und absenden.",
-      "Beim ersten Mal werden Tarife & Modelle geladen — danach nur noch deine Fragen.",
-    ],
-    formatSubmissionMessage: formatAiHostingTariffAdvisorSubmission,
-    sendButtonLabel: "Beratung laden",
-    prefersAiHostingTariffAdvisor: true,
-    copyableOutput: true,
-    beta: true,
   },
   {
     id: "client-weekend",
@@ -2055,7 +2056,7 @@ export function getUseCasesByCategory(): {
   label: string;
   cases: PlaygroundUseCase[];
 }[] {
-  const order: PlaygroundUseCaseCategory[] = ["content", "delivery", "development"];
+  const order: PlaygroundUseCaseCategory[] = ["content", "development", "delivery"];
   return order.map((category) => ({
     category,
     label: USE_CASE_CATEGORY_LABELS[category],

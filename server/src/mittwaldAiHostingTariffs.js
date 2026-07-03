@@ -88,26 +88,41 @@ export async function fetchMittwaldAiHostingTariffs() {
   const now = Date.now();
   if (cache && now - cacheAt < CACHE_TTL_MS) return cache;
 
-  const res = await fetch(TARIFFS_PAGE_URL, {
-    headers: { "User-Agent": "mittwald-ai-playground", Accept: "text/html" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!res.ok) throw new Error(`Tarifseite ${res.status}`);
+  try {
+    const res = await fetch(TARIFFS_PAGE_URL, {
+      headers: { "User-Agent": "mittwald-ai-playground", Accept: "text/html" },
+      signal: AbortSignal.timeout(15_000),
+    });
+    if (!res.ok) {
+      console.warn(`Tarifseite HTTP ${res.status}`);
+      return buildTariffsPayload([], [], `Tarifseite nicht erreichbar (HTTP ${res.status}).`);
+    }
 
-  const html = await res.text();
-  const plans = parseTariffPlans(html);
-  if (plans.length === 0) {
-    throw new Error("Tarifseite konnte nicht geparst werden.");
+    const html = await res.text();
+    const plans = parseTariffPlans(html);
+    if (plans.length === 0) {
+      console.warn("Tarifseite konnte nicht geparst werden.");
+      return buildTariffsPayload([], [], "Tarifseite konnte nicht geparst werden.");
+    }
+
+    const payload = buildTariffsPayload(plans, parseContractNotes(html));
+    cache = payload;
+    cacheAt = now;
+    return payload;
+  } catch (e) {
+    console.warn("Tarifseite laden fehlgeschlagen:", e);
+    const message = e instanceof Error ? e.message : "Tarifseite nicht geladen.";
+    return buildTariffsPayload([], [], message);
   }
+}
 
-  const payload = {
+function buildTariffsPayload(plans, contractNotes, parseWarning = null) {
+  return {
     fetchedAt: new Date().toISOString(),
     url: TARIFFS_PAGE_URL,
     plans,
-    contractNotes: parseContractNotes(html),
+    contractNotes,
+    live: plans.length > 0,
+    parseWarning,
   };
-
-  cache = payload;
-  cacheAt = now;
-  return payload;
 }

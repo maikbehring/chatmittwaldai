@@ -19,12 +19,18 @@ export async function fetchMittwaldAiHostingTariffAdvisor(options = {}) {
     fetchMittwaldAiHostingDocs({ allowedModelIds: options.allowedModelIds }),
   ]);
 
+  const warnings = tariffs.parseWarning ? [tariffs.parseWarning] : [];
+
   const payload = {
     fetchedAt: new Date().toISOString(),
-    sources: [tariffs.url, docs.modelsPage.url],
+    sources: [
+      ...(tariffs.live ? [tariffs.url] : []),
+      docs.modelsPage.url,
+    ],
     tariffs,
     modelsPage: docs.modelsPage,
     apiBaseUrl: docs.apiPage.baseUrl,
+    ...(warnings.length ? { warnings } : {}),
   };
 
   cache = payload;
