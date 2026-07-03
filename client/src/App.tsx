@@ -525,9 +525,11 @@ const ChatMessageRow = memo(function ChatMessageRow({
             </p>
           ) : null}
           {message.mittwaldAiHostingTariffAdvisor &&
-          message.mittwaldAiHostingTariffAdvisor.tariffs.plans.length > 0 ? (
+          message.mittwaldAiHostingTariffAdvisor.modelsPage.models.length > 0 ? (
             <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
-              Live-Tarife · {message.mittwaldAiHostingTariffAdvisor.tariffs.plans.length} Pakete ·{" "}
+              {message.mittwaldAiHostingTariffAdvisor.tariffs.plans.length > 0
+                ? `Live-Tarife · ${message.mittwaldAiHostingTariffAdvisor.tariffs.plans.length} Pakete · `
+                : "FAQ · Dedicated · "}
               {message.mittwaldAiHostingTariffAdvisor.modelsPage.models.length} Modelle · FAQ
             </p>
           ) : null}
@@ -2779,15 +2781,12 @@ export function App() {
           return;
         }
         setAiHostingTariffAdvisorBusy(false);
-        if (
-          mittwaldAiHostingTariffAdvisorPayload.tariffs.plans.length === 0 ||
-          mittwaldAiHostingTariffAdvisorPayload.modelsPage.models.length === 0
-        ) {
+        if (mittwaldAiHostingTariffAdvisorPayload.modelsPage.models.length === 0) {
           setMessages(messagesBeforeSend);
           setAppError({
             kind: "plain",
             message:
-              "AI-Hosting-Tarifberatung: Tarife oder Modelle konnten nicht geladen werden. Bitte erneut versuchen.",
+              "AI-Hosting-Tarifberatung: Modellliste konnte nicht geladen werden. Bitte erneut versuchen.",
           });
           return;
         }
