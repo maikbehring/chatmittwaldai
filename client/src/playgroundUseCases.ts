@@ -1750,6 +1750,30 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     copyableOutput: true,
   },
   {
+    id: "ai-hosting-tarifberater",
+    category: "development",
+    icon: "💶",
+    title: "AI Hosting Tarifberater",
+    subtitle: "Tarif- & Modellberatung",
+    description:
+      "Persönliche Empfehlung zu AI Hosting — von Starter bis Dedicated, auf Basis aktueller Tarife und Praxis-Wissen. Unser Vertrieb hilft dir gern bei der finalen Entscheidung.",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B",
+    fallbackModelId: MODEL_GPT_OSS,
+    systemPrompt: AI_HOSTING_TARIFF_ADVISOR_SYSTEM_PROMPT,
+    composerPlaceholder:
+      "Dein Anliegen — z. B. Tarifwahl, Chatbot, DSGVO, Dedicated …",
+    steps: [
+      "Anliegen eingeben und absenden.",
+      "Beim ersten Mal werden Tarife & Modelle geladen — danach nur noch deine Fragen.",
+    ],
+    formatSubmissionMessage: formatAiHostingTariffAdvisorSubmission,
+    sendButtonLabel: "Beratung laden",
+    prefersAiHostingTariffAdvisor: true,
+    copyableOutput: true,
+    beta: true,
+  },
+  {
     id: "ai-hosting-guide",
     category: "development",
     icon: "🤖",
@@ -1814,30 +1838,6 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     sendButtonLabel: "Demo starten",
     copyableOutput: true,
     experimental: true,
-  },
-  {
-    id: "ai-hosting-tarifberater",
-    category: "development",
-    icon: "💶",
-    title: "AI Hosting Tarifberater",
-    subtitle: "Tarif- & Modellberatung",
-    description:
-      "Persönliche Empfehlung zu AI Hosting — von Starter bis Dedicated, auf Basis aktueller Tarife und Praxis-Wissen. Unser Vertrieb hilft dir gern bei der finalen Entscheidung.",
-    modelId: MODEL_QWEN_36,
-    modelLabel: "Qwen3.6 35B",
-    fallbackModelId: MODEL_GPT_OSS,
-    systemPrompt: AI_HOSTING_TARIFF_ADVISOR_SYSTEM_PROMPT,
-    composerPlaceholder:
-      "Dein Anliegen — z. B. Tarifwahl, Chatbot, DSGVO, Dedicated …",
-    steps: [
-      "Anliegen eingeben und absenden.",
-      "Beim ersten Mal werden Tarife & Modelle geladen — danach nur noch deine Fragen.",
-    ],
-    formatSubmissionMessage: formatAiHostingTariffAdvisorSubmission,
-    sendButtonLabel: "Beratung laden",
-    prefersAiHostingTariffAdvisor: true,
-    copyableOutput: true,
-    beta: true,
   },
   {
     id: "client-weekend",
@@ -2056,7 +2056,7 @@ export function getUseCasesByCategory(): {
   label: string;
   cases: PlaygroundUseCase[];
 }[] {
-  const order: PlaygroundUseCaseCategory[] = ["content", "delivery", "development"];
+  const order: PlaygroundUseCaseCategory[] = ["content", "development", "delivery"];
   return order.map((category) => ({
     category,
     label: USE_CASE_CATEGORY_LABELS[category],
