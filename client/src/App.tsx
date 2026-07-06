@@ -13,6 +13,7 @@ import {
 } from "./modelPresets";
 import { PlaygroundUseCaseCards } from "./PlaygroundUseCaseCards";
 import { PlaygroundUseCaseGuide } from "./PlaygroundUseCaseGuide";
+import { NetworkPathCheckPanel } from "./NetworkPathCheckPanel";
 import { UseCaseExperimentalBadge } from "./UseCaseExperimentalBadge";
 import { UseCaseBetaBadge } from "./UseCaseBetaBadge";
 import { ModelCompareMessageRow } from "./ModelCompareMessageRow";
@@ -1263,6 +1264,7 @@ export function App() {
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
   const isPriceCompareUseCase = activeUseCaseId === "price-compare";
   const isSemanticSearchUseCase = activeUseCaseId === "semantic-search";
+  const isNetworkPathCheckUseCase = activeUseCaseId === "network-path-check";
   const aiHostingGuideComposerProgress = useMemo(() => {
     if (!isAiHostingGuideUseCase || messages.length === 0) return null;
     const last = messages[messages.length - 1];
@@ -3665,6 +3667,7 @@ export function App() {
                     </p>
                   </div>
                 ) : null}
+                {isNetworkPathCheckUseCase ? <NetworkPathCheckPanel /> : null}
                 {activeUseCase ? (
                   <PlaygroundUseCaseGuide
                     useCase={activeUseCase}

@@ -44,7 +44,8 @@ export type PlaygroundUseCaseId =
   | "model-compare"
   | "greenwashing-check"
   | "travel-train-vs-flight"
-  | "co2-plain-language";
+  | "co2-plain-language"
+  | "network-path-check";
 
 export type PlaygroundUseCaseCategory = "content" | "delivery" | "development";
 
@@ -82,6 +83,8 @@ export type PlaygroundUseCase = {
   prefersPriceCompareSearch?: boolean;
   /** Embedding + Rerank + Qwen-Antwort aus Textpassagen. */
   prefersSemanticSearch?: boolean;
+  /** Traceroute/Latenz-Check ohne LLM-Pipeline. */
+  prefersNetworkPathCheck?: boolean;
   sendButtonLabel?: string;
   prefersSpeech?: boolean;
   /** Langaufnahme: Whisper-Chunks alle ~14 min (Besprechungen >20 min). */
@@ -261,7 +264,7 @@ const USE_CASE_SHOWCASE_GROUP_IDS: Record<
     "meeting-protocol",
     "client-weekend",
   ],
-  coding: ["dev-debug", "bug-ticket", "feature-request", "feature-requests-feed"],
+  coding: ["dev-debug", "network-path-check", "bug-ticket", "feature-request", "feature-requests-feed"],
   "ocr-dokumente": ["invoice-ocr", "audio-transcribe"],
   "suche-embeddings": ["semantic-search", "current-research", "price-compare", "wm-2026-news"],
   "content-seo": ["alt-tags", "seo-meta", "linkedin-post"],
@@ -280,6 +283,7 @@ export function getUseCaseShowcaseHighlights(uc: PlaygroundUseCase): string[] {
   if (uc.prefersAudioFile || uc.prefersSpeech) tags.push("Whisper");
   if (uc.prefersSpeech && !uc.prefersAudioFile) tags.push("Sprache");
   if (uc.id === "shopware-mcp-demo") tags.push("Tool Calling");
+  if (uc.prefersNetworkPathCheck) tags.push("Netzwerk");
   if (uc.modelId.includes("gpt-oss")) tags.push("Reasoning");
   if (uc.prefersImage) tags.push("Vision");
   if (uc.beta) tags.push("Beta");
@@ -2463,6 +2467,29 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     sendButtonLabel: "Fehler analysieren",
     prefersImage: true,
     copyableOutput: true,
+  },
+  {
+    id: "network-path-check",
+    category: "development",
+    icon: "🛰️",
+    title: "Traceroute-Check",
+    subtitle: "Routing · Latenz",
+    description:
+      "Hops und Latenz vom Playground-Server zu mittwald AI Hosting vs. OpenAI — plus Browser-Latenz von deinem Gerät. Für echte Hops lokal: Terminal-Befehle zum Kopieren.",
+    modelId: MODEL_MINISTRAL,
+    modelLabel: "Kein Modell nötig",
+    systemPrompt:
+      "Du bist Netzwerk-Berater. Der Nutzer hat den Traceroute-Check im Playground genutzt. Erkläre Hop-Listen und Latenz kurz auf Deutsch, wenn danach gefragt wird.",
+    composerPlaceholder:
+      "Optional: Frage zum Ergebnis — z. B. „Warum ist OpenAI langsamer?“",
+    steps: [
+      "„Traceroute starten“ — parallele Messung zu mittwald und OpenAI.",
+      "Hop-Liste (Server) und Latenzbalken (dein Browser) vergleichen.",
+      "Optional: Terminal-Befehle für Traceroute von deinem Rechner.",
+    ],
+    sendButtonLabel: "Frage stellen",
+    prefersNetworkPathCheck: true,
+    experimental: true,
   },
   {
     id: "invoice-ocr",
