@@ -117,6 +117,7 @@ export function formatMittwaldAiHostingTariffAdvisorContext(
     `Dedicated AI Hosting (M/L/XL, RTX 6000 PRO) nur aus dem Vertriebs-Block weiter unten — nicht erfinden. ` +
     `Modell-Empfehlungen aus Live-Doku + kuratiertem FAQ. Keine erfundenen Preise.\n` +
     `Kommunikationsstil: mittwald-Kundenservice-Chat — nur die gestellte Frage beantworten, Kontext intern nutzen, nicht ausgeben.\n` +
+    `Bei produktivem Go-Live oder hohem/unsicherem Volumen: gemeinsamen Lasttest vor Livegang anbieten (Vertrieb ${MITTWALD_TARIF_CONSULT_PHONE}).\n` +
     `Bei Tarifbuchung (Shared): Tarifseite ${MITTWALD_AI_HOSTING_TARIFF_URL} · mStudio ${MITTWALD_MSTUDIO_URL} · API-Keys im mStudio (nur Shared). Dedicated: Vertrieb · Keys/Einrichtung durch mittwald · Vertrieb: ${MITTWALD_TARIF_CONSULT_PHONE} · ${MITTWALD_SALES_URL} · Support: https://www.mittwald.de/darum-mittwald/kundenservice\n\n` +
     liveTariffsSection +
     `\n\n` +

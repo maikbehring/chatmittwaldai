@@ -278,6 +278,12 @@ export const PLAYGROUND_AI_HOSTING_TARIFF_FAQ: TariffFaqEntry[] = [
     answer: "Aktuell gibt es **keinen direkt buchbaren Testtarif** und kein kostenloses Probe-Abo zum Selbstaktivieren.\n\n**Zwei sinnvolle Wege:**\n\n1. **Starter buchen** — auf der **Tarifseite** (https://www.mittwald.de/mstudio/ai-hosting) **oder** im **mStudio** → AI Hosting; kleinster regulärer Tarif (Preis laut Live-Tarifdaten, derzeit **9 €/Monat**). Damit kannst du AI Hosting produktiv ausprobieren. Shared-Tarife sind monatlich kündbar (30 Tage Frist zum Monatsende) — du kannst nach dem Test also wieder beenden oder upgraden.\n\n2. **Vertrieb** (+49 5772 293 150) — wenn du z. B. **größere Modelle**, **Dedicated GPUs** oder ein **zeitlich begrenztes Test-Setup** brauchst, richten wir dir gemeinsam eine **Testumgebung** ein.\n\n**Nicht** als „gratis Testphase“ oder „unverbindlich ohne Buchung“ verkaufen — Starter ist ein echter Tarif, kein separates Demo-Paket.",
   },
   {
+    id: 93,
+    section: "Tarifwahl",
+    question: "Soll ich vor dem Go-Live einen Lasttest machen — bietet mittwald das an?",
+    answer: "**Ja — das empfehlen wir bei produktivem Start**, wenn Last, Parallelität oder der passende Tarif noch unsicher sind.\n\n**Typische Situationen:**\n\n- **Callcenter** oder Telefonie-KI mit vielen gleichzeitigen Gesprächen\n- **Öffentlicher Website-Chat** oder SaaS mit erwarteten Spitzenlasten\n- Unklarheit, ob **Business** (max. 20 parallele Requests) reicht oder **Dedicated** nötig wird\n- **Launch** einer neuen Kundenanwendung mit hohem Volumen\n\n**Was wir anbieten:** Wir führen **gerne gemeinsam einen Lasttest** durch, **bevor** die Anwendung live geht — realistische Last simulieren, Rate Limits und Tarifwahl prüfen, ggf. Upgrade-Pfad klären.\n\n**Nächster Schritt:** **Vertrieb** **+49 5772 293 150** · https://www.mittwald.de/darum-mittwald/vertrieb\n\n**Hinweis:** Kein separates Self-Service-Tool im mStudio — Lasttest ist ein **Beratungsangebot**, kein garantiert kostenloser Automatismus. Bei kleinem internen PoC reicht oft **Starter** ohne formalen Lasttest.",
+  },
+  {
     id: 59,
     section: "Tarifwahl",
     question: "Kann ich mehrere AI-Hosting-Tarife gleichzeitig buchen — z. B. pro Plattform oder Kunde?",
@@ -569,7 +575,7 @@ export const PLAYGROUND_AI_HOSTING_TARIFF_FAQ: TariffFaqEntry[] = [
     id: 52,
     section: "Agentur",
     question: "Wann lohnt sich ein Beratungsgespräch mit mittwald statt der Selbstauswahl im Tarifkonfigurator?",
-    answer: "Der Tarifkonfigurator eignet sich gut für Standardanwendungen oder erste Projekte.\n\nEin persönliches Beratungsgespräch empfiehlt sich insbesondere, wenn:\n\n- der zukünftige Token-Verbrauch schwer abschätzbar ist,\n- mehrere Kundenprojekte geplant sind,\n- spezielle Compliance- oder Datenschutzanforderungen bestehen,\n- Dedicated AI Hosting interessant wird,\n- individuelle Modelle oder besondere Infrastruktur benötigt werden,\n- Fragen zur Architektur oder Skalierung bestehen.\n\nGemeinsam lässt sich dann prüfen, welcher Tarif und welche technische Architektur langfristig am besten zum geplanten Einsatz passen.",
+    answer: "Der Tarifkonfigurator eignet sich gut für Standardanwendungen oder erste Projekte.\n\nEin persönliches Beratungsgespräch empfiehlt sich insbesondere, wenn:\n\n- der zukünftige Token-Verbrauch schwer abschätzbar ist,\n- mehrere Kundenprojekte geplant sind,\n- spezielle Compliance- oder Datenschutzanforderungen bestehen,\n- Dedicated AI Hosting interessant wird,\n- individuelle Modelle oder besondere Infrastruktur benötigt werden,\n- Fragen zur Architektur oder Skalierung bestehen,\n- eine **neue Anwendung produktiv geht** und ihr vor dem Livegang einen **gemeinsamen Lasttest** fahren wollt (z. B. Callcenter, öffentlicher Chat, SaaS-Launch).\n\nGemeinsam lässt sich dann prüfen, welcher Tarif und welche technische Architektur langfristig am besten zum geplanten Einsatz passen.",
   },
 ];
 
