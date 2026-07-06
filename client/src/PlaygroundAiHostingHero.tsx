@@ -33,12 +33,12 @@ function isPlaygroundTestable(modelId: string, playgroundModelIds: Set<string>):
   return playgroundModelIds.has(modelId) || USE_CASE_PLAYGROUND_MODEL_IDS.has(modelId);
 }
 
-const SHOWCASE_MODELS: ShowcaseModel[] = [
+const QWEN_SIZE_SHOWCASE_MODELS: ShowcaseModel[] = [
   {
-    id: "gpt-oss-120b",
-    label: "gpt-oss-120b",
-    logo: "openai",
-    iconClass: "bg-violet-500/15",
+    id: "Qwen3.5-0.8B",
+    label: "Qwen3.5 0.8B",
+    logo: "qwen",
+    iconClass: "bg-indigo-500/10",
   },
   {
     id: "Qwen3.6-35B-A3B-FP8",
@@ -52,6 +52,18 @@ const SHOWCASE_MODELS: ShowcaseModel[] = [
     logo: "qwen",
     iconClass: "bg-indigo-500/10",
   },
+];
+
+const SHOWCASE_MODELS_LEADING: ShowcaseModel[] = [
+  {
+    id: "gpt-oss-120b",
+    label: "gpt-oss-120b",
+    logo: "openai",
+    iconClass: "bg-violet-500/15",
+  },
+];
+
+const SHOWCASE_MODELS_TRAILING: ShowcaseModel[] = [
   {
     id: "Mistral-Medium-3.5-128B",
     label: "Mistral Medium 128B",
@@ -88,18 +100,19 @@ const SHOWCASE_MODELS: ShowcaseModel[] = [
     logo: "qwen",
     iconClass: "bg-sky-500/10",
   },
-  {
-    id: "Qwen3.5-0.8B",
-    label: "Qwen3.5 0.8B",
-    logo: "qwen",
-    iconClass: "bg-indigo-500/10",
-  },
+];
+
+const SHOWCASE_MODELS: ShowcaseModel[] = [
+  ...SHOWCASE_MODELS_LEADING,
+  ...QWEN_SIZE_SHOWCASE_MODELS,
+  ...SHOWCASE_MODELS_TRAILING,
 ];
 
 const PILLAR_ICONS = {
   models: "brand/hero/pillar-open-models.svg",
   hosting: "brand/hero/pillar-hosting-de.svg",
   api: "brand/hero/pillar-api.svg",
+  responsible: "brand/hero/pillar-responsible-ai.svg",
 } as const;
 
 const PILLARS = [
@@ -120,6 +133,12 @@ const PILLARS = [
     iconClass: "bg-sky-500/10",
     title: "OpenAI-kompatible API",
     text: "Nahtlos in deine Anwendungen",
+  },
+  {
+    image: PILLAR_ICONS.responsible,
+    iconClass: "bg-amber-500/10",
+    title: "KI verantwortungsvoll einsetzen",
+    text: "Verschiedene Modellgrößen für jeden Anwendungsfall",
   },
 ] as const;
 
@@ -221,7 +240,7 @@ export function PlaygroundAiHostingHero({
                 zur Verfügung.
               </p>
             </div>
-            <ul className="grid gap-3 sm:grid-cols-3 sm:gap-4 sm:text-left">
+            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 sm:text-left">
               {PILLARS.map((p) => (
                 <li key={p.title} className="flex flex-col items-center gap-1.5 sm:items-start">
                   <PillarIcon image={p.image} iconClass={p.iconClass} />
@@ -256,8 +275,27 @@ export function PlaygroundAiHostingHero({
             Alle Modelle über dieselbe OpenAI-kompatible API
           </a>
         </div>
-        <div className="flex flex-wrap justify-center gap-2 sm:justify-start">
-          {SHOWCASE_MODELS.map((m) => (
+        <div className="flex flex-wrap items-center justify-center gap-2 sm:justify-start">
+          {SHOWCASE_MODELS_LEADING.map((m) => (
+            <ModelChip
+              key={m.id}
+              model={m}
+              inPlayground={isPlaygroundTestable(m.id, playgroundModelIds)}
+            />
+          ))}
+          <div
+            className="inline-flex flex-nowrap items-center gap-1.5 rounded-full border border-indigo-500/20 bg-indigo-500/[0.06] px-1.5 py-1"
+            title="Qwen-Modelle nach Größe (aufsteigend)"
+          >
+            {QWEN_SIZE_SHOWCASE_MODELS.map((m) => (
+              <ModelChip
+                key={m.id}
+                model={m}
+                inPlayground={isPlaygroundTestable(m.id, playgroundModelIds)}
+              />
+            ))}
+          </div>
+          {SHOWCASE_MODELS_TRAILING.map((m) => (
             <ModelChip
               key={m.id}
               model={m}
