@@ -701,8 +701,25 @@ function cleanTravelPlace(s: string): string {
 function travelPlacePair(origin: string, destination: string): { origin: string; destination: string } | null {
   const o = cleanTravelPlace(origin);
   const d = cleanTravelPlace(destination);
-  if (!o || !d || TRAVEL_NON_PLACE.test(o)) return null;
+  if (!o || !d || TRAVEL_NON_PLACE.test(o) || TRAVEL_NON_PLACE.test(d)) return null;
   return { origin: o, destination: d };
+}
+
+/** Kurzform „Bielefeld München“ — nur bei kurzer Nachricht ohne nach/–/Strecke. */
+function tryBareSpacePlacePair(normalized: string): { origin: string; destination: string } | null {
+  if (/\bnach\b/i.test(normalized) || /\bStrecke\b/i.test(normalized) || /[–—-]/.test(normalized)) {
+    return null;
+  }
+  if (normalized.length > 56) return null;
+
+  const hbfPair = normalized.match(
+    /^([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß.\- ]*?)\s+Hbf\s+([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß.\- ]*?)\s+Hbf\.?$/i,
+  );
+  if (hbfPair) return travelPlacePair(hbfPair[1], hbfPair[2]);
+
+  const tokens = normalized.replace(/\.$/, "").split(/\s+/);
+  if (tokens.length !== 2) return null;
+  return travelPlacePair(tokens[0], tokens[1]);
 }
 
 export function extractTravelRouteFromText(text: string): { origin: string; destination: string } {
@@ -735,6 +752,8 @@ export function extractTravelRouteFromText(text: string): { origin: string; dest
     const pair = travelPlacePair(bareDash[1], bareDash[2]);
     if (pair) return pair;
   }
+  const bareSpace = tryBareSpacePlacePair(normalized);
+  if (bareSpace) return bareSpace;
   const ortNachGlobal = new RegExp(
     `(${TRAVEL_PLACE_SEGMENT})\\s+nach\\s+(${TRAVEL_PLACE_SEGMENT})`,
     "gi",
@@ -779,7 +798,7 @@ export const TRAVEL_TRAIN_VS_FLIGHT_SYSTEM_PROMPT = `Du bist Nachhaltigkeits- un
 Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzeranfrage genannten Strecke** (1 Person, Standard/Economy) auf Basis der **Websuche-Treffer** im Kontext.
 
 **Strecke:**
-- Start und Ziel aus der **aktuellen** Nutzeranfrage entnehmen (auch Kurzform wie „Espelkamp nach Rahden“ oder „Berlin – München“). **Nicht** eine Strecke aus früheren Chat-Nachrichten übernehmen.
+- Start und Ziel aus der **aktuellen** Nutzeranfrage entnehmen (auch Kurzform wie „Espelkamp nach Rahden“, „Berlin – München“ oder „Bielefeld München“). **Nicht** eine Strecke aus früheren Chat-Nachrichten übernehmen.
 - **Niemals** eine andere Strecke aus Websuche-Treffern verwenden, wenn Start/Ziel in der Anfrage klar anders heißen.
 - Wenn Treffer nur eine andere Strecke betreffen: ehrlich sagen; nur übertragbare Richtwerte nutzen.
 
@@ -2522,7 +2541,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     composerPlaceholder:
       "Optional: Schwerpunkte, z. B. „nur CO₂“, „mit Kosten“, andere Strecke im Text nennen …",
     steps: [
-      "Strecke im Text anpassen (Demo: München–Berlin), z. B. „Strecke Dortmund Hbf – Berlin Hbf“ oder Kurzform „Espelkamp nach Rahden“.",
+      "Strecke im Text anpassen (Demo: München–Berlin), z. B. „Strecke Dortmund Hbf – Berlin Hbf“, „Espelkamp nach Rahden“ oder „Bielefeld München“.",
       "Websuche läuft automatisch zur genannten Strecke (Globus aktiv).",
       "Vergleichstabelle und Policy-Snippet per Kopieren-Button übernehmen.",
     ],
