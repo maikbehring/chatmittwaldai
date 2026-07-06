@@ -128,6 +128,16 @@ export function createEmptyThread(webSearchDefault = false): ChatThread {
   };
 }
 
+/** Sidebar: nur Chats mit mindestens einer Nachricht (aktiver Thread zählt Live-State). */
+export function threadHasMessages(
+  thread: ChatThread,
+  activeThreadId: string,
+  liveMessages: StoredChatMessage[],
+): boolean {
+  const msgs = thread.id === activeThreadId ? liveMessages : thread.messages;
+  return msgs.length > 0;
+}
+
 export function sortThreadsByRecent(threads: ChatThread[]): ChatThread[] {
   return [...threads].sort((a, b) => b.updatedAt - a.updatedAt);
 }

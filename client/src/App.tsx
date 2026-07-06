@@ -157,6 +157,7 @@ import {
   loadPlaygroundState,
   savePlaygroundState,
   sortThreadsByRecent,
+  threadHasMessages,
   type ChatThread,
 } from "./chatStorage";
 import {
@@ -1586,21 +1587,25 @@ export function App() {
     setInput("");
     setImageFile(null);
     clearUseCase();
+
+    if (messages.length === 0) {
+      closeMobileSidebar();
+      return;
+    }
+
     const fresh = createEmptyThread(webSearchDefaultEnabled);
     const withCurrent = threads.map((t) =>
       t.id === activeThreadId
         ? {
             ...t,
             messages,
-            title:
-              messages.length > 0
-                ? deriveThreadTitle(messages as ChatMessage[])
-                : t.title,
+            title: deriveThreadTitle(messages as ChatMessage[]),
             updatedAt: Date.now(),
           }
         : t,
     );
-    setThreads(sortThreadsByRecent([fresh, ...withCurrent]));
+    const pruned = withCurrent.filter((t) => threadHasMessages(t, activeThreadId, messages));
+    setThreads(sortThreadsByRecent([fresh, ...pruned]));
     setActiveThreadId(fresh.id);
     setMessages([]);
     closeMobileSidebar();
@@ -3336,7 +3341,9 @@ export function App() {
               className="min-h-0 flex-1 overflow-y-auto px-1.5"
               aria-label="Chat-Verlauf"
             >
-              {threads.map((t) => {
+              {threads
+                .filter((t) => threadHasMessages(t, activeThreadId, messages))
+                .map((t) => {
                 const active = t.id === activeThreadId;
                 return (
                   <div
