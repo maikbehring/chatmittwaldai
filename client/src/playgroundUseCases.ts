@@ -41,7 +41,10 @@ export type PlaygroundUseCaseId =
   | "meeting-protocol"
   | "dev-debug"
   | "invoice-ocr"
-  | "model-compare";
+  | "model-compare"
+  | "greenwashing-check"
+  | "travel-train-vs-flight"
+  | "co2-plain-language";
 
 export type PlaygroundUseCaseCategory = "content" | "delivery" | "development";
 
@@ -116,6 +119,8 @@ export type PlaygroundBriefingField = {
   label: string;
   placeholder?: string;
   rows?: number;
+  /** Vorausgefüllter Wert beim Start des Use Cases (z. B. Demo-Text). */
+  defaultValue?: string;
 };
 
 export const MITTWALD_FEATURE_REQUEST_URL =
@@ -170,7 +175,7 @@ export const LINKEDIN_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
 ];
 
 export function emptyBriefingValues(fields: PlaygroundBriefingField[]): Record<string, string> {
-  return Object.fromEntries(fields.map((f) => [f.id, ""]));
+  return Object.fromEntries(fields.map((f) => [f.id, f.defaultValue ?? ""]));
 }
 
 export function composeBriefingText(
@@ -212,6 +217,110 @@ export const USE_CASE_CATEGORY_LABELS: Record<PlaygroundUseCaseCategory, string>
   development: "Entwicklung",
 };
 
+/** Tabs auf der Startseite — kompakter als content/delivery/development. */
+export type PlaygroundUseCaseShowcaseGroup =
+  | "chat-agenten"
+  | "coding"
+  | "ocr-dokumente"
+  | "suche-embeddings"
+  | "content-seo"
+  | "nachhaltigkeit";
+
+export const USE_CASE_SHOWCASE_GROUP_META: Record<
+  PlaygroundUseCaseShowcaseGroup,
+  { label: string; icon: string }
+> = {
+  "chat-agenten": { label: "Chat & Agenten", icon: "💬" },
+  coding: { label: "Coding", icon: "💻" },
+  "ocr-dokumente": { label: "OCR & Dokumente", icon: "📄" },
+  "suche-embeddings": { label: "Suche & Embeddings", icon: "🔍" },
+  "content-seo": { label: "Content & SEO", icon: "🌐" },
+  nachhaltigkeit: { label: "Nachhaltigkeit", icon: "🌿" },
+};
+
+const USE_CASE_SHOWCASE_GROUP_ORDER: PlaygroundUseCaseShowcaseGroup[] = [
+  "nachhaltigkeit",
+  "chat-agenten",
+  "coding",
+  "ocr-dokumente",
+  "suche-embeddings",
+  "content-seo",
+];
+
+const USE_CASE_SHOWCASE_GROUP_IDS: Record<
+  PlaygroundUseCaseShowcaseGroup,
+  PlaygroundUseCaseId[]
+> = {
+  "chat-agenten": [
+    "ai-hosting-tarifberater",
+    "complex-analysis",
+    "shopware-mcp-demo",
+    "ai-hosting-guide",
+    "model-compare",
+    "product-backlog",
+    "meeting-protocol",
+    "client-weekend",
+  ],
+  coding: ["dev-debug", "bug-ticket", "feature-request", "feature-requests-feed"],
+  "ocr-dokumente": ["invoice-ocr", "audio-transcribe"],
+  "suche-embeddings": ["semantic-search", "current-research", "price-compare", "wm-2026-news"],
+  "content-seo": ["alt-tags", "seo-meta", "linkedin-post"],
+  nachhaltigkeit: ["greenwashing-check", "travel-train-vs-flight", "co2-plain-language"],
+};
+
+export const RECOMMENDED_USE_CASE_ID: PlaygroundUseCaseId = "ai-hosting-tarifberater";
+
+export function getUseCaseShowcaseHighlights(uc: PlaygroundUseCase): string[] {
+  const tags: string[] = [];
+  if (uc.prefersAiHostingTariffAdvisor) tags.push("Tarifberatung");
+  if (uc.prefersModelCompare) tags.push("A/B-Vergleich");
+  if (uc.prefersWebSearch || uc.prefersPriceCompareSearch) tags.push("Websuche");
+  if (uc.prefersSemanticSearch) tags.push("Embeddings");
+  if (uc.prefersDocument) tags.push("GLM-OCR");
+  if (uc.prefersAudioFile || uc.prefersSpeech) tags.push("Whisper");
+  if (uc.prefersSpeech && !uc.prefersAudioFile) tags.push("Sprache");
+  if (uc.id === "shopware-mcp-demo") tags.push("Tool Calling");
+  if (uc.modelId.includes("gpt-oss")) tags.push("Reasoning");
+  if (uc.prefersImage) tags.push("Vision");
+  if (uc.beta) tags.push("Beta");
+  return tags.slice(0, 3);
+}
+
+/** Empfohlen ganz links, Experimental/Beta ganz rechts (relative Reihenfolge bleibt). */
+function sortShowcaseCases(cases: PlaygroundUseCase[]): PlaygroundUseCase[] {
+  const recommended: PlaygroundUseCase[] = [];
+  const stable: PlaygroundUseCase[] = [];
+  const flagged: PlaygroundUseCase[] = [];
+  for (const uc of cases) {
+    if (uc.id === RECOMMENDED_USE_CASE_ID) {
+      recommended.push(uc);
+    } else if (uc.experimental || uc.beta) {
+      flagged.push(uc);
+    } else {
+      stable.push(uc);
+    }
+  }
+  return [...recommended, ...stable, ...flagged];
+}
+
+export function getUseCasesByShowcaseGroup(allCases: PlaygroundUseCase[]): {
+  group: PlaygroundUseCaseShowcaseGroup;
+  label: string;
+  icon: string;
+  cases: PlaygroundUseCase[];
+}[] {
+  const byId = new Map(allCases.map((uc) => [uc.id, uc]));
+  return USE_CASE_SHOWCASE_GROUP_ORDER.map((group) => ({
+    group,
+    ...USE_CASE_SHOWCASE_GROUP_META[group],
+    cases: sortShowcaseCases(
+      USE_CASE_SHOWCASE_GROUP_IDS[group]
+        .map((id) => byId.get(id))
+        .filter((uc): uc is PlaygroundUseCase => uc != null),
+    ),
+  })).filter((g) => g.cases.length > 0);
+}
+
 export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "alt-tags",
   "seo-meta",
@@ -232,6 +341,9 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "meeting-protocol",
   "dev-debug",
   "invoice-ocr",
+  "greenwashing-check",
+  "travel-train-vs-flight",
+  "co2-plain-language",
 ];
 
 export function isCopyableUseCase(id: PlaygroundUseCaseId | null | undefined): boolean {
@@ -458,6 +570,267 @@ export function buildCurrentResearchDirectSearchQueries(userText: string): strin
       ];
 
   return queries.slice(0, 5);
+}
+
+export const GREENWASHING_DEMO_AD_TEXT =
+  "Wir sind die nachhaltigste IT-Agentur Deutschlands! Dank unserer 100 % grünen Lösungen leisten Sie mit jedem Projekt einen aktiven Beitrag zum Klimaschutz — völlig emissionsfrei und ohne Kompromisse.";
+
+export const GREENWASHING_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
+  {
+    id: "werbetext",
+    label: "Werbetext / Claim",
+    defaultValue: GREENWASHING_DEMO_AD_TEXT,
+    placeholder: "Marketingtext, Website-Absatz, Social-Media-Post oder Produktclaim …",
+    rows: 5,
+  },
+  {
+    id: "kontext",
+    label: "Kontext (optional)",
+    placeholder: "z. B. Branche, Zielgruppe B2B, Kanal Website-Startseite",
+    rows: 2,
+  },
+];
+
+export const GREENWASHING_CHECK_SYSTEM_PROMPT = `Du bist ein erfahrener Kommunikationsberater für Nachhaltigkeit und ehrliches Marketing (B2B und Mittelstand).
+
+Aufgabe: Prüfe den Werbetext auf Greenwashing-Risiken und schlage konkrete, ehrlichere Alternativen vor.
+
+**Wichtig — kein Compliance-Gutachten:**
+- Du lieferst eine **redaktionelle Einschätzung**, keine Rechtsberatung und kein CSRD-/UWG-Gutachten.
+- Sage das in einem kurzen Hinweis am Ende.
+
+Prüfkriterien (nur auffällige Punkte benennen):
+- Vage Superlative ohne Beleg („nachhaltigste“, „100 % grün“, „emissionsfrei“ ohne Scope)
+- Fehlende Messbarkeit (keine Zahlen, Zeitraum, Basisjahr, Systemgrenze)
+- Irreführende Totalitäts-Claims („ohne Kompromisse“, „aktiver Klimaschutz“ ohne Maßnahmen)
+- Scope-Vermischung (Betrieb vs. Lieferkette vs. Kundenprojekte)
+- Kompensation als Hauptbotschaft ohne Reduktion
+- „Green“-Begriffe ohne erkennbaren Bezug zu konkreten Maßnahmen
+
+Sprache: Deutsch, sachlich, konstruktiv — nicht belehrend.
+
+Ausgabe in dieser Reihenfolge:
+
+## Kurzfazit
+2–3 Sätze: Gesamtrisiko (niedrig / mittel / hoch) und Kernproblem.
+
+## Auffällige Formulierungen
+Tabelle oder Bullet-Liste: **Originalzitat** — **Problem** — **Warum riskant**
+
+## Konkrete Alternativen
+Pro problematischem Claim 1–2 Formulierungsvorschläge — **ehrlich, spezifisch, ohne Übertreibung**. Kennzeichne, welche Belege/Kennzahlen noch fehlen.
+
+## Empfehlung für die nächste Version
+3 kurze Tipps (z. B. Kennzahl nennen, Scope klären, Quelle/Stand angeben).
+
+## Copy & Paste — überarbeiteter Text
+\`\`\`
+…
+\`\`\`
+
+Wenn der Text bereits solide ist: das ehrlich sagen und nur Feinschliff vorschlagen.`;
+
+export const CO2_PLAIN_LANGUAGE_DEMO_TEXT =
+  "Scope-2-Markt-basierte Emissionen aus eingekauftem Strom betrugen im Berichtsjahr 847 t CO₂e (Vorjahr: 923 t CO₂e), entsprechend einem spezifischen Energieverbrauch von 1,24 MWh/FTE. Die Reduktion resultiert primär aus PPA-Strukturen und einem sinkenden Grid-Faktor gemäß GHG Protocol Scope-2-Guidance.";
+
+export const CO2_PLAIN_LANGUAGE_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
+  {
+    id: "fachtext",
+    label: "Technischer Absatz (CO₂-Bilanz / Nachhaltigkeitsbericht)",
+    defaultValue: CO2_PLAIN_LANGUAGE_DEMO_TEXT,
+    placeholder: "Fachtext aus Bericht, Fußnote oder Kunden-FAQ einfügen …",
+    rows: 6,
+  },
+  {
+    id: "zielgruppe",
+    label: "Zielgruppe (optional)",
+    placeholder: "z. B. Website-Besucher ohne Fachwissen, Kunden-Newsletter",
+    rows: 1,
+  },
+];
+
+export const CO2_PLAIN_LANGUAGE_SYSTEM_PROMPT = `Du übersetzt technische Nachhaltigkeits- und CO₂-Bilanz-Sprache in verständliches Deutsch für Laien.
+
+Aufgabe: Den Fachtext so umformulieren, dass Kund:innen ohne CSR-/GHG-Hintergrund ihn verstehen, **ohne** den Inhalt zu beschönigen oder Zahlen zu verändern.
+
+Regeln:
+- **Alle Zahlen, Einheiten und Vergleiche zum Vorjahr exakt beibehalten**, nicht runden oder erfinden.
+- Fachbegriffe (Scope 1/2/3, CO₂e, PPA, Grid-Faktor …) kurz erklären oder verständlich umschreiben.
+- Kein Greenwashing: keine zusätzlichen Superlative; fehlende Kontexte benennen.
+- Ton: klar, freundlich, B2B-tauglich (Sie oder wir, am Nutzertext orientieren).
+- Sprache: Deutsch.
+
+**Format (streng):**
+- **Kein HTML** in der gesamten Antwort: keine \`<p>\`, \`<strong>\`, \`<br>\` oder andere Tags.
+- Keine Gedankenstriche ( — ). Nutze Punkt, Komma oder Doppelpunkt.
+- Jede Überschrift als \`## …\` mit Leerzeile davor und danach.
+- **Auf einen Blick** und **Glossar:** nur Markdown-Bullets mit \`- \`, **ein Eintrag pro Zeile**.
+- **Website-Version** nur als **Markdown-Codeblock** (\`\`\` … \`\`\`): reiner Fließtext, Absätze durch Leerzeilen getrennt, **ohne** HTML und ohne Markdown-Fettung im Block.
+
+Ausgabe in dieser Reihenfolge:
+
+## In Klartext
+2–4 Absätze Fließtext (Hauptversion für Website oder Kundenbrief).
+
+## Auf einen Blick
+- 3–5 Bullet-Points mit den wichtigsten Fakten (jeder Punkt eigene Zeile).
+
+## Glossar (kurz)
+- **Begriff:** Erklärung in einem Satz (jeder Begriff eigene Zeile).
+
+## Copy & Paste — Website-Version
+\`\`\`
+Absatz 1 …
+
+Absatz 2 …
+\`\`\`
+
+Wenn der Eingabetext unvollständig ist: mit Platzhalter […] arbeiten und offene Punkte in einem kurzen Hinweis-Satz am Ende nennen.`;
+
+/** Start/Ziel aus Nutzertext für Zug-vs.-Flug (Fallback: München – Berlin). */
+export function extractTravelRouteFromText(text: string): { origin: string; destination: string } {
+  const normalized = text.replace(/\s+/g, " ").trim();
+  const streckeMatch = normalized.match(
+    /Strecke\s+(.+?)\s*(?:–|—|-|→|bis|nach)\s*(.+?)(?:\s*\(|\.|,|;|$)/i,
+  );
+  if (streckeMatch) {
+    const clean = (s: string) =>
+      s
+        .replace(/\s+Hbf\b/gi, "")
+        .replace(/\s+Flughafen\b/gi, "")
+        .trim();
+    const origin = clean(streckeMatch[1]);
+    const destination = clean(streckeMatch[2]);
+    if (origin && destination) return { origin, destination };
+  }
+  const vonNach = normalized.match(
+    /(?:von|ab)\s+([A-Za-zÄÖÜäöüß.\- ]+?)\s+nach\s+([A-Za-zÄÖÜäöüß.\- ]+?)(?:\s*\(|\.|,|;|$)/i,
+  );
+  if (vonNach) {
+    return {
+      origin: vonNach[1].replace(/\s+Hbf\b/gi, "").trim(),
+      destination: vonNach[2].replace(/\s+Hbf\b/gi, "").trim(),
+    };
+  }
+  return { origin: "München", destination: "Berlin" };
+}
+
+/** Keine realistische europäische Bahnverbindung (z. B. New York – Berlin). */
+const INTERCONTINENTAL_ROUTE_PATTERN =
+  /\b(new\s*york|newyork|nyc|manhattan|los\s*angeles|san\s*francisco|chicago|miami|boston|washington|seattle|tokyo|osaka|beijing|shanghai|hong\s*kong|singapore|sydney|melbourne|toronto|vancouver|montreal|mumbai|delhi|bangkok|dubai|tel\s*aviv|cairo|sao\s*paulo|rio|mexico\s*city)\b/i;
+
+export function isIntercontinentalTrainRoute(origin: string, destination: string): boolean {
+  return INTERCONTINENTAL_ROUTE_PATTERN.test(`${origin} ${destination}`.toLowerCase());
+}
+
+export const TRAVEL_TRAIN_VS_FLIGHT_SYSTEM_PROMPT = `Du bist Nachhaltigkeits- und Mobilitätsberater für interne Unternehmensrichtlinien.
+
+Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzeranfrage genannten Strecke** (1 Person, Standard/Economy) auf Basis der **Websuche-Treffer** im Kontext.
+
+**Strecke:**
+- Start und Ziel aus der Nutzeranfrage entnehmen. **Nicht** eine andere Strecke stillschweigend unterstellen.
+- Wenn Treffer nur eine andere Strecke betreffen: ehrlich sagen; nur übertragbare Richtwerte nutzen.
+
+**Zwei Streckentypen (wichtig für die Kurzempfehlung):**
+- **Kurz/mittel (ca. bis 6 h reine Zugfahrt, z. B. Ruhr–Berlin, München–Berlin):** Bahn oft **tür-zu-tür konkurrenzfähig oder schneller**; Empfehlung Bahn aus Zeit **und** CO₂.
+- **Lang (ca. über 6–7 h reine Zugfahrt, z. B. Wien–Berlin):** Flug ist tür-zu-tür **meist deutlich schneller**. **Nicht** behaupten, die Zeiten seien „vergleichbar“. Empfehlung Bahn primär wegen **deutlich geringerer CO₂-Emissionen** und Produktivität unterwegs; Flug nur mit Ausnahmebegründung.
+- Begriff **„Kurzstreckenflug“** nur bei echten Kurzstrecken (grobe Faustregel unter ca. 500–600 km Luftlinie). Sonst „Flug“ oder „Inlandsflug“.
+
+**Interkontinental / keine Bahnverbindung (z. B. New York – Berlin):**
+- Dieser Use Case ist primär für **europäische** Strecken. Wenn keine realistische Bahnverbindung existiert: **sofort** klar sagen (kein ICE über den Atlantik).
+- **Keine** Pseudo-Bahn-Spalte mit Schiffs-/Wochenreisen und Fantasie-CO₂. Tabelle: entweder nur **Flug**-Richtwerte oder Spalte Bahn mit „nicht anwendbar“.
+- Fokus: Flug **Hinflug** tür-zu-tür, CO₂ **pro Hinflug** (wenn Rückflug: explizit ausweisen), Kosten Economy aus Treffern.
+- Policy: Flug als einzige praktikable Option; optional Kompensation/Economy erwähnen, aber **keine** erfundenen Regeln (z. B. Business-Class-Verbot), wenn nicht im Nutzertext.
+- Hinweis: „Hbf“ bei Nicht-EU-Städten (z. B. New York) ist unüblich, kurz anmerken.
+
+**Zeitbezug:**
+- Nutze **[Playground — Zeitbezug]** als heutiges Datum.
+- Emissions- und Fahrzeitangaben nur aus Treffern oder als **typische Richtwerte** kennzeichnen.
+
+**Inhaltliche Plausibilität (Richtwerte, nicht erfinden):**
+- Zugfahrt: je nach Strecke ca. **3–4,5 h** (Inland mittel) bis **ca. 8–9,5 h** (z. B. Wien–Berlin ICE).
+- Tür-zu-tür Flug: oft **ca. 4–5,5 h** inkl. Flughafen; Bahn bei Langstrecken oft **länger** tür-zu-tür als Flug.
+- CO₂ pro Person (Richtwerte): Bahn/ICE oft **ca. 10–35 kg** (kürzer niedriger, längere Relation eher höher); Flug oft **ca. 120–250 kg** je nach Entfernung. Keine Faktor-Übertreibung (z. B. „15×“ nur wenn aus den genannten Spannen plausibel).
+- Nightjet/Nachtzug nur erwähnen, wenn relevant; nicht mit Tages-ICE für die Standard-Dienstreise vermischen.
+- Keine erfundenen Live-Preise ohne Treffer.
+
+**Format (streng):**
+- Keine Gedankenstriche ( — ) in der Ausgabe.
+- Jede Überschrift als \`## …\` mit Leerzeile davor und danach.
+- **Für die Reiserichtlinie** und **Quellen & Stand:** nur Markdown-Bullets mit \`- \` (ein Punkt pro Zeile).
+- **Vergleichstabelle:** Jede Zeile separat; Leerzeile vor und nach der Tabelle. In der Spalte Anmerkung/Quelle **keine** anonymen Verweise wie „[1]“; Domain oder Kurztitel.
+- **Policy-Snippet** nur im Markdown-Codeblock (\`\`\` … \`\`\`).
+- **Quellen & Stand:** Bullets mit Titel/Domain, Jahr wenn erkennbar, **vollständige URL**.
+
+Ausgabe in dieser Reihenfolge:
+
+## Kurzempfehlung
+1–2 Sätze für die **genannte** Strecke.
+
+## Vergleich (Richtwerte)
+| Kriterium | Bahn | Flug | Anmerkung/Quelle |
+| --- | --- | --- | --- |
+| … | … | … | … |
+
+Mindestens: Reisezeit Tür-zu-Tür, CO₂ pro Person; optional Kosten nur aus Treffern.
+
+## Für die Reiserichtlinie
+- Wann Bahn bevorzugen
+- Wann Ausnahmen
+- Formulierungsvorschlag (2–3 Sätze) als eigener Bullet
+
+## Quellen & Stand
+- …
+
+## Copy & Paste — Policy-Snippet
+\`\`\`
+…
+\`\`\`
+
+Abschluss-Hinweis (ein Satz, kein Codeblock): KI-Entwurf auf Basis öffentlicher Quellen, keine verbindliche CO₂-Bilanzierung.`;
+
+export function buildTravelTrainVsFlightDirectSearchQueries(userText: string): string[] {
+  const year = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+  }).format(new Date());
+  const { origin, destination } = extractTravelRouteFromText(userText);
+  const route = `${origin} ${destination}`;
+  if (isIntercontinentalTrainRoute(origin, destination)) {
+    return [
+      `Flug ${route} Dauer Economy Tür-zu-Tür ${year}`,
+      `Flug ${route} CO2 Emissionen kg Hinflug ${year}`,
+      `Flug ${origin} nach ${destination} Preis Economy ${year}`,
+      `Langstreckenflug CO2 Richtwerte myclimate ${year}`,
+    ];
+  }
+  return [
+    `ICE ${route} Fahrzeit Strecke ${year}`,
+    `Flug ${route} CO2 Emissionen kg Person ${year}`,
+    `Bahn vs Flug ${route} Umwelt CO2 Vergleich ${year}`,
+    `Kurzstreckenflug CO2 Start Landung Overhead Bahn Deutschland`,
+    `${userText.trim().slice(0, 120)} ${route} Bahn Flug ${year}`.trim(),
+  ].slice(0, 5);
+}
+
+export function formatTravelTrainVsFlightSubmission(text: string): string {
+  const { origin, destination } = extractTravelRouteFromText(text);
+  const year = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "Europe/Berlin",
+    year: "numeric",
+  }).format(new Date());
+  const intercontinental = isIntercontinentalTrainRoute(origin, destination);
+  const scopeNote = intercontinental
+    ? `Für **${origin} – ${destination}** gibt es keine realistische Bahn-/ICE-Verbindung. ` +
+      `Beantworte mit Flug-Richtwerten und interkontinentaler Reiserichtlinie, ohne erzwungenen Bahn-vs.-Flug-Vergleich.\n`
+    : `Erstelle den Vergleich **Bahn vs. Flug** für die Strecke **${origin} – ${destination}** aus den Websuche-Treffern.\n` +
+      `Nutze exakt diese Strecke aus der Anfrage.\n`;
+  return (
+    scopeNote +
+    `Stand/Recherche ${year}; Zahlen als Richtwerte kennzeichnen.\n` +
+    `Heutiges Datum aus [Playground — Zeitbezug] für „aktuell“ verwenden.\n\n` +
+    `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`
+  );
 }
 
 export function buildWm2026DirectSearchQueries(userText: string): string[] {
@@ -1489,7 +1862,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Alt-Tags generieren",
     subtitle: "Barrierefreiheit & SEO",
     description:
-      "Alt-Texte für Website-Bilder — per Bild-Upload oder Kontext. Direkt ins CMS kopieren.",
+      "Alt-Texte für Website-Bilder per Bild-Upload oder Kontext. Direkt ins CMS kopieren.",
     modelId: MODEL_MINISTRAL,
     modelLabel: "Ministral 3 14B",
     systemPrompt: ALT_TAGS_SYSTEM_PROMPT,
@@ -1510,7 +1883,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "SEO Meta-Daten",
     subtitle: "Title, Description & OG",
     description:
-      "Title Tags, Meta Descriptions und Open-Graph-Texte für Kundenwebsites — mehrere Varianten, zeichengenau.",
+      "Title Tags, Meta Descriptions und Open-Graph-Texte für Kundenwebsites, mehrere Varianten, zeichengenau.",
     modelId: MODEL_QWEN_36,
     modelLabel: "Qwen3.6 35B",
     systemPrompt: SEO_META_SYSTEM_PROMPT,
@@ -1531,7 +1904,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "LinkedIn-Beitrag",
     subtitle: "Social · B2B Content",
     description:
-      "LinkedIn-Post im Du — einfaches Briefing, ~900–1.200 Zeichen, ohne Hashtags und Links im Text.",
+      "LinkedIn-Post im Du mit einfachem Briefing, ~900–1.200 Zeichen, ohne Hashtags und Links im Text.",
     modelId: MODEL_QWEN_36,
     modelLabel: "Qwen3.6 35B",
     systemPrompt: LINKEDIN_POST_SYSTEM_PROMPT,
@@ -1559,7 +1932,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Aktuelle Recherche",
     subtitle: "Websuche + Qwen",
     description:
-      "Wettbewerber, Trends oder Fakten live recherchieren — Qwen fasst Treffer für Pitch, Briefing oder Content zusammen.",
+      "Wettbewerber, Trends oder Fakten live recherchieren. Qwen fasst Treffer für Pitch, Briefing oder Content zusammen.",
     modelId: MODEL_QWEN_35,
     modelLabel: "Qwen3.5 122B + Websuche",
     systemPrompt: CURRENT_RESEARCH_SYSTEM_PROMPT,
@@ -1595,7 +1968,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "WM 2026 News",
     subtitle: "Websuche · Fußball",
     description:
-      "Spieltags-Digest zur laufenden WM 2026 — Ergebnisse von gestern, Spiele heute, Tabellen. Websuche mit Quellen zum Kopieren.",
+      "Spieltags-Digest zur laufenden WM 2026: Ergebnisse von gestern, Spiele heute, Tabellen. Websuche mit Quellen zum Kopieren.",
     modelId: MODEL_QWEN_35,
     modelLabel: "Qwen3.5 122B + Websuche",
     systemPrompt: WM_2026_NEWS_SYSTEM_PROMPT,
@@ -1651,7 +2024,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Epics & User Stories",
     subtitle: "Product Owner / PM",
     description:
-      "Kundengespräch per Sprache aufnehmen und in Epics sowie User Stories gießen — nur Kundensicht, ohne Tech-Stack.",
+      "Kundengespräch per Sprache aufnehmen und in Epics sowie User Stories gießen, nur Kundensicht, ohne Tech-Stack.",
     modelId: MODEL_QWEN_35,
     modelLabel: "Qwen3.5 122B",
     systemPrompt: PRODUCT_BACKLOG_SYSTEM_PROMPT,
@@ -1676,7 +2049,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Bug-Ticket erstellen",
     subtitle: "QA & Projektmanagement",
     description:
-      "Screenshot plus Kurzbeschreibung → strukturiertes Ticket für Jira, Linear oder Asana — inkl. Repro-Schritten.",
+      "Screenshot plus Kurzbeschreibung → strukturiertes Ticket für Jira, Linear oder Asana, inkl. Repro-Schritten.",
     modelId: MODEL_MINISTRAL,
     modelLabel: "Ministral 3 14B",
     systemPrompt: BUG_TICKET_SYSTEM_PROMPT,
@@ -1702,7 +2075,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Feature Request",
     subtitle: "mittwald Feature Tracker",
     description:
-      "Briefing → GitHub-Issue für mittwald/feature-requests — Titel und Beschreibung passend zum offiziellen Template, zum Kopieren.",
+      "Briefing → GitHub-Issue für mittwald/feature-requests: Titel und Beschreibung passend zum offiziellen Template, zum Kopieren.",
     modelId: MODEL_QWEN_36,
     modelLabel: "Qwen3.6 35B",
     systemPrompt: FEATURE_REQUEST_SYSTEM_PROMPT,
@@ -1729,7 +2102,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Feature Requests (Feed)",
     subtitle: "mittwald · GitHub",
     description:
-      "Die 10 zuletzt eingereichten Feature Requests aus github.com/mittwald/feature-requests — live von GitHub, kompakt aufbereitet.",
+      "Die 10 zuletzt eingereichten Feature Requests aus github.com/mittwald/feature-requests, live von GitHub, kompakt aufbereitet.",
     modelId: MODEL_MINISTRAL,
     modelLabel: "Ministral 3 14B",
     systemPrompt: FEATURE_REQUESTS_FEED_SYSTEM_PROMPT,
@@ -1757,7 +2130,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "AI Hosting Tarifberater",
     subtitle: "Tarif- & Modellberatung",
     description:
-      "Persönliche Empfehlung zu AI Hosting — von Starter bis Dedicated, auf Basis aktueller Tarife und Praxis-Wissen. Unser Vertrieb hilft dir gern bei der finalen Entscheidung.",
+      "Persönliche Empfehlung zu AI Hosting von Starter bis Dedicated, auf Basis aktueller Tarife und Praxis-Wissen. Unser Vertrieb hilft dir gern bei der finalen Entscheidung.",
     modelId: MODEL_QWEN_36,
     modelLabel: "Qwen3.6 35B",
     fallbackModelId: MODEL_GPT_OSS,
@@ -1810,7 +2183,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Shopware MCP Demo",
     subtitle: "Shop · AI Hosting · Setup",
     description:
-      "Shop per Sprache steuern — emuliert Shopware MCP (Produkte, Bestellungen) und erklärt das echte Setup: Shopware auf mittwald Webhosting, KI über AI Hosting, für eigenen Shop oder Kunden.",
+      "Shop per Sprache steuern: emuliert Shopware MCP (Produkte, Bestellungen) und erklärt das echte Setup mit Shopware auf mittwald Webhosting, KI über AI Hosting, für eigenen Shop oder Kunden.",
     modelId: MODEL_QWEN_36,
     modelLabel: "Qwen3.6 35B",
     fallbackModelId: MODEL_QWEN_35,
@@ -1847,7 +2220,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Wochenende mit Kunde",
     subtitle: "Wikipedia · Wetter · Ideen",
     description:
-      "Stadt eingeben — für das kommende Wochenende holt der Playground Wikipedia & Open-Meteo-Wetter und schlägt Aktivitäten mit deinem zu Besuch kommenden Kunden vor.",
+      "Stadt eingeben: für das kommende Wochenende holt der Playground Wikipedia und Open-Meteo-Wetter und schlägt Aktivitäten mit deinem zu Besuch kommenden Kunden vor.",
     modelId: MODEL_QWEN_35,
     modelLabel: "Qwen3.5 122B",
     systemPrompt: CLIENT_WEEKEND_SYSTEM_PROMPT,
@@ -1874,7 +2247,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Preisvergleich",
     subtitle: "2 Anbieter · Websuche",
     description:
-      "Produkt und zwei Shops eingeben — der Playground sucht iterativ nach Preisen im Web und erstellt einen übersichtlichen Vergleich mit Quellen.",
+      "Produkt und zwei Shops eingeben. Der Playground sucht iterativ nach Preisen im Web und erstellt einen übersichtlichen Vergleich mit Quellen.",
     modelId: MODEL_QWEN_35,
     modelLabel: "Qwen3.5 122B + Websuche",
     systemPrompt: PRICE_COMPARE_SYSTEM_PROMPT,
@@ -1902,7 +2275,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Semantische Suche",
     subtitle: "Embed · Rerank · Demo",
     description:
-      "Textpassagen + Frage — Qwen3-Embedding findet Kandidaten, Qwen3-VL-Reranker sortiert präzise, Qwen antwortet. Vergleichstabelle Embed vs. Rerank inklusive.",
+      "Textpassagen plus Frage: Qwen3-Embedding findet Kandidaten, Qwen3-VL-Reranker sortiert präzise, Qwen antwortet. Vergleichstabelle Embed vs. Rerank inklusive.",
     modelId: MODEL_QWEN_35,
     modelLabel: "Embedding + Rerank + Qwen3.5",
     systemPrompt: SEMANTIC_SEARCH_SYSTEM_PROMPT,
@@ -1925,7 +2298,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Audio transkribieren",
     subtitle: "Datei · Whisper · Auto-Chunks",
     description:
-      "Lange Audiodatei (MP3, WAV, …) hochladen — Whisper transkribiert automatisch in Abschnitten (~14 min), Qwen bereinigt den Volltext zum Kopieren.",
+      "Lange Audiodatei (MP3, WAV, …) hochladen. Whisper transkribiert automatisch in Abschnitten (~14 min), Qwen bereinigt den Volltext zum Kopieren.",
     modelId: MODEL_QWEN_35,
     modelLabel: "Whisper + Qwen3.5 122B",
     systemPrompt: AUDIO_TRANSCRIBE_SYSTEM_PROMPT,
@@ -1952,7 +2325,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Besprechungs-Protokoll",
     subtitle: "Transkript & Protokoll",
     description:
-      "Meeting aufnehmen — Protokoll passt sich an: Agentur, Firma, Familie, Freunde, Verein. Ton & Struktur aus dem Gespräch.",
+      "Meeting aufnehmen. Protokoll passt sich an: Agentur, Firma, Familie, Freunde, Verein. Ton und Struktur aus dem Gespräch.",
     modelId: MODEL_QWEN_35,
     modelLabel: "Qwen3.5 122B",
     systemPrompt: MEETING_PROTOCOL_SYSTEM_PROMPT,
@@ -2008,7 +2381,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Rechnung OCR",
     subtitle: "GLM-OCR + Struktur",
     description:
-      "PDF-Rechnung hochladen — GLM-OCR erkennt Text, Qwen strukturiert Felder (Nr., Absender, Beträge) zum Kopieren.",
+      "PDF-Rechnung hochladen. GLM-OCR erkennt Text, Qwen strukturiert Felder (Nr., Absender, Beträge) zum Kopieren.",
     modelId: MODEL_QWEN_35,
     modelLabel: "Qwen3.5 122B + GLM-OCR",
     systemPrompt: INVOICE_OCR_SYSTEM_PROMPT,
@@ -2030,7 +2403,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Modelle vergleichen",
     subtitle: "A/B · Side-by-Side",
     description:
-      "Gleicher Prompt an zwei Modelle — Antworten nebeneinander mit Token-Verbrauch. Ideal zum Modell-Tuning.",
+      "Gleicher Prompt an zwei Modelle: Antworten nebeneinander mit Token-Verbrauch. Ideal zum Modell-Tuning.",
     modelId: MODEL_MINISTRAL,
     modelLabel: "Ministral vs. Qwen3.6",
     defaultCompareModelB: MODEL_QWEN_36,
@@ -2044,6 +2417,85 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     sendButtonLabel: "Vergleichen",
     prefersModelCompare: true,
     prefersImage: true,
+  },
+  {
+    id: "greenwashing-check",
+    category: "content",
+    icon: "🌿",
+    title: "Greenwashing-Check",
+    subtitle: "Marketing · ehrliche Formulierung",
+    description:
+      "Werbetext auf vage Klima-Claims prüfen, mit konkreten Alternativen ohne Übertreibung. Demo-Text ist vorausgefüllt.",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B",
+    systemPrompt: GREENWASHING_CHECK_SYSTEM_PROMPT,
+    briefingFields: GREENWASHING_BRIEFING_FIELDS,
+    composerPlaceholder:
+      "Optional: weitere Claims, Kanal oder rechtliche Hinweise aus dem Team …",
+    steps: [
+      "Demo-Werbetext prüfen oder eigenen Text im Briefing einfügen.",
+      "„Text prüfen“ — KI markiert riskante Formulierungen und schlägt Alternativen vor.",
+      "Überarbeiteten Text per Kopieren-Button übernehmen (kein Compliance-Gutachten).",
+    ],
+    formatSubmissionMessage: (text) =>
+      `Prüfe den Werbetext auf Greenwashing und liefere ehrliche Alternativen.\n` +
+      `Keine Rechtsberatung — redaktionelle Einschätzung.\n\n` +
+      `--- Eingabe ---\n${text.trim()}\n--- Ende Eingabe ---`,
+    sendButtonLabel: "Text prüfen",
+    copyableOutput: true,
+  },
+  {
+    id: "travel-train-vs-flight",
+    category: "content",
+    icon: "🚆",
+    title: "Zug vs. Flug",
+    subtitle: "Inlandsstrecke · Websuche",
+    description:
+      "Bahn vs. Flug für interne Reiserichtlinien (Schwerpunkt Europa), mit Websuche, Richtwerten und Quellen.",
+    modelId: MODEL_QWEN_35,
+    modelLabel: "Qwen3.5 122B + Websuche",
+    systemPrompt: TRAVEL_TRAIN_VS_FLIGHT_SYSTEM_PROMPT,
+    starterInput:
+      "Vergleich für interne Reiserichtlinie: 1 Person, Economy, Strecke München Hbf – Berlin Hbf (Tür-zu-Tür einbeziehen).",
+    composerPlaceholder:
+      "Optional: Schwerpunkte, z. B. „nur CO₂“, „mit Kosten“, andere Strecke im Text nennen …",
+    steps: [
+      "Strecke im Text anpassen (Demo: München–Berlin), z. B. „Strecke Dortmund Hbf – Berlin Hbf“.",
+      "Websuche läuft automatisch zur genannten Strecke (Globus aktiv).",
+      "Vergleichstabelle und Policy-Snippet per Kopieren-Button übernehmen.",
+    ],
+    formatSubmissionMessage: formatTravelTrainVsFlightSubmission,
+    webSearchDirectQueries: buildTravelTrainVsFlightDirectSearchQueries,
+    sendButtonLabel: "Vergleichen",
+    prefersWebSearch: true,
+    isolatesWebSearchContext: true,
+    copyableOutput: true,
+  },
+  {
+    id: "co2-plain-language",
+    category: "content",
+    icon: "💬",
+    title: "CO₂-Text vereinfachen",
+    subtitle: "Fachsprache → Kundensprache",
+    description:
+      "Technischen CO₂- oder Nachhaltigkeits-Absatz in verständliche Sprache übersetzen. Zahlen bleiben unverändert.",
+    modelId: MODEL_QWEN_36,
+    modelLabel: "Qwen3.6 35B",
+    systemPrompt: CO2_PLAIN_LANGUAGE_SYSTEM_PROMPT,
+    briefingFields: CO2_PLAIN_LANGUAGE_BRIEFING_FIELDS,
+    composerPlaceholder:
+      "Optional: Ton (Sie/du), Länge, Kanal (Website, Newsletter) …",
+    steps: [
+      "Demo-Fachtext nutzen oder eigenen Absatz aus Bericht/FAQ einfügen.",
+      "„Vereinfachen“: Klartext, Bullets und Glossar in einem Durchgang.",
+      "Website-Version per Kopieren-Button übernehmen (reiner Fließtext, kein HTML).",
+    ],
+    formatSubmissionMessage: (text) =>
+      `Formuliere den folgenden Fachtext in verständliche Kundensprache um.\n` +
+      `Alle Zahlen und Einheiten exakt beibehalten. Ausgabe ohne HTML-Tags; Website-Version nur als Fließtext im Codeblock.\n\n` +
+      `--- Eingabe ---\n${text.trim()}\n--- Ende Eingabe ---`,
+    sendButtonLabel: "Vereinfachen",
+    copyableOutput: true,
   },
 ];
 

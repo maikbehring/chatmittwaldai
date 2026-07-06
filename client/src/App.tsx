@@ -146,6 +146,7 @@ import { CopyTextButton, extractCopySections } from "./CopyTextButton";
 import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
 import { MittwaldLogo } from "./MittwaldLogo";
 import { PlaygroundHostingUpsell } from "./PlaygroundHostingUpsell";
+import { PlaygroundAiHostingHero } from "./PlaygroundAiHostingHero";
 import { PlaygroundSelect } from "./PlaygroundSelect";
 import { trackPlaygroundUseCaseSend, trackPlaygroundUseCaseStart } from "./umami";
 import { ArrowUpIcon, MenuIcon, PenIcon } from "./playgroundIcons";
@@ -3586,19 +3587,19 @@ export function App() {
           <div ref={chatScrollRef} className="min-h-0 flex-1 overflow-y-auto">
             {messages.length === 0 ? (
               <div className="flex min-h-full flex-col items-center justify-start gap-4 px-4 py-5 sm:gap-5 sm:px-6 sm:py-6">
-                <div className="flex max-w-5xl flex-col items-center gap-2.5 text-center sm:gap-3">
-                  <p className="playground-text-hero-label font-bold text-playground-ink">
-                    mittwald Playground
-                  </p>
-                  <h1 className="playground-text-hero max-w-5xl text-playground-ink">
-                    {activeUseCase ? activeUseCase.title : "Bereit loszulegen?"}
-                  </h1>
-                  <p className="playground-text-subtitle max-w-4xl font-medium text-playground-ink">
-                    {activeUseCase
-                      ? activeUseCase.description
-                      : `${PLAYGROUND_USE_CASES.length} Use Cases für Agenturen — oder stelle eine eigene Frage.`}
-                  </p>
-                </div>
+                {activeUseCase ? (
+                  <div className="flex max-w-5xl flex-col items-center gap-2.5 text-center sm:gap-3">
+                    <p className="playground-text-hero-label font-bold text-playground-ink">
+                      mittwald Playground
+                    </p>
+                    <h1 className="playground-text-hero max-w-5xl text-playground-ink">
+                      {activeUseCase.title}
+                    </h1>
+                    <p className="playground-text-subtitle max-w-4xl font-medium text-playground-ink">
+                      {activeUseCase.description}
+                    </p>
+                  </div>
+                ) : null}
                 {activeUseCase ? (
                   <PlaygroundUseCaseGuide
                     useCase={activeUseCase}
@@ -3618,6 +3619,14 @@ export function App() {
                   />
                 ) : (
                   <>
+                    <PlaygroundAiHostingHero
+                      aiHostingUrl={aiHostingUrl}
+                      playgroundModels={models}
+                    />
+                    <p className="playground-text-small max-w-2xl text-center font-medium text-playground-muted">
+                      {PLAYGROUND_USE_CASES.length} Use Cases für Agenturen — oder stelle eine eigene
+                      Frage im Chat.
+                    </p>
                     <PlaygroundUseCaseCards
                       cases={PLAYGROUND_USE_CASES}
                       activeId={activeUseCaseId}
