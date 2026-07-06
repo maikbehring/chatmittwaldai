@@ -22,6 +22,10 @@ FROM base AS runner
 WORKDIR /app
 ENV NODE_ENV=production
 ENV PLAYGROUND_BASE_PATH=/ai
+USER root
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends iputils-tracepath traceroute \
+  && rm -rf /var/lib/apt/lists/*
 RUN chown -R node:node /app
 USER node
 COPY --from=builder --chown=node:node /app/package.json /app/package-lock.json ./

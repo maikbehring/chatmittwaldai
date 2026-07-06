@@ -38,6 +38,10 @@ import {
   resolveUpstreamApiKey,
   shouldSkipPublicRateLimit,
 } from "./sessionApiKey.js";
+import {
+  buildNetworkPathCheck,
+  NETWORK_PATH_TARGETS,
+} from "./networkPathCheck.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "../..");
@@ -528,6 +532,40 @@ async function main() {
       }
     },
   );
+
+  const networkPathLimiter = rateLimit({
+    windowMs: RATE_WINDOW_MS,
+    max: Math.min(RATE_MAX_MODELS, 12),
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: shouldSkipPublicRateLimit,
+    handler: createRateLimitHandler("models"),
+  });
+
+  app.get("/api/network/path-check", networkPathLimiter, async (req, res) => {
+    const raw =
+      typeof req.query?.targets === "string" && req.query.targets.trim()
+        ? req.query.targets.split(",")
+        : Object.keys(NETWORK_PATH_TARGETS);
+    const targetKeys = raw
+      .map((s) => s.trim().toLowerCase())
+      .filter((key) => key in NETWORK_PATH_TARGETS);
+    if (targetKeys.length === 0) {
+      return jsonError(res, 400, "invalid_targets", "Keine gültigen Ziele (mittwald, openai).");
+    }
+    try {
+      const data = await buildNetworkPathCheck(req, [...new Set(targetKeys)]);
+      res.json(data);
+    } catch (e) {
+      console.error(e);
+      return jsonError(
+        res,
+        502,
+        "network_path_check_failed",
+        e instanceof Error ? e.message : "Netzwerkpfad-Check fehlgeschlagen.",
+      );
+    }
+  });
 
   app.get("/api/weekend-visit/prepare", featureRequestsLimiter, async (req, res) => {
     const city = typeof req.query?.city === "string" ? req.query.city : "";
