@@ -7,13 +7,11 @@ import {
 export const TARIF_CONSULT_PHONE = "+49 5772 293 150";
 export const TARIF_CONSULT_PHONE_HREF = "tel:+495772293150";
 
-type UpsellPlacement = "sidebar" | "banner";
+type UpsellPlacement = "banner";
 
 type Props = {
   aiHostingUrl: string;
   className?: string;
-  /** Sidebar-Karte unten links; Banner unter den Use Cases auf der Startseite */
-  variant: UpsellPlacement;
 };
 
 function BookCta({
@@ -63,25 +61,8 @@ function CallCta({
   );
 }
 
-export function PlaygroundHostingUpsell({ aiHostingUrl, variant, className = "" }: Props) {
-  if (variant === "sidebar") {
-    return (
-      <div
-        className={`rounded-2xl border border-playground-border bg-gradient-to-b from-playground-muted/[0.06] to-transparent p-3.5 ${className}`.trim()}
-      >
-        <p className="playground-text-small font-bold leading-snug text-playground-ink">
-          Für Kundenprojekte
-        </p>
-        <p className="playground-text-tiny mt-1 leading-snug text-playground-muted">
-          KI fully managed in Deutschland — API-Key im mStudio, OpenAI-kompatibel.
-        </p>
-        <div className="mt-3 flex flex-col gap-2">
-          <BookCta href={aiHostingUrl} placement={variant} />
-          <CallCta placement={variant} />
-        </div>
-      </div>
-    );
-  }
+export function PlaygroundHostingUpsell({ aiHostingUrl, className = "" }: Props) {
+  const placement: UpsellPlacement = "banner";
 
   return (
     <div
@@ -97,8 +78,8 @@ export function PlaygroundHostingUpsell({ aiHostingUrl, variant, className = "" 
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
-          <BookCta href={aiHostingUrl} placement={variant} />
-          <CallCta placement={variant} />
+          <BookCta href={aiHostingUrl} placement={placement} />
+          <CallCta placement={placement} />
         </div>
       </div>
     </div>

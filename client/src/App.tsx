@@ -3507,11 +3507,6 @@ export function App() {
           >
             {sidebarExpanded ? "Browsercache löschen" : "⌫"}
           </button>
-          {sidebarExpanded ? (
-            <div className="px-3 pt-2">
-              <PlaygroundHostingUpsell variant="sidebar" aiHostingUrl={aiHostingUrl} />
-            </div>
-          ) : null}
         </div>
       </aside>
 
@@ -3702,7 +3697,6 @@ export function App() {
                       onSelect={activateUseCase}
                     />
                     <PlaygroundHostingUpsell
-                      variant="banner"
                       aiHostingUrl={aiHostingUrl}
                       className="mt-1"
                     />
