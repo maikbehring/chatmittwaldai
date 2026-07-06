@@ -743,14 +743,21 @@ Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzera
 - Policy: Flug als einzige praktikable Option; optional Kompensation/Economy erwähnen, aber **keine** erfundenen Regeln (z. B. Business-Class-Verbot), wenn nicht im Nutzertext.
 - Hinweis: „Hbf“ bei Nicht-EU-Städten (z. B. New York) ist unüblich, kurz anmerken.
 
+**Kein Linienflug / kein Flughafen am Ziel (z. B. Hannover – Espelkamp):**
+- Wenn **kein regulärer Linienflug** existiert: in der Kurzempfehlung **sofort** sagen; Bahn ist Standard.
+- Flug-Spalte: **„nicht verfügbar“** oder **„nicht buchbar“**; keinen fiktiven Direktflug konstruieren.
+- CO₂ Flug: nur als **hypothetischer** Kurzstrecken-Richtwert mit Kennzeichnung, oder **„n. a.“**; Fokus auf Bahn.
+- Kurzstrecken: oft **RE/IC/Regionalbahn**, nicht ICE; Fahrzeiten aus Treffern, Widersprüche kurz einordnen.
+- **Keine** erfundenen internen Prozesse (z. B. „zentrales Buchungssystem“), wenn nicht in der Nutzeranfrage.
+
 **Zeitbezug:**
 - Nutze **[Playground — Zeitbezug]** als heutiges Datum.
 - Emissions- und Fahrzeitangaben nur aus Treffern oder als **typische Richtwerte** kennzeichnen.
 
 **Inhaltliche Plausibilität (Richtwerte, nicht erfinden):**
-- Zugfahrt: je nach Strecke ca. **3–4,5 h** (Inland mittel) bis **ca. 8–9,5 h** (z. B. Wien–Berlin ICE).
+- Zugfahrt: **Kurz/regional** oft **ca. 1–2,5 h** (z. B. Hannover–Espelkamp RE); **Inland mittel** ca. **3–4,5 h**; **lang** bis **ca. 8–9,5 h** (z. B. Wien–Berlin ICE).
 - Tür-zu-tür Flug: oft **ca. 4–5,5 h** inkl. Flughafen; Bahn bei Langstrecken oft **länger** tür-zu-tür als Flug.
-- CO₂ pro Person (Richtwerte): Bahn/ICE oft **ca. 10–35 kg** (kürzer niedriger, längere Relation eher höher); Flug oft **ca. 120–250 kg** je nach Entfernung. Keine Faktor-Übertreibung (z. B. „15×“ nur wenn aus den genannten Spannen plausibel).
+- CO₂ pro Person (Richtwerte): Bahn oft **ca. 5–35 kg** (kurz/regional niedriger, längere Relation höher); Flug oft **ca. 80–250 kg** je nach Entfernung, nur wenn ein Flug überhaupt existiert.
 - Nightjet/Nachtzug nur erwähnen, wenn relevant; nicht mit Tages-ICE für die Standard-Dienstreise vermischen.
 - Keine erfundenen Live-Preise ohne Treffer.
 
@@ -805,10 +812,10 @@ export function buildTravelTrainVsFlightDirectSearchQueries(userText: string): s
     ];
   }
   return [
-    `ICE ${route} Fahrzeit Strecke ${year}`,
-    `Flug ${route} CO2 Emissionen kg Person ${year}`,
-    `Bahn vs Flug ${route} Umwelt CO2 Vergleich ${year}`,
-    `Kurzstreckenflug CO2 Start Landung Overhead Bahn Deutschland`,
+    `Bahn ${route} Fahrzeit RE ICE ${year}`,
+    `Zug ${origin} nach ${destination} Fahrplan ${year}`,
+    `Flug ${route} Verbindung gibt es ${year}`,
+    `Bahn vs Flug ${route} CO2 Emissionen ${year}`,
     `${userText.trim().slice(0, 120)} ${route} Bahn Flug ${year}`.trim(),
   ].slice(0, 5);
 }
