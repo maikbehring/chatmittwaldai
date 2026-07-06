@@ -145,6 +145,7 @@ import {
 import { CopyTextButton, extractCopySections } from "./CopyTextButton";
 import {
   getSameTravelRouteStaticResponse,
+  extractTravelCopySections,
   normalizeTravelTrainVsFlightOutput,
 } from "./travelTrainVsFlightOutput";
 import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
@@ -221,6 +222,8 @@ export type MessageTokenStats = TokenMeter;
 export type ChatMessage = {
   role: Exclude<Role, "system">;
   content: string | ContentPart[];
+  /** Use Case, der die Nachricht erzeugt hat (für Formatierung/Kopieren). */
+  playgroundUseCaseId?: PlaygroundUseCaseId;
   usage?: TokenMeter;
   webSearch?: WebSearchResponse;
   mittwaldFeatureRequests?: MittwaldFeatureRequestsResponse;
@@ -447,8 +450,35 @@ function assistantMessagePlainText(content: string | ContentPart[]): string {
     .join("\n");
 }
 
-function UseCaseCopyActions({ content }: { content: string }) {
-  const sections = extractCopySections(content);
+function resolveMessageUseCaseId(
+  message: ChatMessage,
+  activeUseCaseId: PlaygroundUseCaseId | null | undefined,
+): PlaygroundUseCaseId | null {
+  return message.playgroundUseCaseId ?? activeUseCaseId ?? null;
+}
+
+function polishAssistantMarkdown(
+  content: string | ContentPart[],
+  useCaseId: PlaygroundUseCaseId | null,
+): string {
+  const plain = assistantMessagePlainText(content);
+  if (useCaseId === "travel-train-vs-flight") {
+    return normalizeTravelTrainVsFlightOutput(stripHallucinatedCo2FromAssistantText(plain));
+  }
+  return stripHallucinatedCo2FromAssistantText(plain);
+}
+
+function UseCaseCopyActions({
+  content,
+  useCaseId,
+}: {
+  content: string;
+  useCaseId?: PlaygroundUseCaseId | null;
+}) {
+  const sections =
+    useCaseId === "travel-train-vs-flight"
+      ? extractTravelCopySections(content)
+      : extractCopySections(content);
   if (sections.length === 0) {
     const plain = content.trim();
     if (!plain) return null;
@@ -558,13 +588,12 @@ const ChatMessageRow = memo(function ChatMessageRow({
       </div>
     );
   }
-  const assistantPlain = (
-    activeUseCaseId === "travel-train-vs-flight"
-      ? normalizeTravelTrainVsFlightOutput(
-          stripHallucinatedCo2FromAssistantText(assistantMessagePlainText(message.content)),
-        )
-      : stripHallucinatedCo2FromAssistantText(assistantMessagePlainText(message.content))
-  ).trim();
+  const useCaseIdForMessage = resolveMessageUseCaseId(message, activeUseCaseId);
+  const assistantPlain = polishAssistantMarkdown(message.content, useCaseIdForMessage).trim();
+  const assistantDisplayContent =
+    !streaming && message.role === "assistant" && useCaseIdForMessage === "travel-train-vs-flight"
+      ? assistantPlain
+      : message.content;
   const isAiHostingGuide = activeUseCaseId === "ai-hosting-guide";
   const isAiHostingTariffAdvisor = activeUseCaseId === "ai-hosting-tarifberater";
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
@@ -588,7 +617,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
   const showPriceCompareProgress =
     isPriceCompareUseCase && (priceComparePhase === "search" || priceCompareGenerating);
   const showCopyActions =
-    isCopyableUseCase(activeUseCaseId) &&
+    isCopyableUseCase(useCaseIdForMessage) &&
     !streaming &&
     !webSearchPending &&
     !featureRequestsPending &&
@@ -605,7 +634,9 @@ const ChatMessageRow = memo(function ChatMessageRow({
   return (
     <div className="flex w-full justify-start">
       <div className="flex max-w-full flex-col items-start">
-        {showCopyActions ? <UseCaseCopyActions content={assistantPlain} /> : null}
+        {showCopyActions ? (
+          <UseCaseCopyActions content={assistantPlain} useCaseId={useCaseIdForMessage} />
+        ) : null}
         <div className="playground-text-chat max-w-full text-playground-muted">
           {webSearchPending ? (
             <p className="flex items-center gap-2 text-neutral-500 dark:text-neutral-400" role="status">
@@ -665,7 +696,7 @@ const ChatMessageRow = memo(function ChatMessageRow({
               accentClassName="emerald"
             />
           ) : (
-            renderMessageContent(message.content, streaming, onImageOpen)
+            renderMessageContent(assistantDisplayContent, streaming, onImageOpen)
           )}
         </div>
         {message.usage ? <AssistantTokenFooter stats={message.usage} /> : null}
@@ -2705,8 +2736,12 @@ export function App() {
         trackPlaygroundUseCaseSend(activeUseCase);
         setMessages([
           ...messagesBeforeSend,
-          { role: "user", content: userContent },
-          { role: "assistant", content: sameRouteResponse },
+          { role: "user", content: userContent, playgroundUseCaseId: "travel-train-vs-flight" },
+          {
+            role: "assistant",
+            content: sameRouteResponse,
+            playgroundUseCaseId: "travel-train-vs-flight",
+          },
         ]);
         return;
       }
@@ -2929,6 +2964,7 @@ export function App() {
     const userMessage: ChatMessage = {
       role: "user",
       content: userContent,
+      ...(activeUseCase ? { playgroundUseCaseId: activeUseCase.id } : {}),
       ...(webSearchPayload ? { webSearch: webSearchPayload } : {}),
       ...(mittwaldFeatureRequestsPayload
         ? { mittwaldFeatureRequests: mittwaldFeatureRequestsPayload }
@@ -3178,16 +3214,13 @@ export function App() {
 
         const cleanedContent =
           typeof last.content === "string"
-            ? activeUseCase?.id === "travel-train-vs-flight"
-              ? normalizeTravelTrainVsFlightOutput(
-                  stripHallucinatedCo2FromAssistantText(last.content),
-                )
-              : stripHallucinatedCo2FromAssistantText(last.content)
+            ? polishAssistantMarkdown(last.content, activeUseCase?.id ?? null)
             : last.content;
 
         copy[copy.length - 1] = {
           ...last,
           content: cleanedContent,
+          ...(activeUseCase ? { playgroundUseCaseId: activeUseCase.id } : {}),
           usage: {
             promptTokens: usageSnap?.promptTokens ?? null,
             completionTokens: usageSnap?.completionTokens ?? null,

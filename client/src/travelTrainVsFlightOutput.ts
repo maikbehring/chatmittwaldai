@@ -1,4 +1,6 @@
 import { extractTravelRouteFromText, isSameTravelRoute } from "./playgroundUseCases";
+import type { CopySection } from "./CopyTextButton";
+import { extractCopySections } from "./CopyTextButton";
 
 const TRAVEL_HEADINGS = [
   "Kurzempfehlung",
@@ -99,6 +101,15 @@ export function normalizeTravelTrainVsFlightOutput(text: string): string {
   out = normalizeSectionBullets(out, "Quellen & Stand");
   out = wrapPolicySnippetInCodeBlock(out);
   return out.trimEnd();
+}
+
+/** Kopieren-Buttons: Policy-Snippet aus Codeblock, sonst Standard-Extraktion. */
+export function extractTravelCopySections(markdown: string): CopySection[] {
+  const policy = markdown.match(/## Copy & Paste[\s\S]*?\n```\n([\s\S]*?)```/);
+  if (policy?.[1]?.trim()) {
+    return [{ label: "Policy-Snippet", text: policy[1].trim() }];
+  }
+  return extractCopySections(markdown);
 }
 
 /** Keine API/Websuche bei identischem Start und Ziel. */
