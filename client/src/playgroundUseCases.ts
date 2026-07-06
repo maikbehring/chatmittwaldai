@@ -836,6 +836,9 @@ Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzera
 - CO₂ pro Person (Richtwerte): Bahn oft **ca. 5–35 kg** (kurz/regional niedriger, längere Relation höher); Flug oft **ca. 80–250 kg** je nach Entfernung, nur wenn ein Flug überhaupt existiert.
 - Nightjet/Nachtzug nur erwähnen, wenn relevant; nicht mit Tages-ICE für die Standard-Dienstreise vermischen.
 - Keine erfundenen Live-Preise ohne Treffer.
+- **Umstiege:** „Direktverbindung“ oder „ohne Umstieg“ nur, wenn Websuche-Treffer das für **diese** Strecke bestätigen; sonst typische Umstiege und Knotenbahnhöfe nennen (z. B. Köln, Dortmund, Hannover).
+- **Anbieter:** FlixTrain, Nachtzug oder Regionalanbieter nur nennen, wenn sie in den Treffern für die genannte Strecke vorkommen.
+- CO₂ Bahn **Inland ~150–300 km:** eher **ca. 12–25 kg**; Werte unter 10 kg nur bei sehr kurzen RE-Strecken.
 
 **Format (streng):**
 - Keine Gedankenstriche ( — ) in der Ausgabe.
@@ -911,6 +914,7 @@ export function formatTravelTrainVsFlightSubmission(text: string): string {
   return (
     scopeNote +
     `Stand/Recherche ${year}; Zahlen als Richtwerte kennzeichnen.\n` +
+    `Umstiege und Verbindungsart (direkt vs. Umstieg) nur aus Treffern; nichts erfinden.\n` +
     `Heutiges Datum aus [Playground — Zeitbezug] für „aktuell“ verwenden.\n\n` +
     `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`
   );
