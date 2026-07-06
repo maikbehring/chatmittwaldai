@@ -1,7 +1,12 @@
 import { useCallback, useState } from "react";
 import {
+  countryFlagEmoji,
   fetchNetworkPathCheck,
   formatClientLocation,
+  formatHopLocation,
+  formatPathSummary,
+  formatResolvedTargetGeo,
+  isDomesticOrInternalPath,
   localTracerouteCommands,
   measureBrowserLatencies,
   type BrowserLatencyProbe,
@@ -16,24 +21,62 @@ function formatRtt(ms: number | null): string {
 }
 
 function HopRow({ hop, isLast }: { hop: NetworkHop; isLast: boolean }) {
+  const location = formatHopLocation(hop);
+  const flag =
+    hop.scope === "private"
+      ? "🏢"
+      : hop.geo?.countryCode
+        ? countryFlagEmoji(hop.geo.countryCode)
+        : "";
+  const isForeign = hop.foreign === true;
+
   return (
     <li className="relative flex gap-3 pb-4 last:pb-0">
       {!isLast ? (
         <span
-          className="absolute left-[0.6875rem] top-6 bottom-0 w-px bg-playground-border"
+          className={`absolute left-[0.6875rem] top-6 bottom-0 w-px ${
+            isForeign ? "bg-amber-400/60" : "bg-playground-border"
+          }`}
           aria-hidden
         />
       ) : null}
       <span
-        className="relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-playground-border bg-playground-sidebar playground-text-tiny font-bold text-playground-ink"
+        className={`relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center rounded-full border playground-text-tiny font-bold ${
+          isForeign
+            ? "border-amber-500/50 bg-amber-500/15 text-amber-900 dark:text-amber-100"
+            : hop.scope === "private"
+              ? "border-playground-border bg-playground-muted/10 text-playground-muted"
+              : "border-playground-border bg-playground-sidebar text-playground-ink"
+        }`}
         aria-hidden
       >
         {hop.n}
       </span>
       <div className="min-w-0 flex-1 pt-0.5">
-        <p className="playground-text-small font-mono font-medium text-playground-ink break-all">
-          {hop.host}
-        </p>
+        <div className="flex flex-wrap items-center gap-2">
+          <p className="playground-text-small font-mono font-medium text-playground-ink break-all">
+            {hop.host}
+          </p>
+          {flag ? (
+            <span className="playground-text-tiny shrink-0" aria-hidden>
+              {flag}
+            </span>
+          ) : null}
+        </div>
+        {location ? (
+          <p
+            className={`playground-text-tiny ${
+              isForeign ? "font-medium text-amber-800 dark:text-amber-200" : "text-playground-muted"
+            }`}
+          >
+            {location}
+            {isForeign
+              ? " · Ausland"
+              : hop.geo?.countryCode === "DE"
+                ? " · Deutschland"
+                : ""}
+          </p>
+        ) : null}
         <p className="playground-text-tiny text-playground-muted">
           RTT {formatRtt(hop.rttMs)}
           {hop.note ? ` · ${hop.note}` : ""}
@@ -43,19 +86,41 @@ function HopRow({ hop, isLast }: { hop: NetworkHop; isLast: boolean }) {
   );
 }
 
+function PathSummaryBadge({ target }: { target: NetworkPathTargetResult }) {
+  const summary = formatPathSummary(target);
+  const abroad = target.pathSummary.crossesAbroad;
+  const internalOnly = isDomesticOrInternalPath(target) && !target.pathSummary.staysDomestic;
+  return (
+    <p
+      className={`playground-text-tiny rounded-lg px-2.5 py-1.5 font-medium ${
+        abroad
+          ? "border border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100"
+          : internalOnly
+            ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100"
+            : "border border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100"
+      }`}
+    >
+      {summary}
+    </p>
+  );
+}
+
 function TargetPathCard({ target }: { target: NetworkPathTargetResult }) {
+  const resolvedGeo = formatResolvedTargetGeo(target);
+
   return (
     <article className="flex min-w-0 flex-1 flex-col rounded-2xl border border-playground-border bg-playground-sidebar p-4 sm:p-5">
-      <header className="mb-4 space-y-1">
+      <header className="mb-4 space-y-2">
         <h3 className="playground-text-body font-display font-semibold text-playground-ink">
           {target.label}
         </h3>
+        <PathSummaryBadge target={target} />
         <p className="playground-text-tiny font-mono text-playground-muted break-all">{target.host}</p>
         {target.resolvedIp ? (
-          <p className="playground-text-tiny text-playground-muted">IPv4: {target.resolvedIp}</p>
-        ) : null}
-        {target.tool !== "none" ? (
-          <p className="playground-text-tiny text-playground-muted">Tool: {target.tool}</p>
+          <p className="playground-text-tiny text-playground-muted">
+            Ziel-IP: <span className="font-mono text-playground-ink">{target.resolvedIp}</span>
+            {resolvedGeo ? ` · ${resolvedGeo}` : ""}
+          </p>
         ) : null}
       </header>
 
@@ -122,6 +187,12 @@ export function NetworkPathCheckPanel() {
   }, []);
 
   const location = result ? formatClientLocation(result.client.geo) : null;
+  const mittwaldTarget = result?.targets.find((t) => t.key === "mittwald");
+  const openaiTarget = result?.targets.find((t) => t.key === "openai");
+  const showAbroadCallout =
+    mittwaldTarget &&
+    isDomesticOrInternalPath(mittwaldTarget) &&
+    openaiTarget?.pathSummary.crossesAbroad;
 
   return (
     <div className="w-full max-w-5xl space-y-4 text-left">
@@ -181,6 +252,23 @@ export function NetworkPathCheckPanel() {
           </section>
 
           <p className="playground-text-tiny text-playground-muted">{result.probeOrigin.note}</p>
+
+          {showAbroadCallout ? (
+            <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 sm:px-5">
+              <p className="playground-text-small font-semibold text-amber-950 dark:text-amber-50">
+                OpenAI-Route verlässt Deutschland
+              </p>
+              <p className="mt-1 playground-text-tiny text-amber-900/90 dark:text-amber-100/90">
+                mittwald AI Hosting bleibt im internen/deutschen Pfad (
+                {mittwaldTarget?.pathSummary.hopCount ?? 0} Hops). Die OpenAI-API läuft über{" "}
+                {openaiTarget?.pathSummary.foreignHops ?? 0} Auslands-Hop(s)
+                {openaiTarget?.pathSummary.countries.length
+                  ? ` (${openaiTarget.pathSummary.countries.join(" → ")})`
+                  : ""}
+                — typisch US/Cloudflare-Anbindung, nicht DE-Hosting.
+              </p>
+            </div>
+          ) : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
             {result.targets.map((target) => (

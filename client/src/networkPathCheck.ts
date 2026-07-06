@@ -2,11 +2,32 @@ import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse } from "./apiErrors";
 import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 
+export type IpGeo = {
+  city: string;
+  region: string;
+  country: string;
+  countryCode: string;
+};
+
 export type NetworkHop = {
   n: number;
   host: string;
   rttMs: number | null;
   note?: string;
+  scope?: "private" | "public" | "timeout";
+  geo?: IpGeo | null;
+  geoLabel?: string;
+  foreign?: boolean;
+};
+
+export type NetworkPathSummary = {
+  hopCount: number;
+  publicHops: number;
+  foreignHops: number;
+  countries: string[];
+  staysDomestic: boolean;
+  crossesAbroad: boolean;
+  firstForeignCountry: string | null;
 };
 
 export type NetworkPathTargetResult = {
@@ -14,7 +35,9 @@ export type NetworkPathTargetResult = {
   host: string;
   label: string;
   resolvedIp: string | null;
+  resolvedGeo: IpGeo | null;
   hops: NetworkHop[];
+  pathSummary: NetworkPathSummary;
   error: string | null;
   tool: string;
 };
@@ -27,6 +50,7 @@ export type NetworkPathCheckResponse = {
       city: string;
       region: string;
       country: string;
+      countryCode?: string;
       latitude: number | null;
       longitude: number | null;
     } | null;
@@ -136,4 +160,49 @@ export function localTracerouteCommands(): { label: string; command: string }[] 
     { label: "mittwald AI Hosting", command: "traceroute llm.aihosting.mittwald.de" },
     { label: "OpenAI API", command: "traceroute api.openai.com" },
   ];
+}
+
+export function countryFlagEmoji(countryCode: string | undefined): string {
+  if (!countryCode || countryCode.length !== 2) return "";
+  const code = countryCode.toUpperCase();
+  return String.fromCodePoint(
+    ...[...code].map((char) => 0x1f1e6 + char.charCodeAt(0) - 65),
+  );
+}
+
+export function formatHopLocation(hop: NetworkHop): string | null {
+  if (hop.scope === "private") return hop.geoLabel ?? "Internes Netz";
+  if (hop.scope === "timeout") return null;
+  if (!hop.geo) return null;
+  const parts = [hop.geo.city, hop.geo.region, hop.geo.country].filter(Boolean);
+  return parts.length > 0 ? parts.join(", ") : hop.geo.country || null;
+}
+
+export function formatPathSummary(target: NetworkPathTargetResult): string {
+  const { pathSummary: s } = target;
+  if (s.hopCount === 0) return "Keine Hop-Daten";
+  const privateCount = target.hops.filter((h) => h.scope === "private").length;
+  if (privateCount === s.hopCount) {
+    return `${s.hopCount} Hops · internes Netz (Rechenzentrum)`;
+  }
+  if (s.staysDomestic) {
+    return `${s.hopCount} Hops · überwiegend intern / Deutschland`;
+  }
+  if (s.crossesAbroad) {
+    const countries = s.countries.length > 0 ? s.countries.join(" → ") : "Ausland";
+    return `${s.hopCount} Hops · ${s.foreignHops} Auslands-Hop(s) · ${countries}`;
+  }
+  return `${s.hopCount} Hops`;
+}
+
+export function isDomesticOrInternalPath(target: NetworkPathTargetResult): boolean {
+  if (target.pathSummary.staysDomestic) return true;
+  return target.hops.length > 0 && target.hops.every((h) => h.scope === "private" || h.scope === "timeout");
+}
+
+export function formatResolvedTargetGeo(target: NetworkPathTargetResult): string | null {
+  if (!target.resolvedGeo) return null;
+  const flag = countryFlagEmoji(target.resolvedGeo.countryCode);
+  const parts = [target.resolvedGeo.city, target.resolvedGeo.country].filter(Boolean);
+  return `${flag ? `${flag} ` : ""}${parts.join(", ")}`.trim();
 }
