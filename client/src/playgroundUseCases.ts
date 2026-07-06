@@ -753,6 +753,19 @@ export function extractTravelRouteFromText(text: string): { origin: string; dest
   return { origin: "München", destination: "Berlin" };
 }
 
+export function isSameTravelRoute(origin: string, destination: string): boolean {
+  return cleanTravelPlace(origin).toLowerCase() === cleanTravelPlace(destination).toLowerCase();
+}
+
+/** Client-Validierung vor Senden (z. B. „Rahden nach Rahden“). */
+export function getTravelRouteValidationError(text: string): string | null {
+  const { origin, destination } = extractTravelRouteFromText(text);
+  if (isSameTravelRoute(origin, destination)) {
+    return `Start und Ziel sind identisch („${origin}“). Bitte zwei verschiedene Orte nennen, z. B. „Espelkamp nach Rahden“.`;
+  }
+  return null;
+}
+
 /** Keine realistische europäische Bahnverbindung (z. B. New York – Berlin). */
 const INTERCONTINENTAL_ROUTE_PATTERN =
   /\b(new\s*york|newyork|nyc|manhattan|los\s*angeles|san\s*francisco|chicago|miami|boston|washington|seattle|tokyo|osaka|beijing|shanghai|hong\s*kong|singapore|sydney|melbourne|toronto|vancouver|montreal|mumbai|delhi|bangkok|dubai|tel\s*aviv|cairo|sao\s*paulo|rio|mexico\s*city)\b/i;
@@ -767,7 +780,11 @@ Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzera
 
 **Strecke:**
 - Start und Ziel aus der **aktuellen** Nutzeranfrage entnehmen (auch Kurzform wie „Espelkamp nach Rahden“ oder „Berlin – München“). **Nicht** eine Strecke aus früheren Chat-Nachrichten übernehmen.
+- **Niemals** eine andere Strecke aus Websuche-Treffern verwenden, wenn Start/Ziel in der Anfrage klar anders heißen.
 - Wenn Treffer nur eine andere Strecke betreffen: ehrlich sagen; nur übertragbare Richtwerte nutzen.
+
+**Gleicher Ort als Start und Ziel (z. B. „Rahden nach Rahden“):**
+- Das ist **keine** Dienstreise-Strecke. Kurzempfehlung: Eingabefehler — bitte zwei **verschiedene** Orte nennen. **Keine** Vergleichstabelle mit einer anderen nahegelegenen Strecke (z. B. Espelkamp–Rahden).
 
 **Zwei Streckentypen (wichtig für die Kurzempfehlung):**
 - **Kurz/mittel (ca. bis 6 h reine Zugfahrt, z. B. Ruhr–Berlin, München–Berlin):** Bahn oft **tür-zu-tür konkurrenzfähig oder schneller**; Empfehlung Bahn aus Zeit **und** CO₂.
