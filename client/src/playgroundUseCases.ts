@@ -827,7 +827,7 @@ Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzera
 - **Keine** Social-Media-Posts als CO₂-Quelle; bevorzugt UBA, co2online, DB/myclimate oder Anbieter-Fahrplanseiten.
 
 **Zeitbezug:**
-- Nutze **[Playground — Zeitbezug]** als heutiges Datum.
+- Nutze **[Playground — Zeitbezug]** als heutiges Datum (Jahr und Kalendertag). **Nicht** ein anderes Jahr (z. B. 2024) verwenden.
 - Emissions- und Fahrzeitangaben nur aus Treffern oder als **typische Richtwerte** kennzeichnen.
 
 **Inhaltliche Plausibilität (Richtwerte, nicht erfinden):**
