@@ -11,20 +11,38 @@ const TRAVEL_HEADINGS = [
 ] as const;
 
 const POLICY_SNIPPET_HEADING = "## Copy & Paste — Policy-Snippet";
+const TABLE_PLACEHOLDER_PREFIX = "PLAYGROUND_TRAVEL_TABLE_";
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function canonicalTravelHeading(line: string): (typeof TRAVEL_HEADINGS)[number] | null {
+  const trimmed = line.trim().replace(/:\s*$/, "");
+  if (/^Copy\s*&\s*Paste\s*[-–—]\s*Policy-Snippet$/i.test(trimmed)) {
+    return "Copy & Paste — Policy-Snippet";
+  }
+  if (/^Für die Reise-?richtlinie$/i.test(trimmed)) {
+    return "Für die Reiserichtlinie";
+  }
+  if (/^Vergleich\s*\(Richtwerte\)$/i.test(trimmed)) {
+    return "Vergleich (Richtwerte)";
+  }
+  for (const heading of TRAVEL_HEADINGS) {
+    if (trimmed.toLowerCase() === heading.toLowerCase()) return heading;
+  }
+  return null;
+}
+
 function normalizeTravelHeadingLine(line: string): string {
   const trimmed = line.trim();
-  if (/^Copy\s*&\s*Paste\s*[-–—]\s*Policy-Snippet$/i.test(trimmed)) {
-    return POLICY_SNIPPET_HEADING;
+  if (trimmed.startsWith("##")) {
+    const inner = trimmed.replace(/^##\s*/, "");
+    const canonical = canonicalTravelHeading(inner);
+    return canonical ? `## ${canonical}` : line;
   }
-  if ((TRAVEL_HEADINGS as readonly string[]).includes(trimmed)) {
-    return `## ${trimmed}`;
-  }
-  if (trimmed.startsWith("##")) return line;
+  const canonical = canonicalTravelHeading(trimmed);
+  if (canonical) return `## ${canonical}`;
   return line;
 }
 
@@ -36,17 +54,57 @@ export function ensureTravelMarkdownHeadings(text: string): string {
     .join("\n");
 }
 
+/** Tabellen vor Bullet-Normalisierung schützen (verhindert „Zugwww.“-Artefakte). */
+function shieldMarkdownTables(text: string): { text: string; tables: string[] } {
+  const tables: string[] = [];
+  const shielded = text.replace(
+    /(?:^|\n)((?:\|[^\n]+\n)(?:\|[-:\s|]+\n)(?:\|[^\n]*\n?)+)/g,
+    (_match, table: string) => {
+      const id = tables.length;
+      tables.push(table.trimEnd());
+      return `\n${TABLE_PLACEHOLDER_PREFIX}${id}\n`;
+    },
+  );
+  return { text: shielded, tables };
+}
+
+function restoreMarkdownTables(text: string, tables: string[]): string {
+  return text.replace(
+    new RegExp(`${TABLE_PLACEHOLDER_PREFIX}(\\d+)`, "g"),
+    (_match, id: string) => `\n${tables[Number(id)] ?? ""}\n`,
+  );
+}
+
+function shouldSkipBulletLine(line: string): boolean {
+  const t = line.trim();
+  if (!t) return true;
+  if (t.startsWith("|")) return true;
+  if (t.startsWith("- ")) return true;
+  if (t.startsWith("```")) return true;
+  if (t.startsWith("##")) return true;
+  if (t.includes(TABLE_PLACEHOLDER_PREFIX)) return true;
+  if (/^Kriterium\s*\|/i.test(t)) return true;
+  return false;
+}
+
 function policySectionLinesToBullets(lines: string[]): string[] {
   return lines.map((line) => {
+    if (shouldSkipBulletLine(line)) return line;
     const t = line.trim();
-    if (!t) return "";
-    if (t.startsWith("- ") || t.startsWith("|") || t.startsWith("```")) return line;
     const labeled = t.match(/^(Bahn bevorzugen|Ausnahmen|Formulierungsvorschlag)\s*:\s*(.+)$/i);
     if (labeled) {
       const label =
         labeled[1].charAt(0).toUpperCase() + labeled[1].slice(1).toLowerCase();
       return `- **${label}:** ${labeled[2].trim()}`;
     }
+    return `- ${t}`;
+  });
+}
+
+function sourceSectionLinesToBullets(lines: string[]): string[] {
+  return lines.map((line) => {
+    if (shouldSkipBulletLine(line)) return line;
+    const t = line.trim();
     return `- ${t}`;
   });
 }
@@ -61,12 +119,7 @@ function normalizeSectionBullets(text: string, heading: string): string {
     const normalized =
       heading === "Für die Reiserichtlinie"
         ? policySectionLinesToBullets(lines)
-        : lines.map((line) => {
-            const t = line.trim();
-            if (!t) return "";
-            if (t.startsWith("- ") || t.startsWith("|") || t.startsWith("```")) return line;
-            return `- ${t}`;
-          });
+        : sourceSectionLinesToBullets(lines);
     const joined = normalized
       .filter((l, i, arr) => !(l === "" && arr[i + 1] === ""))
       .join("\n");
@@ -97,8 +150,10 @@ function wrapPolicySnippetInCodeBlock(text: string): string {
 export function normalizeTravelTrainVsFlightOutput(text: string): string {
   let out = text.replace(/\u2014/g, "-").replace(/ — /g, " - ");
   out = ensureTravelMarkdownHeadings(out);
-  out = normalizeSectionBullets(out, "Für die Reiserichtlinie");
+  const { text: shielded, tables } = shieldMarkdownTables(out);
+  out = normalizeSectionBullets(shielded, "Für die Reiserichtlinie");
   out = normalizeSectionBullets(out, "Quellen & Stand");
+  out = restoreMarkdownTables(out, tables);
   out = wrapPolicySnippetInCodeBlock(out);
   return out.trimEnd();
 }
