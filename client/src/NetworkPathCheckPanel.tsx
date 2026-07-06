@@ -6,7 +6,6 @@ import {
   formatHopLocation,
   formatPathSummary,
   formatResolvedTargetGeo,
-  isDomesticOrInternalPath,
   localTracerouteCommands,
   measureBrowserLatencies,
   type BrowserLatencyProbe,
@@ -44,9 +43,7 @@ function HopRow({ hop, isLast }: { hop: NetworkHop; isLast: boolean }) {
         className={`relative z-[1] flex h-6 w-6 shrink-0 items-center justify-center rounded-full border playground-text-tiny font-bold ${
           isForeign
             ? "border-amber-500/50 bg-amber-500/15 text-amber-900 dark:text-amber-100"
-            : hop.scope === "private"
-              ? "border-playground-border bg-playground-muted/10 text-playground-muted"
-              : "border-playground-border bg-playground-sidebar text-playground-ink"
+            : "border-playground-border bg-playground-sidebar text-playground-ink"
         }`}
         aria-hidden
       >
@@ -86,40 +83,93 @@ function HopRow({ hop, isLast }: { hop: NetworkHop; isLast: boolean }) {
   );
 }
 
-function PathSummaryBadge({ target }: { target: NetworkPathTargetResult }) {
-  const summary = formatPathSummary(target);
-  const abroad = target.pathSummary.crossesAbroad;
-  const internalOnly = isDomesticOrInternalPath(target) && !target.pathSummary.staysDomestic;
-  return (
-    <p
-      className={`playground-text-tiny rounded-lg px-2.5 py-1.5 font-medium ${
-        abroad
-          ? "border border-amber-500/30 bg-amber-500/10 text-amber-950 dark:text-amber-100"
-          : internalOnly
-            ? "border border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100"
-            : "border border-emerald-500/25 bg-emerald-500/10 text-emerald-950 dark:text-emerald-100"
-      }`}
-    >
-      {summary}
-    </p>
-  );
-}
-
-function TargetPathCard({ target }: { target: NetworkPathTargetResult }) {
+function MittwaldEndpointCard({
+  target,
+  browserLatency,
+}: {
+  target: NetworkPathTargetResult;
+  browserLatency: BrowserLatencyProbe[] | null;
+}) {
   const resolvedGeo = formatResolvedTargetGeo(target);
+  const mittwaldSiteMs = browserLatency?.find((p) => p.key === "mittwald")?.latencyMs ?? null;
+  const playgroundMs = browserLatency?.find((p) => p.key === "playground")?.latencyMs ?? null;
+  const isDe =
+    target.resolvedGeo?.countryCode === "DE" ||
+    target.resolvedGeo?.country?.toLowerCase().includes("germany") ||
+    target.resolvedGeo?.country?.toLowerCase().includes("deutsch");
 
   return (
-    <article className="flex min-w-0 flex-1 flex-col rounded-2xl border border-playground-border bg-playground-sidebar p-4 sm:p-5">
+    <article className="flex min-w-0 flex-1 flex-col rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.04] p-4 sm:p-5">
       <header className="mb-4 space-y-2">
         <h3 className="playground-text-body font-display font-semibold text-playground-ink">
           {target.label}
         </h3>
-        <PathSummaryBadge target={target} />
+        <p className="playground-text-tiny rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-2.5 py-1.5 font-medium text-emerald-950 dark:text-emerald-100">
+          {countryFlagEmoji("DE")} Hosting in Deutschland · kein Server-Traceroute nötig
+        </p>
         <p className="playground-text-tiny font-mono text-playground-muted break-all">{target.host}</p>
         {target.resolvedIp ? (
           <p className="playground-text-tiny text-playground-muted">
             Ziel-IP: <span className="font-mono text-playground-ink">{target.resolvedIp}</span>
-            {resolvedGeo ? ` · ${resolvedGeo}` : ""}
+            {resolvedGeo ? ` · ${resolvedGeo}` : isDe ? ` · ${countryFlagEmoji("DE")} Deutschland` : ""}
+          </p>
+        ) : null}
+      </header>
+
+      <div className="space-y-3">
+        <p className="playground-text-small text-playground-muted">
+          {target.endpointInfo ??
+            "Die KI-API liegt im mittwald-Rechenzentrum. Ein Traceroute vom Playground-Server wäre nur intern (Server → Server) und nicht aussagekräftig."}
+        </p>
+        <ul className="playground-text-tiny list-inside list-disc space-y-1 text-playground-muted">
+          <li>Verarbeitung in Deutschland (DSGVO)</li>
+          <li>Kein Datentransfer an OpenAI-/US-APIs</li>
+          <li>OpenAI-kompatible API unter obigem Endpunkt</li>
+        </ul>
+        {(mittwaldSiteMs != null || playgroundMs != null) && (
+          <div className="rounded-xl border border-playground-border bg-playground-sidebar/80 px-3 py-2.5">
+            <p className="playground-text-tiny font-bold text-playground-ink">
+              Latenz von deinem Browser
+            </p>
+            {mittwaldSiteMs != null ? (
+              <p className="playground-text-tiny text-playground-muted">
+                mittwald.de: <span className="font-mono text-playground-ink">{mittwaldSiteMs} ms</span>
+              </p>
+            ) : null}
+            {playgroundMs != null ? (
+              <p className="playground-text-tiny text-playground-muted">
+                Playground-API:{" "}
+                <span className="font-mono text-playground-ink">{playgroundMs} ms</span>
+              </p>
+            ) : null}
+          </div>
+        )}
+      </div>
+    </article>
+  );
+}
+
+function OpenAiTraceCard({ target }: { target: NetworkPathTargetResult }) {
+  const summary = formatPathSummary(target);
+
+  return (
+    <article className="flex min-w-0 flex-1 flex-col rounded-2xl border border-amber-500/25 bg-amber-500/[0.03] p-4 sm:p-5">
+      <header className="mb-4 space-y-2">
+        <h3 className="playground-text-body font-display font-semibold text-playground-ink">
+          {target.label}
+        </h3>
+        <p className="playground-text-tiny rounded-lg border border-amber-500/30 bg-amber-500/10 px-2.5 py-1.5 font-medium text-amber-950 dark:text-amber-100">
+          {summary}
+        </p>
+        <p className="playground-text-tiny text-playground-muted">
+          Traceroute vom Playground-Server — zeigt den Weg <strong className="font-semibold">ins Ausland</strong>{" "}
+          (typisch US/Cloudflare).
+        </p>
+        <p className="playground-text-tiny font-mono text-playground-muted break-all">{target.host}</p>
+        {target.resolvedIp ? (
+          <p className="playground-text-tiny text-playground-muted">
+            Ziel-IP: <span className="font-mono text-playground-ink">{target.resolvedIp}</span>
+            {formatResolvedTargetGeo(target) ? ` · ${formatResolvedTargetGeo(target)}` : ""}
           </p>
         ) : null}
       </header>
@@ -189,10 +239,7 @@ export function NetworkPathCheckPanel() {
   const location = result ? formatClientLocation(result.client.geo) : null;
   const mittwaldTarget = result?.targets.find((t) => t.key === "mittwald");
   const openaiTarget = result?.targets.find((t) => t.key === "openai");
-  const showAbroadCallout =
-    mittwaldTarget &&
-    isDomesticOrInternalPath(mittwaldTarget) &&
-    openaiTarget?.pathSummary.crossesAbroad;
+  const openaiSiteMs = browserLatency?.find((p) => p.key === "openai")?.latencyMs ?? null;
 
   return (
     <div className="w-full max-w-5xl space-y-4 text-left">
@@ -203,9 +250,10 @@ export function NetworkPathCheckPanel() {
               Routing & Latenz
             </h3>
             <p className="playground-text-small max-w-prose text-playground-muted">
-              Vergleicht den Netzwerkpfad zum mittwald AI Hosting mit dem Weg zur OpenAI-API. Die
-              Hop-Liste kommt vom Playground-Server; die Latenzbalken messen die Verbindung von{" "}
-              <strong className="font-semibold text-playground-ink">deinem Browser</strong>.
+              <strong className="font-semibold text-playground-ink">mittwald:</strong> Endpunkt in
+              Deutschland + Latenz von deinem Browser.{" "}
+              <strong className="font-semibold text-playground-ink">OpenAI:</strong> Traceroute vom
+              Playground-Server — zeigt, wie der Weg ins Ausland aussieht.
             </p>
           </div>
           <button
@@ -214,7 +262,7 @@ export function NetworkPathCheckPanel() {
             disabled={loading}
             className="shrink-0 rounded-xl bg-playground-send px-4 py-2.5 playground-text-small font-bold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            {loading ? "Messung läuft …" : "Traceroute starten"}
+            {loading ? "Messung läuft …" : "Routing prüfen"}
           </button>
         </div>
 
@@ -243,7 +291,7 @@ export function NetworkPathCheckPanel() {
             </div>
             <div className="space-y-3">
               <h4 className="playground-text-small font-bold text-playground-ink">
-                Latenz von deinem Browser
+                Latenz-Vergleich (dein Browser)
               </h4>
               {(browserLatency ?? []).map((probe) => (
                 <LatencyBar key={probe.key} probe={probe} />
@@ -251,29 +299,30 @@ export function NetworkPathCheckPanel() {
             </div>
           </section>
 
-          <p className="playground-text-tiny text-playground-muted">{result.probeOrigin.note}</p>
-
-          {showAbroadCallout ? (
+          {openaiTarget?.pathSummary.crossesAbroad ? (
             <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 px-4 py-3 sm:px-5">
               <p className="playground-text-small font-semibold text-amber-950 dark:text-amber-50">
                 OpenAI-Route verlässt Deutschland
               </p>
               <p className="mt-1 playground-text-tiny text-amber-900/90 dark:text-amber-100/90">
-                mittwald AI Hosting bleibt im internen/deutschen Pfad (
-                {mittwaldTarget?.pathSummary.hopCount ?? 0} Hops). Die OpenAI-API läuft über{" "}
-                {openaiTarget?.pathSummary.foreignHops ?? 0} Auslands-Hop(s)
-                {openaiTarget?.pathSummary.countries.length
+                Die OpenAI-API läuft über {openaiTarget.pathSummary.foreignHops} Auslands-Hop(s)
+                {openaiTarget.pathSummary.countries.length
                   ? ` (${openaiTarget.pathSummary.countries.join(" → ")})`
                   : ""}
-                — typisch US/Cloudflare-Anbindung, nicht DE-Hosting.
+                . mittwald AI Hosting bleibt im deutschen Rechenzentrum
+                {openaiSiteMs != null && mittwaldTarget
+                  ? ` — Browser-Latenz z. B. OpenAI ${openaiSiteMs} ms vs. mittwald ${browserLatency?.find((p) => p.key === "mittwald")?.latencyMs ?? "—"} ms`
+                  : ""}
+                .
               </p>
             </div>
           ) : null}
 
           <div className="grid gap-4 lg:grid-cols-2">
-            {result.targets.map((target) => (
-              <TargetPathCard key={target.key} target={target} />
-            ))}
+            {mittwaldTarget ? (
+              <MittwaldEndpointCard target={mittwaldTarget} browserLatency={browserLatency} />
+            ) : null}
+            {openaiTarget ? <OpenAiTraceCard target={openaiTarget} /> : null}
           </div>
 
           <section className="rounded-2xl border border-dashed border-playground-border bg-playground-muted/[0.03] px-4 py-4 sm:px-5">
@@ -281,7 +330,8 @@ export function NetworkPathCheckPanel() {
               Traceroute von deinem Gerät (Terminal)
             </h4>
             <p className="mt-1 playground-text-tiny text-playground-muted">
-              Für echte Hops ab deinem Netzwerk: Befehle lokal ausführen (macOS/Linux).
+              Für den <strong className="font-semibold">kompletten Pfad ab deinem Netzwerk</strong>{" "}
+              — besonders sinnvoll für den Vergleich mittwald vs. OpenAI:
             </p>
             <ul className="mt-3 space-y-2">
               {localTracerouteCommands().map((item) => (

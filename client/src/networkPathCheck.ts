@@ -40,6 +40,8 @@ export type NetworkPathTargetResult = {
   pathSummary: NetworkPathSummary;
   error: string | null;
   tool: string;
+  tracerouteSkipped?: boolean;
+  endpointInfo?: string;
 };
 
 export type NetworkPathCheckResponse = {
