@@ -136,6 +136,8 @@ import {
   isBonusChatGrantUsed,
   markBonusChatGrantUsed,
   PLAYGROUND_THEME_STORAGE_KEY,
+  readSidebarCollapsedPreference,
+  writeSidebarCollapsedPreference,
 } from "./playgroundBrowserStorage";
 import {
   clearWebSearchConsent,
@@ -807,7 +809,7 @@ export function App() {
   const [deleteAllChatsOpen, setDeleteAllChatsOpen] = useState(false);
   const [clearBrowserCacheOpen, setClearBrowserCacheOpen] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => readSidebarCollapsedPreference());
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
   const isMobileLayout = useIsMobileLayout();
   const closeMobileSidebar = useCallback(() => setMobileSidebarOpen(false), []);
@@ -816,7 +818,11 @@ export function App() {
     if (isMobileLayout) {
       setMobileSidebarOpen((v) => !v);
     } else {
-      setSidebarCollapsed((v) => !v);
+      setSidebarCollapsed((v) => {
+        const next = !v;
+        writeSidebarCollapsedPreference(next);
+        return next;
+      });
     }
   }, [isMobileLayout]);
   const sidebarExpanded = isMobileLayout ? mobileSidebarOpen : !sidebarCollapsed;
@@ -3256,7 +3262,8 @@ export function App() {
         />
       ) : null}
       <aside
-        className={`flex shrink-0 flex-col border-r border-playground-border bg-playground-sidebar px-2 transition-[width,transform] duration-200 ease-out ${
+        aria-hidden={!isMobileLayout && sidebarCollapsed}
+        className={`flex shrink-0 flex-col border-r border-playground-border bg-playground-sidebar px-2 transition-[width,border-color] duration-200 ease-out ${
           isMobileLayout
             ? `fixed inset-y-0 left-0 z-50 w-[min(100vw,329px)] max-w-[min(100vw,329px)] shadow-xl ${
                 mobileSidebarOpen
@@ -3264,7 +3271,7 @@ export function App() {
                   : "pointer-events-none -translate-x-full"
               }`
             : sidebarCollapsed
-              ? "w-[52px]"
+              ? "w-0 min-w-0 overflow-hidden border-r-0 px-0"
               : "w-[329px]"
         }`}
       >
@@ -3394,29 +3401,6 @@ export function App() {
           </div>
         ) : null}
 
-        {!isMobileLayout && sidebarCollapsed ? (
-          <div className="mt-2 flex flex-col items-center gap-1 px-1">
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200/80 dark:text-neutral-400 dark:hover:bg-neutral-800"
-              onClick={newChat}
-              disabled={busy || speechBusy}
-              title="Neuer Chat"
-              aria-label="Neuer Chat"
-            >
-              ✎
-            </button>
-            <button
-              type="button"
-              className="flex h-9 w-9 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-200/80 dark:text-neutral-400 dark:hover:bg-neutral-800"
-              onClick={() => setSidebarCollapsed(false)}
-              title="Sidebar ausklappen"
-            >
-              →
-            </button>
-          </div>
-        ) : null}
-
         <div className="mt-auto shrink-0 space-y-0 border-t border-playground-border py-3">
           {sidebarExpanded ? (
             <SessionCo2Footprint grams={sessionCo2Grams} className="px-3 pb-2" />
@@ -3458,17 +3442,27 @@ export function App() {
       <div className="flex min-w-0 flex-1 flex-col bg-playground-main">
         <div className="relative z-20 flex h-[56px] shrink-0 items-center justify-between gap-2 overflow-visible border-b border-playground-border px-3 sm:px-5">
           <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
-            {isMobileLayout ? (
-              <button
-                type="button"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-neutral-600 hover:bg-neutral-100 dark:text-neutral-400 dark:hover:bg-neutral-800"
-                onClick={openMobileSidebar}
-                aria-label="Chat-Verlauf öffnen"
-                title="Chat-Verlauf"
-              >
-                <span className="text-lg leading-none">≡</span>
-              </button>
-            ) : null}
+            <button
+              type="button"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-playground-ink hover:bg-playground-muted/5"
+              onClick={isMobileLayout ? openMobileSidebar : toggleSidebar}
+              aria-label={
+                isMobileLayout
+                  ? "Chat-Verlauf öffnen"
+                  : sidebarCollapsed
+                    ? "Seitenleiste öffnen"
+                    : "Seitenleiste einklappen"
+              }
+              title={
+                isMobileLayout
+                  ? "Chat-Verlauf"
+                  : sidebarCollapsed
+                    ? "Seitenleiste öffnen"
+                    : "Seitenleiste einklappen"
+              }
+            >
+              <MenuIcon />
+            </button>
             <label htmlFor="model-select" className="sr-only">
               {isModelCompareUseCase ? "Modell A" : "Modell"}
             </label>
