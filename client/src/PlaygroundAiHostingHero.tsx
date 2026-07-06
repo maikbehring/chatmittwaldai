@@ -109,19 +109,12 @@ const SHOWCASE_MODELS: ShowcaseModel[] = [
 ];
 
 const PILLAR_ICONS = {
-  models: "brand/hero/pillar-open-models.svg",
   hosting: "brand/hero/pillar-hosting-de.svg",
   api: "brand/hero/pillar-api.svg",
   responsible: "brand/hero/pillar-responsible-ai.svg",
 } as const;
 
 const PILLARS = [
-  {
-    image: PILLAR_ICONS.models,
-    iconClass: "bg-violet-500/10",
-    title: "Open Weight Modelle",
-    text: "Transparente, leistungsstarke KI",
-  },
   {
     image: PILLAR_ICONS.hosting,
     iconClass: "bg-emerald-500/10",
@@ -240,7 +233,7 @@ export function PlaygroundAiHostingHero({
                 zur Verfügung.
               </p>
             </div>
-            <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 sm:text-left">
+            <ul className="grid gap-3 sm:grid-cols-3 sm:gap-4 sm:text-left">
               {PILLARS.map((p) => (
                 <li key={p.title} className="flex flex-col items-center gap-1.5 sm:items-start">
                   <PillarIcon image={p.image} iconClass={p.iconClass} />
