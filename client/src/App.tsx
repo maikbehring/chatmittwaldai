@@ -46,7 +46,6 @@ import {
   composeBriefingText,
   emptyBriefingValues,
   getUseCaseById,
-  getTravelRouteValidationError,
   hasBriefingContent,
   isCopyableUseCase,
   PLAYGROUND_USE_CASES,
@@ -144,6 +143,10 @@ import {
   setWebSearchConsent,
 } from "./webSearchConsent";
 import { CopyTextButton, extractCopySections } from "./CopyTextButton";
+import {
+  getSameTravelRouteStaticResponse,
+  normalizeTravelTrainVsFlightOutput,
+} from "./travelTrainVsFlightOutput";
 import { PlaygroundLinksFooter } from "./PlaygroundExternalLinks";
 import { MittwaldLogo } from "./MittwaldLogo";
 import { PlaygroundHostingUpsell } from "./PlaygroundHostingUpsell";
@@ -2693,9 +2696,14 @@ export function App() {
     }
 
     if (activeUseCase?.id === "travel-train-vs-flight" && typeof userContent === "string" && !file) {
-      const travelRouteError = getTravelRouteValidationError(rawTextBeforeFormat);
-      if (travelRouteError) {
-        setAppError({ kind: "plain", message: travelRouteError });
+      const sameRouteResponse = getSameTravelRouteStaticResponse(rawTextBeforeFormat);
+      if (sameRouteResponse) {
+        trackPlaygroundUseCaseSend(activeUseCase);
+        setMessages([
+          ...messagesBeforeSend,
+          { role: "user", content: userContent },
+          { role: "assistant", content: sameRouteResponse },
+        ]);
         return;
       }
     }
@@ -3166,7 +3174,11 @@ export function App() {
 
         const cleanedContent =
           typeof last.content === "string"
-            ? stripHallucinatedCo2FromAssistantText(last.content)
+            ? activeUseCase?.id === "travel-train-vs-flight"
+              ? normalizeTravelTrainVsFlightOutput(
+                  stripHallucinatedCo2FromAssistantText(last.content),
+                )
+              : stripHallucinatedCo2FromAssistantText(last.content)
             : last.content;
 
         copy[copy.length - 1] = {
