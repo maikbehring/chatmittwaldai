@@ -822,7 +822,9 @@ Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzera
 - Flug-Spalte: **„nicht verfügbar“** oder **„nicht buchbar“**; keinen fiktiven Direktflug konstruieren.
 - CO₂ Flug: nur als **hypothetischer** Kurzstrecken-Richtwert mit Kennzeichnung, oder **„n. a.“**; Fokus auf Bahn.
 - Kurzstrecken: oft **RE/IC/Regionalbahn**, nicht ICE; Fahrzeiten aus Treffern, Widersprüche kurz einordnen.
-- **Keine** erfundenen internen Prozesse (z. B. „zentrales Buchungssystem“), wenn nicht in der Nutzeranfrage.
+- **Keine** erfundenen internen Prozesse (z. B. „zentrales Buchungssystem“, **mStudio**, Genehmigung durch Geschäftsführung), wenn nicht in der Nutzeranfrage.
+- Formulierungen wie „zwingend“ oder „verpflichtend“ nur als **Vorschlag** kennzeichnen, nicht als bestehende Regel darstellen.
+- **Keine** Social-Media-Posts als CO₂-Quelle; bevorzugt UBA, co2online, DB/myclimate oder Anbieter-Fahrplanseiten.
 
 **Zeitbezug:**
 - Nutze **[Playground — Zeitbezug]** als heutiges Datum.
