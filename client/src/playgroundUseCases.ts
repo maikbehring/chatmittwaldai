@@ -688,31 +688,101 @@ Absatz 2 …
 Wenn der Eingabetext unvollständig ist: mit Platzhalter […] arbeiten und offene Punkte in einem kurzen Hinweis-Satz am Ende nennen.`;
 
 /** Start/Ziel aus Nutzertext für Zug-vs.-Flug (Fallback: München – Berlin). */
+const TRAVEL_PLACE_SEGMENT = String.raw`[A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß.\- ]{0,48}?`;
+const TRAVEL_NON_PLACE = /^(flug|zug|bahn|reise|fahrt|vergleich|dienstreise|economy|person)$/i;
+
+function cleanTravelPlace(s: string): string {
+  return s
+    .replace(/\s+Hbf\b/gi, "")
+    .replace(/\s+Flughafen\b/gi, "")
+    .trim();
+}
+
+function travelPlacePair(origin: string, destination: string): { origin: string; destination: string } | null {
+  const o = cleanTravelPlace(origin);
+  const d = cleanTravelPlace(destination);
+  if (!o || !d || TRAVEL_NON_PLACE.test(o) || TRAVEL_NON_PLACE.test(d)) return null;
+  return { origin: o, destination: d };
+}
+
+/** Kurzform „Bielefeld München“ — nur bei kurzer Nachricht ohne nach/–/Strecke. */
+function tryBareSpacePlacePair(normalized: string): { origin: string; destination: string } | null {
+  if (/\bnach\b/i.test(normalized) || /\bStrecke\b/i.test(normalized) || /[–—-]/.test(normalized)) {
+    return null;
+  }
+  if (normalized.length > 56) return null;
+
+  const hbfPair = normalized.match(
+    /^([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß.\- ]*?)\s+Hbf\s+([A-Za-zÄÖÜäöüß][A-Za-zÄÖÜäöüß.\- ]*?)\s+Hbf\.?$/i,
+  );
+  if (hbfPair) return travelPlacePair(hbfPair[1], hbfPair[2]);
+
+  const tokens = normalized.replace(/\.$/, "").split(/\s+/);
+  if (tokens.length !== 2) return null;
+  return travelPlacePair(tokens[0], tokens[1]);
+}
+
 export function extractTravelRouteFromText(text: string): { origin: string; destination: string } {
   const normalized = text.replace(/\s+/g, " ").trim();
   const streckeMatch = normalized.match(
     /Strecke\s+(.+?)\s*(?:–|—|-|→|bis|nach)\s*(.+?)(?:\s*\(|\.|,|;|$)/i,
   );
   if (streckeMatch) {
-    const clean = (s: string) =>
-      s
-        .replace(/\s+Hbf\b/gi, "")
-        .replace(/\s+Flughafen\b/gi, "")
-        .trim();
-    const origin = clean(streckeMatch[1]);
-    const destination = clean(streckeMatch[2]);
-    if (origin && destination) return { origin, destination };
+    const pair = travelPlacePair(streckeMatch[1], streckeMatch[2]);
+    if (pair) return pair;
   }
   const vonNach = normalized.match(
     /(?:von|ab)\s+([A-Za-zÄÖÜäöüß.\- ]+?)\s+nach\s+([A-Za-zÄÖÜäöüß.\- ]+?)(?:\s*\(|\.|,|;|$)/i,
   );
   if (vonNach) {
-    return {
-      origin: vonNach[1].replace(/\s+Hbf\b/gi, "").trim(),
-      destination: vonNach[2].replace(/\s+Hbf\b/gi, "").trim(),
-    };
+    const pair = travelPlacePair(vonNach[1], vonNach[2]);
+    if (pair) return pair;
+  }
+  const bareNach = normalized.match(
+    new RegExp(`^(${TRAVEL_PLACE_SEGMENT})\\s+nach\\s+(${TRAVEL_PLACE_SEGMENT})\\.?$`, "i"),
+  );
+  if (bareNach) {
+    const pair = travelPlacePair(bareNach[1], bareNach[2]);
+    if (pair) return pair;
+  }
+  const bareDash = normalized.match(
+    new RegExp(`^(${TRAVEL_PLACE_SEGMENT})\\s*(?:–|—|-)\\s*(${TRAVEL_PLACE_SEGMENT})\\.?$`, "i"),
+  );
+  if (bareDash) {
+    const pair = travelPlacePair(bareDash[1], bareDash[2]);
+    if (pair) return pair;
+  }
+  const bareSpace = tryBareSpacePlacePair(normalized);
+  if (bareSpace) return bareSpace;
+  const ortNachGlobal = new RegExp(
+    `(${TRAVEL_PLACE_SEGMENT})\\s+nach\\s+(${TRAVEL_PLACE_SEGMENT})`,
+    "gi",
+  );
+  let ortNachMatch: RegExpExecArray | null;
+  let lastOrtNach: RegExpExecArray | null = null;
+  while ((ortNachMatch = ortNachGlobal.exec(normalized)) !== null) {
+    if (!TRAVEL_NON_PLACE.test(cleanTravelPlace(ortNachMatch[1]))) {
+      lastOrtNach = ortNachMatch;
+    }
+  }
+  if (lastOrtNach) {
+    const pair = travelPlacePair(lastOrtNach[1], lastOrtNach[2]);
+    if (pair) return pair;
   }
   return { origin: "München", destination: "Berlin" };
+}
+
+export function isSameTravelRoute(origin: string, destination: string): boolean {
+  return cleanTravelPlace(origin).toLowerCase() === cleanTravelPlace(destination).toLowerCase();
+}
+
+/** Client-Validierung vor Senden (z. B. „Rahden nach Rahden“). */
+export function getTravelRouteValidationError(text: string): string | null {
+  const { origin, destination } = extractTravelRouteFromText(text);
+  if (isSameTravelRoute(origin, destination)) {
+    return `Start und Ziel sind identisch („${origin}“). Bitte zwei verschiedene Orte nennen, z. B. „Espelkamp nach Rahden“.`;
+  }
+  return null;
 }
 
 /** Keine realistische europäische Bahnverbindung (z. B. New York – Berlin). */
@@ -728,8 +798,12 @@ export const TRAVEL_TRAIN_VS_FLIGHT_SYSTEM_PROMPT = `Du bist Nachhaltigkeits- un
 Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzeranfrage genannten Strecke** (1 Person, Standard/Economy) auf Basis der **Websuche-Treffer** im Kontext.
 
 **Strecke:**
-- Start und Ziel aus der Nutzeranfrage entnehmen. **Nicht** eine andere Strecke stillschweigend unterstellen.
+- Start und Ziel aus der **aktuellen** Nutzeranfrage entnehmen (auch Kurzform wie „Espelkamp nach Rahden“, „Berlin – München“ oder „Bielefeld München“). **Nicht** eine Strecke aus früheren Chat-Nachrichten übernehmen.
+- **Niemals** eine andere Strecke aus Websuche-Treffern verwenden, wenn Start/Ziel in der Anfrage klar anders heißen.
 - Wenn Treffer nur eine andere Strecke betreffen: ehrlich sagen; nur übertragbare Richtwerte nutzen.
+
+**Gleicher Ort als Start und Ziel (z. B. „Rahden nach Rahden“):**
+- Das ist **keine** Dienstreise-Strecke. Kurzempfehlung: Eingabefehler — bitte zwei **verschiedene** Orte nennen. **Keine** Vergleichstabelle mit einer anderen nahegelegenen Strecke (z. B. Espelkamp–Rahden).
 
 **Zwei Streckentypen (wichtig für die Kurzempfehlung):**
 - **Kurz/mittel (ca. bis 6 h reine Zugfahrt, z. B. Ruhr–Berlin, München–Berlin):** Bahn oft **tür-zu-tür konkurrenzfähig oder schneller**; Empfehlung Bahn aus Zeit **und** CO₂.
@@ -2467,7 +2541,7 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     composerPlaceholder:
       "Optional: Schwerpunkte, z. B. „nur CO₂“, „mit Kosten“, andere Strecke im Text nennen …",
     steps: [
-      "Strecke im Text anpassen (Demo: München–Berlin), z. B. „Strecke Dortmund Hbf – Berlin Hbf“.",
+      "Strecke im Text anpassen (Demo: München–Berlin), z. B. „Strecke Dortmund Hbf – Berlin Hbf“, „Espelkamp nach Rahden“ oder „Bielefeld München“.",
       "Websuche läuft automatisch zur genannten Strecke (Globus aktiv).",
       "Vergleichstabelle und Policy-Snippet per Kopieren-Button übernehmen.",
     ],

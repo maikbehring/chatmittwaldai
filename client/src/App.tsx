@@ -46,6 +46,7 @@ import {
   composeBriefingText,
   emptyBriefingValues,
   getUseCaseById,
+  getTravelRouteValidationError,
   hasBriefingContent,
   isCopyableUseCase,
   PLAYGROUND_USE_CASES,
@@ -2689,6 +2690,14 @@ export function App() {
         message: "Bitte beide Anbieter im Briefing eintragen.",
       });
       return;
+    }
+
+    if (activeUseCase?.id === "travel-train-vs-flight" && typeof userContent === "string" && !file) {
+      const travelRouteError = getTravelRouteValidationError(rawTextBeforeFormat);
+      if (travelRouteError) {
+        setAppError({ kind: "plain", message: travelRouteError });
+        return;
+      }
     }
 
     let mittwaldFeatureRequestsPayload: MittwaldFeatureRequestsResponse | undefined;
