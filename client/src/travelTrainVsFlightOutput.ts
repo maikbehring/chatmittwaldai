@@ -8,25 +8,45 @@ const TRAVEL_HEADINGS = [
   "Copy & Paste — Policy-Snippet",
 ] as const;
 
+const POLICY_SNIPPET_HEADING = "## Copy & Paste — Policy-Snippet";
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function normalizeTravelHeadingLine(line: string): string {
+  const trimmed = line.trim();
+  if (/^Copy\s*&\s*Paste\s*[-–—]\s*Policy-Snippet$/i.test(trimmed)) {
+    return POLICY_SNIPPET_HEADING;
+  }
+  if ((TRAVEL_HEADINGS as readonly string[]).includes(trimmed)) {
+    return `## ${trimmed}`;
+  }
+  if (trimmed.startsWith("##")) return line;
+  return line;
 }
 
 /** Plain-Text-Überschriften in Markdown-## umwandeln. */
 export function ensureTravelMarkdownHeadings(text: string): string {
   return text
     .split("\n")
-    .map((line) => {
-      const trimmed = line.trim();
-      if (
-        (TRAVEL_HEADINGS as readonly string[]).includes(trimmed) &&
-        !trimmed.startsWith("##")
-      ) {
-        return `## ${trimmed}`;
-      }
-      return line;
-    })
+    .map((line) => normalizeTravelHeadingLine(line))
     .join("\n");
+}
+
+function policySectionLinesToBullets(lines: string[]): string[] {
+  return lines.map((line) => {
+    const t = line.trim();
+    if (!t) return "";
+    if (t.startsWith("- ") || t.startsWith("|") || t.startsWith("```")) return line;
+    const labeled = t.match(/^(Bahn bevorzugen|Ausnahmen|Formulierungsvorschlag)\s*:\s*(.+)$/i);
+    if (labeled) {
+      const label =
+        labeled[1].charAt(0).toUpperCase() + labeled[1].slice(1).toLowerCase();
+      return `- **${label}:** ${labeled[2].trim()}`;
+    }
+    return `- ${t}`;
+  });
 }
 
 function normalizeSectionBullets(text: string, heading: string): string {
@@ -36,24 +56,31 @@ function normalizeSectionBullets(text: string, heading: string): string {
   );
   return text.replace(pattern, (_match, header: string, body: string) => {
     const lines = body.split("\n");
-    const normalized = lines.map((line) => {
-      const t = line.trim();
-      if (!t) return "";
-      if (t.startsWith("- ") || t.startsWith("|") || t.startsWith("```")) return line;
-      return `- ${t}`;
-    });
-    const joined = normalized.filter((l, i, arr) => !(l === "" && arr[i + 1] === "")).join("\n");
+    const normalized =
+      heading === "Für die Reiserichtlinie"
+        ? policySectionLinesToBullets(lines)
+        : lines.map((line) => {
+            const t = line.trim();
+            if (!t) return "";
+            if (t.startsWith("- ") || t.startsWith("|") || t.startsWith("```")) return line;
+            return `- ${t}`;
+          });
+    const joined = normalized
+      .filter((l, i, arr) => !(l === "" && arr[i + 1] === ""))
+      .join("\n");
     return `${header}${joined.trimEnd()}\n\n`;
   });
 }
 
 function wrapPolicySnippetInCodeBlock(text: string): string {
-  const marker = "## Copy & Paste — Policy-Snippet";
-  const idx = text.indexOf(marker);
-  if (idx < 0) return text;
+  const markerPattern = /## Copy & Paste\s*[-–—]\s*Policy-Snippet/i;
+  const match = text.match(markerPattern);
+  if (!match || match.index == null) return text;
 
-  const before = text.slice(0, idx + marker.length);
-  const after = text.slice(idx + marker.length).replace(/^\s*\n/, "");
+  const idx = match.index;
+  const markerLen = match[0].length;
+  const before = `${text.slice(0, idx)}${POLICY_SNIPPET_HEADING}`;
+  const after = text.slice(idx + markerLen).replace(/^\s*\n/, "");
   if (after.startsWith("```")) return text;
 
   const footerIdx = after.search(/\n\n(?:KI-Entwurf|Dieser KI-Entwurf)/i);

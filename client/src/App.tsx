@@ -558,8 +558,12 @@ const ChatMessageRow = memo(function ChatMessageRow({
       </div>
     );
   }
-  const assistantPlain = stripHallucinatedCo2FromAssistantText(
-    assistantMessagePlainText(message.content),
+  const assistantPlain = (
+    activeUseCaseId === "travel-train-vs-flight"
+      ? normalizeTravelTrainVsFlightOutput(
+          stripHallucinatedCo2FromAssistantText(assistantMessagePlainText(message.content)),
+        )
+      : stripHallucinatedCo2FromAssistantText(assistantMessagePlainText(message.content))
   ).trim();
   const isAiHostingGuide = activeUseCaseId === "ai-hosting-guide";
   const isAiHostingTariffAdvisor = activeUseCaseId === "ai-hosting-tarifberater";
