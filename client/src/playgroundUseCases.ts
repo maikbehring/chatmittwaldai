@@ -2475,17 +2475,17 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     title: "Traceroute-Check",
     subtitle: "Routing · Latenz",
     description:
-      "Hops und Latenz vom Playground-Server zu mittwald AI Hosting vs. OpenAI — plus Browser-Latenz von deinem Gerät. Für echte Hops lokal: Terminal-Befehle zum Kopieren.",
+      "Vergleicht mittwald AI Hosting (DE-Endpunkt, Browser-Latenz) mit dem Traceroute zur OpenAI-API (Route ins Ausland). Für den vollen Pfad ab deinem Netzwerk: Terminal-Befehle.",
     modelId: MODEL_MINISTRAL,
     modelLabel: "Kein Modell nötig",
     systemPrompt:
-      "Du bist Netzwerk-Berater. Der Nutzer hat den Traceroute-Check im Playground genutzt. Erkläre Hop-Listen und Latenz kurz auf Deutsch, wenn danach gefragt wird.",
+      "Du bist Netzwerk-Berater. Der Nutzer hat den Routing-Check im Playground genutzt. Erkläre: mittwald = DE-Hosting ohne sinnvollen Server-Trace; OpenAI = Auslands-Route. Kurz auf Deutsch.",
     composerPlaceholder:
       "Optional: Frage zum Ergebnis — z. B. „Warum ist OpenAI langsamer?“",
     steps: [
-      "„Traceroute starten“ — parallele Messung zu mittwald und OpenAI.",
-      "Hop-Liste (Server) und Latenzbalken (dein Browser) vergleichen.",
-      "Optional: Terminal-Befehle für Traceroute von deinem Rechner.",
+      "„Routing prüfen“ — OpenAI-Traceroute + mittwald Endpunkt-Info.",
+      "Latenz-Vergleich von deinem Browser (mittwald vs. OpenAI).",
+      "Optional: Terminal-Traceroute von deinem Rechner für beide Ziele.",
     ],
     sendButtonLabel: "Frage stellen",
     prefersNetworkPathCheck: true,

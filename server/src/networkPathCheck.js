@@ -8,16 +8,19 @@ import os from "node:os";
 
 /** @typedef {{ hopCount: number; publicHops: number; foreignHops: number; countries: string[]; staysDomestic: boolean; crossesAbroad: boolean; firstForeignCountry: string | null }} NetworkPathSummary */
 
-/** @typedef {{ key: string; host: string; label: string; resolvedIp: string | null; resolvedGeo: IpGeo | null; hops: NetworkHop[]; pathSummary: NetworkPathSummary; error: string | null; tool: string }} NetworkPathResult */
+/** @typedef {{ key: string; host: string; label: string; resolvedIp: string | null; resolvedGeo: IpGeo | null; hops: NetworkHop[]; pathSummary: NetworkPathSummary; error: string | null; tool: string; tracerouteSkipped?: boolean; endpointInfo?: string }} NetworkPathResult */
 
 export const NETWORK_PATH_TARGETS = {
   mittwald: {
     host: "llm.aihosting.mittwald.de",
     label: "mittwald AI Hosting",
+    /** Server-Traceroute wäre nur RZ-intern (Server → Server) — nicht aussagekräftig. */
+    traceroute: false,
   },
   openai: {
     host: "api.openai.com",
     label: "OpenAI API",
+    traceroute: true,
   },
 };
 
@@ -302,6 +305,23 @@ export async function buildNetworkPathCheck(req, targetKeys) {
         resolvedIp = null;
       }
 
+      if (target.traceroute === false) {
+        return {
+          key,
+          host: target.host,
+          label: target.label,
+          resolvedIp,
+          resolvedGeo: null,
+          hops: [],
+          pathSummary: summarizePath([]),
+          error: null,
+          tool: "none",
+          tracerouteSkipped: true,
+          endpointInfo:
+            "Die API läuft im mittwald-Rechenzentrum in Deutschland. Ein Traceroute vom Playground-Server wäre nur eine interne Server-zu-Server-Verbindung im RZ — dafür nutze die Browser-Latenz oder einen lokalen Traceroute von deinem Rechner.",
+        };
+      }
+
       const traced = await runTraceToHost(target.host);
       return {
         key,
@@ -362,7 +382,7 @@ export async function buildNetworkPathCheck(req, targetKeys) {
       label: "Playground-Server",
       hostname: probeHostname || undefined,
       note:
-        "Traceroute-Hops starten am Server, auf dem der Playground läuft (typischerweise mittwald-Rechenzentrum). Die Browser-Latenz im UI zeigt die Verbindung von deinem Gerät.",
+        "Traceroute wird nur für die OpenAI-API ausgeführt (Route ins Ausland). mittwald AI Hosting: Endpunkt-Info und Browser-Latenz — kein Server-Trace, weil der Playground im selben RZ liegt.",
     },
     targets: pathResults,
   };
