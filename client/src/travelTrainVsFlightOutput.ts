@@ -93,10 +93,106 @@ function wrapPolicySnippetInCodeBlock(text: string): string {
   return `${before}\n\n\`\`\`\n${snippetBody}\n\`\`\`${footer}`;
 }
 
+const INVENTED_PROCESS_REPLACEMENTS: ReadonlyArray<[RegExp, string]> = [
+  [/\büber\s+das\s+mStudio\s+oder\s+direkt\s+im\s+Kundencenter\b/gi, "über das zentrale Reise-/Buchungstool"],
+  [/\büber\s+das\s+mStudio\s+oder\b/gi, "über das zentrale Reise-/Buchungstool oder"],
+  [/\bim\s+mStudio\b/gi, "im zentralen Reise-/Buchungstool"],
+  [/\büber\s+das\s+mStudio\b/gi, "über das zentrale Reise-/Buchungstool"],
+  [/\bvia\s+mStudio\b/gi, "über das zentrale Reise-/Buchungstool"],
+  [/\bdirekt\s+im\s+Kundencenter\b/gi, "über das zentrale Reise-/Buchungstool"],
+  [/\bim\s+Kundencenter\b/gi, "im zentralen Reise-/Buchungstool"],
+  [/\bKundencenter\b/g, "zentrales Reise-/Buchungstool"],
+  [/\bmStudio\b/g, "zentrales Reise-/Buchungstool"],
+];
+
+function sanitizeTravelInventedProcesses(text: string): string {
+  let out = text;
+  for (const [pattern, replacement] of INVENTED_PROCESS_REPLACEMENTS) {
+    out = out.replace(pattern, replacement);
+  }
+  return out;
+}
+
+function softenMandatoryPolicyWording(text: string): string {
+  return text
+    .replace(/\bist\s+ausschließlich\s+die\s+Nutzung\b/gi, "wird die Nutzung")
+    .replace(/\bist\s+ausschließlich\b/gi, "wird vorrangig")
+    .replace(/\bausschließlich\s+die\s+Nutzung\b/gi, "die Nutzung")
+    .replace(/\bausschließlich\b/gi, "vorrangig")
+    .replace(/\bist\s+gestattet\b/gi, "wird empfohlen")
+    .replace(/\bsind\s+gestattet\b/gi, "werden empfohlen")
+    .replace(/\bgestattet\b/gi, "empfohlen")
+    .replace(/\bpriorisiert\s+werden\s+sollen\b/gi, "nach Möglichkeit genutzt werden können")
+    .replace(/\bist\s+vorgeschrieben\b/gi, "kann vorgesehen werden")
+    .replace(/\bwird\s+vorgeschrieben\b/gi, "kann vorgesehen werden")
+    .replace(/\bist\s+verpflichtend\b/gi, "ist empfohlen")
+    .replace(/\bwird\s+verpflichtend\b/gi, "wird empfohlen");
+}
+
+function markdownTableRow(cells: string[]): string {
+  return `| ${cells.join(" | ")} |`;
+}
+
+function convertTabularLinesToMarkdownTable(lines: string[]): string[] | null {
+  const rows = lines
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => line.split("\t").map((cell) => cell.trim()))
+    .filter((cells) => cells.length >= 3);
+
+  if (rows.length < 2) return null;
+  const colCount = Math.max(...rows.map((row) => row.length));
+  const padRow = (cells: string[]) => {
+    const padded = [...cells];
+    while (padded.length < colCount) padded.push("");
+    return markdownTableRow(padded);
+  };
+
+  return [
+    padRow(rows[0]),
+    markdownTableRow(Array.from({ length: colCount }, () => "---")),
+    ...rows.slice(1).map(padRow),
+  ];
+}
+
+/** Tab-getrennte Vergleichstabellen in Pipe-Markdown umwandeln. */
+function ensureTravelComparisonTable(text: string): string {
+  const pattern = /(## Vergleich \(Richtwerte\)\s*\n)([\s\S]*?)(?=\n## |$)/i;
+  return text.replace(pattern, (match, header: string, body: string) => {
+    if (/\|\s*---\s*\|/.test(body)) return match;
+
+    const lines = body.split("\n");
+    const tableStart = lines.findIndex((line) => line.includes("\t") && line.trim().length > 0);
+    if (tableStart < 0) return match;
+
+    let tableEnd = tableStart;
+    while (tableEnd < lines.length) {
+      const t = lines[tableEnd].trim();
+      if (!t) break;
+      if (!t.includes("\t") && tableEnd > tableStart) break;
+      if (t.includes("\t")) tableEnd += 1;
+      else break;
+    }
+
+    const converted = convertTabularLinesToMarkdownTable(lines.slice(tableStart, tableEnd));
+    if (!converted) return match;
+
+    const rebuilt = [
+      ...lines.slice(0, tableStart),
+      ...converted,
+      ...lines.slice(tableEnd),
+    ].join("\n");
+    return `${header}${rebuilt.trimEnd()}\n\n`;
+  });
+}
+
 /** Nach dem Modell: Bullets, Codeblock, Überschriften. */
 export function normalizeTravelTrainVsFlightOutput(text: string): string {
   let out = text.replace(/\u2014/g, "-").replace(/ — /g, " - ");
+  out = sanitizeTravelInventedProcesses(out);
+  out = softenMandatoryPolicyWording(out);
   out = ensureTravelMarkdownHeadings(out);
+  out = ensureTravelComparisonTable(out);
   out = normalizeSectionBullets(out, "Für die Reiserichtlinie");
   out = normalizeSectionBullets(out, "Quellen & Stand");
   out = wrapPolicySnippetInCodeBlock(out);
