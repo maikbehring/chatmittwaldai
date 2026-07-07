@@ -4,6 +4,8 @@
  * Optional: SerpAPI (Google), Serper (Google) — jeweils per API-Key in .env.
  */
 
+import { annotateSearchResult, sortSearchResultsByReliability } from "./webSearchQuality.js";
+
 const MAX_QUERY_LEN = 2000;
 const DEFAULT_MAX_RESULTS = 5;
 
@@ -59,14 +61,19 @@ export function unwrapDdgUrl(href) {
 }
 
 function normalizeResults(items, maxResults) {
-  return items
+  const annotated = items
     .filter((r) => r.url && r.title)
     .slice(0, maxResults)
-    .map((r) => ({
-      title: r.title.slice(0, 300),
-      url: unwrapDdgUrl(r.url).slice(0, 2000),
-      snippet: (r.snippet ?? "").slice(0, 600),
-    }));
+    .map((r) => {
+      const base = {
+        title: r.title.slice(0, 300),
+        url: unwrapDdgUrl(r.url).slice(0, 2000),
+        snippet: (r.snippet ?? "").slice(0, 600),
+      };
+      const meta = annotateSearchResult(base);
+      return { ...base, ...meta };
+    });
+  return sortSearchResultsByReliability(annotated);
 }
 
 function isDdgBotChallenge(html) {
@@ -408,6 +415,6 @@ export async function searchWebMulti(rawQueries, options = {}) {
   return {
     query: queries.join(" · "),
     provider,
-    results: combined.slice(0, maxTotal),
+    results: sortSearchResultsByReliability(combined).slice(0, maxTotal),
   };
 }

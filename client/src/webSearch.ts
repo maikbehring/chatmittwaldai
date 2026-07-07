@@ -2,6 +2,12 @@ import { apiUrl } from "./appPaths";
 import { ensureOkApiResponse, type PlaygroundRateLimits } from "./apiErrors";
 import { playgroundApiHeaders } from "./playgroundSessionApiKey";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
+import {
+  formatSearchResultKindLabel,
+  formatSearchResultReliabilityLabel,
+  WEB_SEARCH_ANSWER_RULES,
+  type WebSearchResultQuality,
+} from "./webSearchQuality";
 
 /** Server kürzt ohnehin — großzügig für LLM-Verdichtung. */
 export const WEB_SEARCH_CHAT_EXCERPT_MAX_CHARS = 16000;
@@ -10,17 +16,19 @@ export type WebSearchResult = {
   title: string;
   url: string;
   snippet: string;
-};
+} & WebSearchResultQuality;
 
-function classifyWebSearchResultUrl(url: string): string | null {
-  if (/linkedin\.com\/in\//i.test(url)) return "LinkedIn-Profil";
-  if (/linkedin\.com\/posts\//i.test(url)) {
-    return "LinkedIn-Beitrag (Snippet kann Zitat einer anderen Person sein — nicht dem Post-Autor zuschreiben)";
-  }
-  if (/northdata\.de|handelsregister|unternehmensregister/i.test(url)) {
-    return "Register-Aggregator (Firmenhistorie kann fehlerhaft sein)";
-  }
-  return null;
+function formatSearchResultBlock(r: WebSearchResult, index: number): string {
+  const kind = formatSearchResultKindLabel(r.kind);
+  const reliability = formatSearchResultReliabilityLabel(r.reliability);
+  const meta = [
+    kind ? `Typ: ${kind}` : null,
+    reliability ? `Zuverlässigkeit: ${reliability}` : null,
+    r.caveat ? `Hinweis: ${r.caveat}` : null,
+  ]
+    .filter(Boolean)
+    .join("\n");
+  return `[${index}] ${r.title}\n${meta ? `${meta}\n` : ""}URL: ${r.url}\n${r.snippet || "(kein Snippet)"}`;
 }
 
 export type WebSearchResponse = {
@@ -121,11 +129,7 @@ export function formatWebSearchContext(data: WebSearchResponse): string {
       "Sage dem Nutzer, dass die Websuche leer war — nicht behaupten, du hättest allgemeines Trainingswissen als Live-Suche genutzt."
     );
   }
-  const lines = data.results.map((r, i) => {
-    const kind = classifyWebSearchResultUrl(r.url);
-    const kindLine = kind ? `Typ: ${kind}\n` : "";
-    return `[${i + 1}] ${r.title}\n${kindLine}URL: ${r.url}\n${r.snippet || "(kein Snippet)"}`;
-  });
+  const lines = data.results.map((r, i) => formatSearchResultBlock(r, i + 1));
   return (
     `${formatPlaygroundTodayContext()}\n\n` +
     `[Playground-Websuche — vom Server geladene Treffer (${data.provider}). ` +
@@ -134,14 +138,9 @@ export function formatWebSearchContext(data: WebSearchResponse): string {
         : `Die an Google geschickte Suchzeile („${data.query}“) wurde aus deinem Kontext plus aktueller Eingabe automatisch zu einer Kurz-Anfrage verdichtet. `) +
       `]\n` +
     "WICHTIG: Diese Ergebnisse sind frisch aus dem Internet. Du darfst sie als Quelle nutzen. " +
-    "Behaupte NICHT, du könntest nicht im Web suchen oder hättest keinen Live-Zugriff — die Suche wurde bereits für den Nutzer durchgeführt. " +
-    "Prüfe Fest- und Terminangaben gegen das oben genannte heutige Datum (z. B. ob ein Event heute liegt). " +
-    "Viele Treffer haben leere Snippets — werte dann **Titel** aktiv aus (z. B. Ergebnisse, Datumsangaben, Teamnamen). " +
-    "**Personen & Biografien:** Snippets aus LinkedIn-**Beiträgen** (/posts/) nicht blind dem Profil-Inhaber zuschreiben — oft Zitate Dritter. " +
-    "Primärquelle für Rollen: LinkedIn-**Profil** (/in/). Register-Snippets („vormals … GmbH“) nicht als gesicherte Firmenhistorie wiedergeben. " +
-    "Mehrere widersprüchliche Snippets nicht zu einer Biografie fusionieren — Unsicherheit nennen oder weglassen. " +
-    "Bei **Maik Behring**: verifizierten [Playground — Maintainer Maik Behring]-Kontext aus den Systemnachrichten bevorzugen. " +
-    "Beantworte die Frage anhand der Treffer; nenne passende URLs. Wenn die Treffer nicht reichen, sage das ehrlich.\n\n" +
+    "Behaupte NICHT, du könntest nicht im Web suchen oder hättest keinen Live-Zugriff — die Suche wurde bereits für den Nutzer durchgeführt.\n\n" +
+    `${WEB_SEARCH_ANSWER_RULES}\n\n` +
+    "Bei **Maik Behring**: verifizierten [Playground — Maintainer Maik Behring]-Kontext aus den Systemnachrichten bevorzugen.\n\n" +
     lines.join("\n\n")
   );
 }
