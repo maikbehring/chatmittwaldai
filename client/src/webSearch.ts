@@ -140,7 +140,7 @@ export function formatWebSearchContext(data: WebSearchResponse): string {
     "**Personen & Biografien:** Snippets aus LinkedIn-**Beiträgen** (/posts/) nicht blind dem Profil-Inhaber zuschreiben — oft Zitate Dritter. " +
     "Primärquelle für Rollen: LinkedIn-**Profil** (/in/). Register-Snippets („vormals … GmbH“) nicht als gesicherte Firmenhistorie wiedergeben. " +
     "Mehrere widersprüchliche Snippets nicht zu einer Biografie fusionieren — Unsicherheit nennen oder weglassen. " +
-    "Bei **Maik Behring**: verifizierten [Playground — Maintainer Maik Behring]-Kontext aus den Systemnachrichten bevorzugen. " +
+    "Bei **Maik Behring**: [Playground — Maintainer Maik Behring]-Kontext bevorzugen — **Tante Else GmbH** als Inhaber/Geschäftsführer nennen; **niemals** „vormals Robert Meyer Verwaltungs GmbH“ (falscher Register-Fehler). " +
     "Beantworte die Frage anhand der Treffer; nenne passende URLs. Wenn die Treffer nicht reichen, sage das ehrlich.\n\n" +
     lines.join("\n\n")
   );
