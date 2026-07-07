@@ -826,8 +826,9 @@ Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzera
 - Flug-Spalte: **„nicht verfügbar“** oder **„nicht buchbar“**; keinen fiktiven Direktflug konstruieren.
 - CO₂ Flug: nur als **hypothetischer** Kurzstrecken-Richtwert mit Kennzeichnung, oder **„n. a.“**; Fokus auf Bahn.
 - Kurzstrecken: oft **RE/IC/Regionalbahn**, nicht ICE; Fahrzeiten aus Treffern, Widersprüche kurz einordnen.
-- **Keine** erfundenen internen Prozesse (z. B. „zentrales Buchungssystem“, **mStudio**, Genehmigung durch Geschäftsführung), wenn nicht in der Nutzeranfrage.
-- Formulierungen wie „zwingend“ oder „verpflichtend“ nur als **Vorschlag** kennzeichnen, nicht als bestehende Regel darstellen.
+- **Keine** erfundenen internen Prozesse (z. B. „zentrales Buchungssystem“, **mStudio**, Concur, SAP, Genehmigung durch Geschäftsführung), wenn nicht in der Nutzeranfrage.
+- Stattdessen neutral: „zentrales Reise-/Buchungstool“, „interner Reiseantrag“, „Vorgesetzte/r“.
+- **Formulierungsvorschlag** immer als **Beispieltext in Anführungszeichen**; Wörter wie „vorgeschrieben“, „verpflichtend“, „zwingend“ **nur** innerhalb des Zitats und nie als bestehende Firmenregel.
 - **Keine** Social-Media-Posts als CO₂-Quelle; bevorzugt UBA, co2online, DB/myclimate oder Anbieter-Fahrplanseiten.
 
 **Zeitbezug:**
@@ -838,17 +839,18 @@ Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzera
 - Zugfahrt: **Kurz/regional** oft **ca. 1–2,5 h** (z. B. Hannover–Espelkamp RE); **Inland mittel** ca. **3–4,5 h**; **lang** bis **ca. 8–9,5 h** (z. B. Wien–Berlin ICE).
 - Tür-zu-tür Flug: oft **ca. 4–5,5 h** inkl. Flughafen; Bahn bei Langstrecken oft **länger** tür-zu-tür als Flug.
 - CO₂ pro Person (Richtwerte): Bahn oft **ca. 5–35 kg** (kurz/regional niedriger, längere Relation höher); Flug oft **ca. 80–250 kg** je nach Entfernung, nur wenn ein Flug überhaupt existiert.
+- CO₂ Bahn **Inland ~150–300 km:** eher **ca. 12–25 kg**; **~400–600 km:** eher **ca. 18–30 kg**; Werte unter 10 kg nur bei sehr kurzen RE-Strecken. Immer als **geschätzter Richtwert** kennzeichnen.
 - Nightjet/Nachtzug nur erwähnen, wenn relevant; nicht mit Tages-ICE für die Standard-Dienstreise vermischen.
 - Keine erfundenen Live-Preise ohne Treffer.
-- **Umstiege:** „Direktverbindung“ oder „ohne Umstieg“ nur, wenn Websuche-Treffer das für **diese** Strecke bestätigen; sonst typische Umstiege und Knotenbahnhöfe nennen (z. B. Köln, Dortmund, Hannover).
-- **Anbieter:** FlixTrain, Nachtzug oder Regionalanbieter nur nennen, wenn sie in den Treffern für die genannte Strecke vorkommen.
-- CO₂ Bahn **Inland ~150–300 km:** eher **ca. 12–25 kg**; Werte unter 10 kg nur bei sehr kurzen RE-Strecken.
+- **Umstiege:** Wenn Treffer **direkte ICE/IC-Verbindungen** für die Strecke nennen, **„überwiegend direkt“** oder die schnellste Direktzeit ausweisen. „Direktverbindung“ oder „ohne Umstieg“ nur, wenn Treffer das bestätigen; sonst typische Umstiege und Knotenbahnhöfe nennen (z. B. Köln, Hannover).
+- **Anbieter:** FlixTrain, Nachtzug oder Regionalanbieter nur nennen, wenn sie in den Treffern für die genannte Strecke vorkommen; Nachtzug nicht zur Standard-Dienstreise mischen.
+- **Flug-Ausnahmen:** Nur wenn ein **realistischer Linienflug** auf der Relation existiert. Keinen fiktiven Umweg über Drehkreuz-Flughäfen skizzieren, wenn ohnehin kein Linienflug buchbar ist.
 
 **Format (streng):**
 - Keine Gedankenstriche ( — ) in der Ausgabe.
 - Jede Überschrift als \`## …\` mit Leerzeile davor und danach.
 - **Für die Reiserichtlinie** und **Quellen & Stand:** nur Markdown-Bullets mit \`- \` (ein Punkt pro Zeile).
-- **Vergleichstabelle:** Jede Zeile separat; Leerzeile vor und nach der Tabelle. In der Spalte Anmerkung/Quelle **keine** anonymen Verweise wie „[1]“; Domain oder Kurztitel.
+- **Vergleichstabelle:** zwingend **Pipe-Markdown** (\`| Kriterium | Bahn | Flug | Anmerkung/Quelle |\`), **keine Tabs**. Jede Zeile separat; Leerzeile vor und nach der Tabelle. In der Spalte Anmerkung/Quelle **keine** anonymen Verweise wie „[1]“; Domain oder Kurztitel.
 - **Policy-Snippet** nur im Markdown-Codeblock (\`\`\` … \`\`\`).
 - **Quellen & Stand:** Bullets mit Titel/Domain, Jahr wenn erkennbar, **vollständige URL**.
 
@@ -918,7 +920,9 @@ export function formatTravelTrainVsFlightSubmission(text: string): string {
   return (
     scopeNote +
     `Stand/Recherche ${year}; Zahlen als Richtwerte kennzeichnen.\n` +
-    `Umstiege und Verbindungsart (direkt vs. Umstieg) nur aus Treffern; nichts erfinden.\n` +
+    `Keine Produkt- oder Toolnamen (z. B. mStudio, Concur) erfinden; neutral „zentrales Reise-/Buchungstool“.\n` +
+    `Formulierungsvorschlag nur als Beispiel in Anführungszeichen, keine bestehende Regel behaupten.\n` +
+    `Umstiege und Verbindungsart (direkt vs. Umstieg) nur aus Treffern; bei Direkt-ICE in Treffern nicht pauschal Umstieg behaupten.\n` +
     `Heutiges Datum aus [Playground — Zeitbezug] für „aktuell“ verwenden.\n\n` +
     `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`
   );
