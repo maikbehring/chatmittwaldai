@@ -826,9 +826,10 @@ Aufgabe: Vergleiche **Bahn (ICE/IC/ÖBB)** vs. **Flug** auf der **in der Nutzera
 - Flug-Spalte: **„nicht verfügbar“** oder **„nicht buchbar“**; keinen fiktiven Direktflug konstruieren.
 - CO₂ Flug: nur als **hypothetischer** Kurzstrecken-Richtwert mit Kennzeichnung, oder **„n. a.“**; Fokus auf Bahn.
 - Kurzstrecken: oft **RE/IC/Regionalbahn**, nicht ICE; Fahrzeiten aus Treffern, Widersprüche kurz einordnen.
-- **Keine** erfundenen internen Prozesse (z. B. „zentrales Buchungssystem“, **mStudio**, Concur, SAP, Genehmigung durch Geschäftsführung), wenn nicht in der Nutzeranfrage.
+- **Keine** erfundenen internen Prozesse (z. B. „zentrales Buchungssystem“, **mStudio**, **Kundencenter**, Concur, SAP, Genehmigung durch Geschäftsführung), wenn nicht in der Nutzeranfrage.
 - Stattdessen neutral: „zentrales Reise-/Buchungstool“, „interner Reiseantrag“, „Vorgesetzte/r“.
-- **Formulierungsvorschlag** immer als **Beispieltext in Anführungszeichen**; Wörter wie „vorgeschrieben“, „verpflichtend“, „zwingend“ **nur** innerhalb des Zitats und nie als bestehende Firmenregel.
+- **Formulierungsvorschlag** immer als **Beispieltext in Anführungszeichen**; Wörter wie „vorgeschrieben“, „verpflichtend“, „zwingend“, **„ausschließlich“**, **„gestattet“** **nicht** verwenden (klingt nach bestehender Regel).
+- **Nicht** so: „… ausschließlich … gestattet … über mStudio/Kundencenter …“. **Stattdessen** z. B.: „Für Dienstreisen von [Start] nach [Ziel] wird die Bahn empfohlen, da keine Linienflüge verfügbar sind. Tickets über das zentrale Reise-/Buchungstool buchen; Sparpreise nutzen, wo möglich.“
 - **Keine** Social-Media-Posts als CO₂-Quelle; bevorzugt UBA, co2online, DB/myclimate oder Anbieter-Fahrplanseiten.
 
 **Zeitbezug:**
@@ -920,8 +921,8 @@ export function formatTravelTrainVsFlightSubmission(text: string): string {
   return (
     scopeNote +
     `Stand/Recherche ${year}; Zahlen als Richtwerte kennzeichnen.\n` +
-    `Keine Produkt- oder Toolnamen (z. B. mStudio, Concur) erfinden; neutral „zentrales Reise-/Buchungstool“.\n` +
-    `Formulierungsvorschlag nur als Beispiel in Anführungszeichen, keine bestehende Regel behaupten.\n` +
+    `Keine Produkt- oder Toolnamen (z. B. mStudio, Kundencenter, Concur) erfinden; neutral „zentrales Reise-/Buchungstool“.\n` +
+    `Formulierungsvorschlag nur als weiches Beispiel in Anführungszeichen; vermeide „ausschließlich“, „gestattet“, „vorgeschrieben“.\n` +
     `Umstiege und Verbindungsart (direkt vs. Umstieg) nur aus Treffern; bei Direkt-ICE in Treffern nicht pauschal Umstieg behaupten.\n` +
     `Heutiges Datum aus [Playground — Zeitbezug] für „aktuell“ verwenden.\n\n` +
     `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`

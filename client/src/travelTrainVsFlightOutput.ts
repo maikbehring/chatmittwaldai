@@ -94,9 +94,14 @@ function wrapPolicySnippetInCodeBlock(text: string): string {
 }
 
 const INVENTED_PROCESS_REPLACEMENTS: ReadonlyArray<[RegExp, string]> = [
+  [/\büber\s+das\s+mStudio\s+oder\s+direkt\s+im\s+Kundencenter\b/gi, "über das zentrale Reise-/Buchungstool"],
+  [/\büber\s+das\s+mStudio\s+oder\b/gi, "über das zentrale Reise-/Buchungstool oder"],
   [/\bim\s+mStudio\b/gi, "im zentralen Reise-/Buchungstool"],
   [/\büber\s+das\s+mStudio\b/gi, "über das zentrale Reise-/Buchungstool"],
   [/\bvia\s+mStudio\b/gi, "über das zentrale Reise-/Buchungstool"],
+  [/\bdirekt\s+im\s+Kundencenter\b/gi, "über das zentrale Reise-/Buchungstool"],
+  [/\bim\s+Kundencenter\b/gi, "im zentralen Reise-/Buchungstool"],
+  [/\bKundencenter\b/g, "zentrales Reise-/Buchungstool"],
   [/\bmStudio\b/g, "zentrales Reise-/Buchungstool"],
 ];
 
@@ -110,6 +115,14 @@ function sanitizeTravelInventedProcesses(text: string): string {
 
 function softenMandatoryPolicyWording(text: string): string {
   return text
+    .replace(/\bist\s+ausschließlich\s+die\s+Nutzung\b/gi, "wird die Nutzung")
+    .replace(/\bist\s+ausschließlich\b/gi, "wird vorrangig")
+    .replace(/\bausschließlich\s+die\s+Nutzung\b/gi, "die Nutzung")
+    .replace(/\bausschließlich\b/gi, "vorrangig")
+    .replace(/\bist\s+gestattet\b/gi, "wird empfohlen")
+    .replace(/\bsind\s+gestattet\b/gi, "werden empfohlen")
+    .replace(/\bgestattet\b/gi, "empfohlen")
+    .replace(/\bpriorisiert\s+werden\s+sollen\b/gi, "nach Möglichkeit genutzt werden können")
     .replace(/\bist\s+vorgeschrieben\b/gi, "kann vorgesehen werden")
     .replace(/\bwird\s+vorgeschrieben\b/gi, "kann vorgesehen werden")
     .replace(/\bist\s+verpflichtend\b/gi, "ist empfohlen")
