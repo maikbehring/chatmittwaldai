@@ -1,4 +1,5 @@
 import { formatPlaygroundMittwaldContext } from "./playgroundMittwaldContext";
+import { formatPlaygroundAuthorContext } from "./playgroundAuthorContext";
 import { formatPlaygroundCo2Context } from "./inferenceFootprint";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
 
@@ -16,6 +17,7 @@ export function playgroundSystemContextMessages(
   const msgs: PlaygroundSystemContextMessage[] = [
     { role: "system", content: formatPlaygroundTodayContext() },
     { role: "system", content: formatPlaygroundMittwaldContext() },
+    { role: "system", content: formatPlaygroundAuthorContext() },
   ];
   if (options?.includeCo2Guide) {
     msgs.push({ role: "system", content: formatPlaygroundCo2Context() });
@@ -27,7 +29,7 @@ export function playgroundSystemContextMessages(
 export function formatPlaygroundBaseSystemContext(
   options?: PlaygroundSystemContextOptions,
 ): string {
-  const parts = [formatPlaygroundTodayContext(), formatPlaygroundMittwaldContext()];
+  const parts = [formatPlaygroundTodayContext(), formatPlaygroundMittwaldContext(), formatPlaygroundAuthorContext()];
   if (options?.includeCo2Guide) {
     parts.push(formatPlaygroundCo2Context());
   }

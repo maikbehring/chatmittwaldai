@@ -12,6 +12,17 @@ export type WebSearchResult = {
   snippet: string;
 };
 
+function classifyWebSearchResultUrl(url: string): string | null {
+  if (/linkedin\.com\/in\//i.test(url)) return "LinkedIn-Profil";
+  if (/linkedin\.com\/posts\//i.test(url)) {
+    return "LinkedIn-Beitrag (Snippet kann Zitat einer anderen Person sein — nicht dem Post-Autor zuschreiben)";
+  }
+  if (/northdata\.de|handelsregister|unternehmensregister/i.test(url)) {
+    return "Register-Aggregator (Firmenhistorie kann fehlerhaft sein)";
+  }
+  return null;
+}
+
 export type WebSearchResponse = {
   query: string;
   provider: string;
@@ -110,10 +121,11 @@ export function formatWebSearchContext(data: WebSearchResponse): string {
       "Sage dem Nutzer, dass die Websuche leer war — nicht behaupten, du hättest allgemeines Trainingswissen als Live-Suche genutzt."
     );
   }
-  const lines = data.results.map(
-    (r, i) =>
-      `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet || "(kein Snippet)"}`,
-  );
+  const lines = data.results.map((r, i) => {
+    const kind = classifyWebSearchResultUrl(r.url);
+    const kindLine = kind ? `Typ: ${kind}\n` : "";
+    return `[${i + 1}] ${r.title}\n${kindLine}URL: ${r.url}\n${r.snippet || "(kein Snippet)"}`;
+  });
   return (
     `${formatPlaygroundTodayContext()}\n\n` +
     `[Playground-Websuche — vom Server geladene Treffer (${data.provider}). ` +
@@ -125,6 +137,10 @@ export function formatWebSearchContext(data: WebSearchResponse): string {
     "Behaupte NICHT, du könntest nicht im Web suchen oder hättest keinen Live-Zugriff — die Suche wurde bereits für den Nutzer durchgeführt. " +
     "Prüfe Fest- und Terminangaben gegen das oben genannte heutige Datum (z. B. ob ein Event heute liegt). " +
     "Viele Treffer haben leere Snippets — werte dann **Titel** aktiv aus (z. B. Ergebnisse, Datumsangaben, Teamnamen). " +
+    "**Personen & Biografien:** Snippets aus LinkedIn-**Beiträgen** (/posts/) nicht blind dem Profil-Inhaber zuschreiben — oft Zitate Dritter. " +
+    "Primärquelle für Rollen: LinkedIn-**Profil** (/in/). Register-Snippets („vormals … GmbH“) nicht als gesicherte Firmenhistorie wiedergeben. " +
+    "Mehrere widersprüchliche Snippets nicht zu einer Biografie fusionieren — Unsicherheit nennen oder weglassen. " +
+    "Bei **Maik Behring**: verifizierten [Playground — Maintainer Maik Behring]-Kontext aus den Systemnachrichten bevorzugen. " +
     "Beantworte die Frage anhand der Treffer; nenne passende URLs. Wenn die Treffer nicht reichen, sage das ehrlich.\n\n" +
     lines.join("\n\n")
   );
