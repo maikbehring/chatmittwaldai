@@ -18,6 +18,7 @@ export type InferencePresetSlice = {
 
 export const MODEL_MINISTRAL = "Ministral-3-14B-Instruct-2512";
 export const MODEL_GPT_OSS = "gpt-oss-120b";
+export const MODEL_QWEN_08 = "Qwen3.5-0.8B";
 export const MODEL_QWEN_35 = "Qwen3.5-122B-A10B-FP8";
 export const MODEL_QWEN_36 = "Qwen3.6-35B-A3B-FP8";
 /** Dediziertes OCR-Modell (mittwald) — Texterkennung aus Dokumenten/Bildern. */
@@ -39,6 +40,13 @@ export function getInferencePreset(modelId: string): InferencePresetSlice {
         extraBody: null,
         maxTokens: 8192,
         hint: "Doku: temperature & top_p 1.0; Reasoning-Stufe per Systemzeile „Reasoning: …“.",
+      };
+    case MODEL_QWEN_08:
+      return {
+        temperature: 0.7,
+        extraBody: null,
+        maxTokens: 2048,
+        hint: "Kleines Qwen-Modell — nur eine System-Nachricht; Playground-Kontext wird automatisch zusammengeführt.",
       };
     case MODEL_QWEN_35:
     case MODEL_QWEN_36:
@@ -63,6 +71,11 @@ export function getInferencePreset(modelId: string): InferencePresetSlice {
 
 export function isQwen3Model(modelId: string): boolean {
   return modelId === MODEL_QWEN_35 || modelId === MODEL_QWEN_36;
+}
+
+/** Upstream akzeptiert bei diesem Modell nur eine System-Nachricht (mehrere → 400). */
+export function modelRequiresSingleSystemMessage(modelId: string): boolean {
+  return modelId === MODEL_QWEN_08;
 }
 
 /** Vision-Overrides laut Qwen-Modellseiten (Thinking aus, Parameter, kürzere Ausgabe). */
