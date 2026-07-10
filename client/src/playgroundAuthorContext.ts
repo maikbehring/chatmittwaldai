@@ -1,3 +1,11 @@
+const PLAYGROUND_AUTHOR_QUESTION_RE =
+  /\b(maik\s*behring|wer\s+(?:ist|war)\s+maik|wer\s+hat\s+(?:den|diesen)\s+playground|playground[\s-]?maintainer|chatmittwaldai)\b/i;
+
+/** Nur bei expliziter Biografie-/Maintainer-Frage — nicht in jedem Chat mitgeben. */
+export function isPlaygroundAuthorQuestion(text: string): boolean {
+  return PLAYGROUND_AUTHOR_QUESTION_RE.test(text.trim());
+}
+
 /**
  * Verifizierter Kontext zum Playground-Maintainer — gegen Halluzinationen bei
  * „Wer ist Maik Behring?“ und ähnlichen Biografie-Fragen (Websuche-Snippets sind oft falsch).
@@ -17,6 +25,8 @@ export function formatPlaygroundAuthorContext(): string {
     `• **Keine** Verbindung **Tante Else GmbH ↔ Robert Meyer Verwaltungs GmbH** — Register-Aggregatoren (z. B. North Data) zeigen das fälschlich als „vormals …“; das ist **falsch** und hat **nichts** mit Tante Else zu tun. Diese Formulierung **niemals** übernehmen oder vorsichtig paraphrasieren.\n` +
     `• Register-**Netzwerk**-Snippets nicht als „vielleicht keine direkte Tätigkeit“ relativieren, wenn **Tante Else** betroffen ist — die Rolle als Inhaber/GF ist oben bestätigt; nur die **Robert-Meyer-Firmenhistorie** ist falsch.\n\n` +
     `## Antwort-Regeln\n` +
+    `• **Nur** bei expliziter Frage nach Maik Behring / Playground-Maintainer antworten — nicht in Begrüßungen oder Smalltalk einbringen.\n` +
+    `• Du bist **nicht** Maik Behring; nicht in Ich-Form als er sprechen.\n` +
     `• Kurzprofil aus den bestätigten Fakten (mittwald + optional Tante Else); LinkedIn verlinken.\n` +
     `• Widersprüchliche Snippets als **unsicher** kennzeichnen oder weglassen — nicht zu einer „Wahrheit“ fusionieren.\n` +
     `• LinkedIn-URL \`/in/\` = Profil; \`/posts/\` = Beitrag (Snippet kann fremden Text enthalten).`

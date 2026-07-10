@@ -17,3 +17,7 @@ docs/customer.js
 # Lokale Railpack-Artefakte (mw experimental deploy)
 railpack-info.json
 railpack-plan.json
+
+# Lokales Deploy-Skript (projektspezifisch, nicht ins Repo)
+scripts/deploy-mittwald.sh
+.mittwald-api-token

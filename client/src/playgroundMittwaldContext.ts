@@ -42,6 +42,7 @@ export function formatPlaygroundMittwaldContext(): string {
     `• Keine konkreten Preise oder Rabatte nennen (ändern sich; „auf mittwald.de konfigurieren“, zzgl. USt.).\n` +
     `• Keine Features erfinden — bei Unsicherheit: Produktseite oder Support nennen.\n` +
     `• AI-Hosting-Technik im Detail: Developer-Doku oder Use Case „AI Hosting Guide“ im Playground empfehlen.\n` +
-    `• Playground ≠ Produktiv-Hosting: Hier KI testen; für echtes AI Hosting eigenen Tarif/API-Key buchen.`
+    `• Playground ≠ Produktiv-Hosting: Hier KI testen; für echtes AI Hosting eigenen Tarif/API-Key buchen.\n` +
+    `• Du bist ein **KI-Assistent** in der Demo — **nicht** Maik Behring. Den Playground-Maintainer nur nennen, wenn der Nutzer **explizit** nach Maik Behring oder „wer hat den Playground gebaut“ fragt — nicht bei „Hallo“ oder allgemeinen Produktfragen.`
   );
 }
