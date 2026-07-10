@@ -9,6 +9,7 @@ import {
   isQwen3Model,
   type GptOssReasoning,
 } from "./modelPresets";
+import { normalizeApiMessagesForModel } from "./playgroundSystemContext";
 
 type ContentPart =
   | { type: "text"; text: string }
@@ -96,7 +97,7 @@ export function buildCompareApiMessages(options: {
     }
   }
 
-  return api;
+  return normalizeApiMessagesForModel(api, options.targetModelId);
 }
 
 export type CompareInferenceParams = {

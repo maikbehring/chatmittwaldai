@@ -2,6 +2,7 @@ import { formatPlaygroundMittwaldContext } from "./playgroundMittwaldContext";
 import { formatPlaygroundAuthorContext } from "./playgroundAuthorContext";
 import { formatPlaygroundCo2Context } from "./inferenceFootprint";
 import { formatPlaygroundTodayContext } from "./playgroundDate";
+import { modelRequiresSingleSystemMessage } from "./modelPresets";
 
 export type PlaygroundSystemContextMessage = { role: "system"; content: string };
 
@@ -34,4 +35,31 @@ export function formatPlaygroundBaseSystemContext(
     parts.push(formatPlaygroundCo2Context());
   }
   return parts.join("\n\n");
+}
+
+type SystemMergeableMessage = {
+  role: "system" | "user" | "assistant";
+  content: string | unknown[];
+};
+
+/** Qwen3.5-0.8B: mehrere System-Nachrichten führen upstream zu „Got bad request“ (400). */
+export function normalizeApiMessagesForModel<T extends SystemMergeableMessage>(
+  messages: T[],
+  modelId: string,
+): T[] {
+  if (!modelRequiresSingleSystemMessage(modelId)) return messages;
+
+  const systemParts: string[] = [];
+  const rest: T[] = [];
+  for (const m of messages) {
+    if (m.role === "system" && typeof m.content === "string" && m.content.trim().length > 0) {
+      systemParts.push(m.content);
+      continue;
+    }
+    rest.push(m);
+  }
+
+  if (systemParts.length <= 1) return messages;
+
+  return [{ role: "system", content: systemParts.join("\n\n") } as T, ...rest];
 }

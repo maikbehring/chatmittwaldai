@@ -122,7 +122,7 @@ import {
   formatMittwaldFeatureRequestsContext,
   type MittwaldFeatureRequestsResponse,
 } from "./mittwaldFeatureRequests";
-import { formatPlaygroundBaseSystemContext, playgroundSystemContextMessages } from "./playgroundSystemContext";
+import { formatPlaygroundBaseSystemContext, normalizeApiMessagesForModel, playgroundSystemContextMessages } from "./playgroundSystemContext";
 import { WebSearchGlobeToggle, WebSearchModeChip } from "./WebSearchComposerControl";
 import { WebSearchConsentDialog } from "./WebSearchConsentDialog";
 import { DeleteAllChatsDialog } from "./DeleteAllChatsDialog";
@@ -2152,6 +2152,7 @@ export function App() {
           maxMessages,
         );
         apiMessages = trimmedApiMessages;
+        apiMessages = normalizeApiMessagesForModel(apiMessages, model);
         if (trimmedCount > 0) {
           setContextTrimNotice(
             `Langer Chatverlauf: ${trimmedCount} ältere Nachricht${trimmedCount === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}). „Clear chat“ setzt den Verlauf zurück.`,
@@ -2332,6 +2333,7 @@ export function App() {
           maxMessages,
         );
         apiMessages = trimmedApiMessages;
+        apiMessages = normalizeApiMessagesForModel(apiMessages, model);
         if (trimmedCount > 0) {
           setContextTrimNotice(
             `Langer Chatverlauf: ${trimmedCount} ältere Nachricht${trimmedCount === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}). „Clear chat“ setzt den Verlauf zurück.`,
@@ -2508,6 +2510,7 @@ export function App() {
           maxMessages,
         );
         apiMessages = trimmedApiMessages;
+        apiMessages = normalizeApiMessagesForModel(apiMessages, model);
         if (trimmedCount > 0) {
           setContextTrimNotice(
             `Langer Chatverlauf: ${trimmedCount} ältere Nachricht${trimmedCount === 1 ? "" : "en"} werden nicht mehr an die KI gesendet (Limit ${maxMessages}). „Clear chat“ setzt den Verlauf zurück.`,
@@ -3064,7 +3067,7 @@ export function App() {
         apiMessages,
         maxMessages,
       );
-      apiMessages = trimmedApiMessages;
+      apiMessages = normalizeApiMessagesForModel(trimmedApiMessages, streamModelId);
       trimNoticeRef.count = trimmedCount;
 
       const body: Record<string, unknown> = {
