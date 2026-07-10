@@ -77,6 +77,7 @@ import {
   stripHallucinatedCo2FromAssistantText,
   sumCo2GramsFromAssistantMessages,
 } from "./inferenceFootprint";
+import { isPlaygroundAuthorQuestion } from "./playgroundAuthorContext";
 import { SessionCo2Footprint } from "./SessionCo2Footprint";
 import {
   fetchWeekendVisitSources,
@@ -1926,6 +1927,9 @@ export function App() {
             includeCo2Guide: isPlaygroundCo2Question(
               typeof userContent === "string" ? userContent : text,
             ),
+            includeAuthorGuide: isPlaygroundAuthorQuestion(
+              typeof userContent === "string" ? userContent : text,
+            ),
           }),
         });
 
@@ -2619,6 +2623,7 @@ export function App() {
         : rawTextBeforeFormat;
 
     const includeCo2Guide = isPlaygroundCo2Question(rawTextBeforeFormat);
+    const includeAuthorGuide = isPlaygroundAuthorQuestion(rawTextBeforeFormat);
 
     const webSearchDirectQueries =
       activeUseCase?.webSearchDirectQueries?.(rawTextBeforeFormat);
@@ -2996,7 +3001,7 @@ export function App() {
     const threadForApi = isolateWebSearch ? [userMessage] : nextThread;
 
     const buildApiMessages = (streamModelId: string): ApiMessage[] => {
-      const api: ApiMessage[] = [...playgroundSystemContextMessages({ includeCo2Guide })];
+      const api: ApiMessage[] = [...playgroundSystemContextMessages({ includeCo2Guide, includeAuthorGuide })];
       if (streamModelId === MODEL_GPT_OSS) {
         const line = `Reasoning: ${gptOssReasoning}`;
         const rest = systemPrompt.trim();

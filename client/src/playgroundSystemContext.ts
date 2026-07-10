@@ -9,6 +9,8 @@ export type PlaygroundSystemContextMessage = { role: "system"; content: string }
 export type PlaygroundSystemContextOptions = {
   /** Nur bei expliziten Fragen zur Playground-CO₂-Anzeige — sonst halluziniert das Modell eigene Werte. */
   includeCo2Guide?: boolean;
+  /** Nur bei expliziten Fragen zu Maik Behring / Playground-Maintainer — sonst nicht im Chat erwähnen. */
+  includeAuthorGuide?: boolean;
 };
 
 /** Getrennte System-Nachrichten (bessere Gewichtung als ein langer Block). */
@@ -18,8 +20,10 @@ export function playgroundSystemContextMessages(
   const msgs: PlaygroundSystemContextMessage[] = [
     { role: "system", content: formatPlaygroundTodayContext() },
     { role: "system", content: formatPlaygroundMittwaldContext() },
-    { role: "system", content: formatPlaygroundAuthorContext() },
   ];
+  if (options?.includeAuthorGuide) {
+    msgs.push({ role: "system", content: formatPlaygroundAuthorContext() });
+  }
   if (options?.includeCo2Guide) {
     msgs.push({ role: "system", content: formatPlaygroundCo2Context() });
   }
@@ -30,7 +34,10 @@ export function playgroundSystemContextMessages(
 export function formatPlaygroundBaseSystemContext(
   options?: PlaygroundSystemContextOptions,
 ): string {
-  const parts = [formatPlaygroundTodayContext(), formatPlaygroundMittwaldContext(), formatPlaygroundAuthorContext()];
+  const parts = [formatPlaygroundTodayContext(), formatPlaygroundMittwaldContext()];
+  if (options?.includeAuthorGuide) {
+    parts.push(formatPlaygroundAuthorContext());
+  }
   if (options?.includeCo2Guide) {
     parts.push(formatPlaygroundCo2Context());
   }
