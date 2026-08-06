@@ -1,4 +1,6 @@
 import { formatPlaygroundShortDateBerlin } from "./playgroundDate";
+import { GRID_CARBON_FORECAST_SYSTEM_PROMPT } from "./gridCarbonForecast";
+import { formatGridCarbonForecastSubmission } from "./gridCarbonForecastAdvice";
 import { MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
 import {
   extractShopwareMcpScenarioFromSubmission,
@@ -45,6 +47,7 @@ export type PlaygroundUseCaseId =
   | "greenwashing-check"
   | "travel-train-vs-flight"
   | "co2-plain-language"
+  | "grid-carbon-forecast"
   | "network-path-check";
 
 export type PlaygroundUseCaseCategory = "content" | "delivery" | "development";
@@ -85,6 +88,8 @@ export type PlaygroundUseCase = {
   prefersSemanticSearch?: boolean;
   /** Traceroute/Latenz-Check ohne LLM-Pipeline. */
   prefersNetworkPathCheck?: boolean;
+  /** Strommix-Forecast (24 h) — Panel ohne Pflicht-Prompt. */
+  prefersGridCarbonForecast?: boolean;
   sendButtonLabel?: string;
   prefersSpeech?: boolean;
   /** Langaufnahme: Whisper-Chunks alle ~14 min (Besprechungen >20 min). */
@@ -268,7 +273,7 @@ const USE_CASE_SHOWCASE_GROUP_IDS: Record<
   "ocr-dokumente": ["invoice-ocr", "audio-transcribe"],
   "suche-embeddings": ["semantic-search", "current-research", "price-compare", "wm-2026-news"],
   "content-seo": ["alt-tags", "seo-meta", "linkedin-post"],
-  nachhaltigkeit: ["greenwashing-check", "travel-train-vs-flight", "co2-plain-language"],
+  nachhaltigkeit: ["grid-carbon-forecast", "greenwashing-check", "travel-train-vs-flight", "co2-plain-language"],
 };
 
 export const RECOMMENDED_USE_CASE_ID: PlaygroundUseCaseId = "ai-hosting-tarifberater";
@@ -284,6 +289,7 @@ export function getUseCaseShowcaseHighlights(uc: PlaygroundUseCase): string[] {
   if (uc.prefersSpeech && !uc.prefersAudioFile) tags.push("Sprache");
   if (uc.id === "shopware-mcp-demo") tags.push("Tool Calling");
   if (uc.prefersNetworkPathCheck) tags.push("Netzwerk");
+  if (uc.prefersGridCarbonForecast) tags.push("Strommix");
   if (uc.modelId.includes("gpt-oss")) tags.push("Reasoning");
   if (uc.prefersImage) tags.push("Vision");
   if (uc.beta) tags.push("Beta");
@@ -2539,6 +2545,29 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     sendButtonLabel: "Vergleichen",
     prefersModelCompare: true,
     prefersImage: true,
+  },
+  {
+    id: "grid-carbon-forecast",
+    category: "content",
+    icon: "⚡",
+    title: "Strommix-Forecast 24 h",
+    subtitle: "Carbon-aware · Deutschland",
+    description:
+      "Wann ist im deutschen Stromnetz besonders viel regenerativer Strom erwartet? 24-Stunden-Prognose — " +
+      "um rechenintensive KI-Jobs (Batch, Embeddings, lokale LLMs) in passende Phasen zu legen.",
+    modelId: MODEL_MINISTRAL,
+    modelLabel: "Ministral (optional)",
+    systemPrompt: GRID_CARBON_FORECAST_SYSTEM_PROMPT,
+    composerPlaceholder:
+      "Optional: z. B. „Was kann ich damit anfangen?“ oder „Wann lokalen LLM-Batch starten?“",
+    steps: [
+      "Forecast lädt automatisch — zeigt grüne Netzphasen, nicht die Herkunft eures Stromtarifs.",
+      "Ideal zum Timen lokaler LLMs, GPU-Server und Batch-Jobs auf mittwald AI Hosting.",
+      "Optional: Frage im Chat — z. B. „Was kann ich damit anfangen?“",
+    ],
+    formatSubmissionMessage: formatGridCarbonForecastSubmission,
+    sendButtonLabel: "Frage stellen",
+    prefersGridCarbonForecast: true,
   },
   {
     id: "greenwashing-check",

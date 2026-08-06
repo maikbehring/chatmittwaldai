@@ -11,6 +11,8 @@ export type PlaygroundSystemContextOptions = {
   includeCo2Guide?: boolean;
   /** Nur bei expliziten Fragen zu Maik Behring / Playground-Maintainer — sonst nicht im Chat erwähnen. */
   includeAuthorGuide?: boolean;
+  /** Strommix-Forecast-Use-Case: kein mittwald-Produktprofil — weniger Ablenkung bei Forecast-Fragen. */
+  skipMittwaldProfile?: boolean;
 };
 
 /** Getrennte System-Nachrichten (bessere Gewichtung als ein langer Block). */
@@ -19,8 +21,10 @@ export function playgroundSystemContextMessages(
 ): PlaygroundSystemContextMessage[] {
   const msgs: PlaygroundSystemContextMessage[] = [
     { role: "system", content: formatPlaygroundTodayContext() },
-    { role: "system", content: formatPlaygroundMittwaldContext() },
   ];
+  if (!options?.skipMittwaldProfile) {
+    msgs.push({ role: "system", content: formatPlaygroundMittwaldContext() });
+  }
   if (options?.includeAuthorGuide) {
     msgs.push({ role: "system", content: formatPlaygroundAuthorContext() });
   }
@@ -34,7 +38,10 @@ export function playgroundSystemContextMessages(
 export function formatPlaygroundBaseSystemContext(
   options?: PlaygroundSystemContextOptions,
 ): string {
-  const parts = [formatPlaygroundTodayContext(), formatPlaygroundMittwaldContext()];
+  const parts = [formatPlaygroundTodayContext()];
+  if (!options?.skipMittwaldProfile) {
+    parts.push(formatPlaygroundMittwaldContext());
+  }
   if (options?.includeAuthorGuide) {
     parts.push(formatPlaygroundAuthorContext());
   }

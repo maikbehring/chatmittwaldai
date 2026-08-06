@@ -1,10 +1,32 @@
+# Build-Kontext schlank halten — nur Client/Server landen im Image (siehe Dockerfile).
+# Redaktionelle MD/HTML und lokale Hilfsskripte gehören nicht in den Deploy.
+
 node_modules
+client/node_modules
+server/node_modules
 client/dist
 .git
+.github
 .env
 .env.*
+!.env.example
 *.log
 .DS_Store
-PRIVAT-*.md
-*.pdf
+
+# Docs, Blog-Entwürfe, Anleitungen, Batch-Ergebnisse (nicht runtime)
 docs
+**/*.md
+*.md
+
+# Lokale Deploy-/Audit-/Batch-Skripte (nicht im Container)
+scripts
+
+# Sonstiges Entwicklungszeug
+.cursor
+.vscode
+*.pdf
+PRIVAT-*.md
+.mittwald-api-token
+coverage
+tmp
+temp

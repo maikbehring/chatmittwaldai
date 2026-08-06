@@ -42,6 +42,7 @@ import {
   buildNetworkPathCheck,
   NETWORK_PATH_TARGETS,
 } from "./networkPathCheck.js";
+import { getGridCarbonConfig, getGridCarbonSummary } from "./gridCarbonForecast.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "../..");
@@ -450,7 +451,27 @@ async function main() {
       aiHostingUrl:
         process.env.PLAYGROUND_LINK_AI_HOSTING_URL?.trim() || DEFAULT_AI_HOSTING_URL,
       selfHostRepoUrl: SELF_HOST_REPO_URL,
+      gridCarbon: getGridCarbonConfig(),
     });
+  });
+
+  app.get("/api/carbon/grid-de", modelsLimiter, async (_req, res) => {
+    const cfg = getGridCarbonConfig();
+    if (!cfg.enabled) {
+      return jsonError(res, 404, "not_enabled", "Strommix-Badge ist deaktiviert.");
+    }
+    try {
+      const summary = await getGridCarbonSummary();
+      res.json(summary);
+    } catch (e) {
+      console.error(e);
+      return jsonError(
+        res,
+        502,
+        "grid_forecast_failed",
+        "Strommix-Prognose konnte nicht geladen werden.",
+      );
+    }
   });
 
   const webSearchLimiter = rateLimit({

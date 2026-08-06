@@ -54,11 +54,9 @@ export function estimateInferenceCo2Grams(
 }
 
 export const CO2_FOOTPRINT_TOOLTIP =
-  "Orientierungswert auf Basis von Energie-Messungen an der mittwald AI-Hosting-Infrastruktur " +
-  "(kWh pro 1 Mio. gewichtete Token je Modell): Eingabe-Token × 1/4 + Ausgabe-Token, " +
-  "dann × deutscher Strommix (UBA 2025) 344 g CO₂/kWh. " +
-  "kWh/Mio.: Qwen3.6 0,55 · gpt-oss 0,73 · Qwen3.5 1,31 · Ministral 1,50. " +
-  "Keine exakte Ökobilanz — nur Chat-Inferenz; ohne API-Nutzungsdaten grob geschätzt.";
+  "Schätzung für diese Antwort: gewichtete Token (Eingabe × ¼ + Ausgabe) × gemessene GPU-Energie je Modell × UBA-Jahresmittel 344 g/kWh. " +
+  "Orientierungswert — basiert noch auf dem Jahresmittel, nicht auf dem Live-Strommix-Forecast. " +
+  "kWh/Mio.: Qwen3.6 0,55 · gpt-oss 0,73 · Qwen3.5 1,31 · Ministral 1,50.";
 
 export const SESSION_CO2_TOOLTIP =
   `${CO2_FOOTPRINT_TOOLTIP} Summe aller Antworten über alle Chats in diesem Browser.`;
@@ -68,7 +66,7 @@ export function formatPlaygroundCo2Context(): string {
   return (
     `[Playground — CO₂-Anzeige]\n` +
     `Unter jeder Assistenten-Antwort und im Footer zeigt dieser Playground automatisch „≈ … g CO₂eq“ — ein Orientierungswert für diese Chat-Inferenz.\n` +
-    `Grundlage: Energie-Messungen an der mittwald AI-Hosting-Infrastruktur (je Modell) × Token-Nutzung der Anfrage × Strommix-Faktor. Trotzdem nur Orientierung, keine exakte Messung pro Klick, keine Ökobilanz fürs Reporting. Websuche, Whisper, OCR, Embeddings nicht einbezogen.\n` +
+    `Grundlage: Energie-Messungen an der mittwald AI-Hosting-Infrastruktur (je Modell) × Token-Nutzung × UBA-Jahresmittel 344 g/kWh — noch kein Live-Strommix-Forecast. Nur Orientierung, keine Ökobilanz fürs Reporting.\n` +
     `WICHTIG: Fragt der Nutzer nach „CO₂“, „CO2“, „CO₂eq“, „CO₂-Wert“ o. Ä. ohne explizit nach globalem Klima/Industrie/Chemie zu fragen, meint er fast immer diese Playground-Anzeige.\n` +
     `Dann: 2–4 kurze Sätze auf Deutsch — eigene Infrastruktur, Orientierung, nicht für Reporting. KEIN allgemeiner Text über Klimawandel, Verbrennung, Zement, Sensoren, Mauna Loa o. Ä.\n` +
     `NIEMALS CO₂-Zahlen, „≈ … g CO₂eq“ oder Hinweise dazu in deiner Antwort nennen — die Oberfläche berechnet und zeigt den Wert separat unter der Nachricht.`

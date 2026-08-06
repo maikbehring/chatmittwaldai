@@ -14,6 +14,7 @@ import {
 import { PlaygroundUseCaseCards } from "./PlaygroundUseCaseCards";
 import { PlaygroundUseCaseGuide } from "./PlaygroundUseCaseGuide";
 import { NetworkPathCheckPanel } from "./NetworkPathCheckPanel";
+import { GridCarbonForecastPanel } from "./GridCarbonForecastPanel";
 import { UseCaseExperimentalBadge } from "./UseCaseExperimentalBadge";
 import { UseCaseBetaBadge } from "./UseCaseBetaBadge";
 import { ModelCompareMessageRow } from "./ModelCompareMessageRow";
@@ -79,6 +80,14 @@ import {
 } from "./inferenceFootprint";
 import { isPlaygroundAuthorQuestion } from "./playgroundAuthorContext";
 import { SessionCo2Footprint } from "./SessionCo2Footprint";
+import { GridCarbonBadge } from "./GridCarbonBadge";
+import {
+  fetchGridCarbonSummary,
+  formatGridCarbonForecastContext,
+  gridCarbonRefreshIntervalMs,
+  type GridCarbonSummary,
+} from "./gridCarbonForecast";
+import { getGridCarbonForecastStaticResponse } from "./gridCarbonForecastAdvice";
 import {
   fetchWeekendVisitSources,
   formatWeekendVisitContext,
@@ -233,6 +242,7 @@ export type ChatMessage = {
   mittwaldAiHostingTariffAdvisor?: MittwaldAiHostingTariffAdvisorResponse;
   weekendVisitData?: WeekendVisitData;
   priceCompareSearch?: PriceCompareSearchResponse;
+  gridCarbonForecast?: GridCarbonSummary;
   compare?: ModelComparePayload;
 };
 
@@ -845,6 +855,8 @@ export function App() {
   const [bonusGrantUsed, setBonusGrantUsed] = useState(false);
   const [sessionApiKeyActive, setSessionApiKeyActive] = useState(() => hasSessionApiKey());
   const [aiHostingUrl, setAiHostingUrl] = useState(DEFAULT_AI_HOSTING_URL);
+  const [gridCarbonEnabled, setGridCarbonEnabled] = useState(true);
+  const [gridCarbonSummary, setGridCarbonSummary] = useState<GridCarbonSummary | null>(null);
   const [deleteAllChatsOpen, setDeleteAllChatsOpen] = useState(false);
   const [clearBrowserCacheOpen, setClearBrowserCacheOpen] = useState(false);
   const [showModelSettings, setShowModelSettings] = useState(false);
@@ -1149,6 +1161,7 @@ export function App() {
             rateLimits?: PlaygroundRateLimits;
             bonusChat?: PlaygroundBonusChatConfig;
             aiHostingUrl?: string;
+            gridCarbon?: { enabled?: boolean };
             speechToText?: {
               enabled?: boolean;
               model?: string;
@@ -1161,6 +1174,9 @@ export function App() {
           if (c.bonusChat) setBonusChatConfig(c.bonusChat);
           if (typeof c.aiHostingUrl === "string" && c.aiHostingUrl.trim()) {
             setAiHostingUrl(c.aiHostingUrl.trim());
+          }
+          if (c.gridCarbon && c.gridCarbon.enabled === false) {
+            setGridCarbonEnabled(false);
           }
           if (typeof c.maxMessages === "number" && c.maxMessages >= 4) {
             setMaxMessages(c.maxMessages);
@@ -1200,6 +1216,26 @@ export function App() {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- nur einmal beim Mount
   }, []);
+
+  useEffect(() => {
+    if (!gridCarbonEnabled) return;
+    let cancelled = false;
+    const load = () => {
+      void fetchGridCarbonSummary()
+        .then((s) => {
+          if (!cancelled) setGridCarbonSummary(s);
+        })
+        .catch((e) => {
+          console.error(e);
+        });
+    };
+    load();
+    const id = window.setInterval(load, gridCarbonRefreshIntervalMs());
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
+  }, [gridCarbonEnabled]);
 
   useEffect(() => {
     adjustInputHeight();
@@ -1266,6 +1302,7 @@ export function App() {
   const isPriceCompareUseCase = activeUseCaseId === "price-compare";
   const isSemanticSearchUseCase = activeUseCaseId === "semantic-search";
   const isNetworkPathCheckUseCase = activeUseCaseId === "network-path-check";
+  const isGridCarbonForecastUseCase = activeUseCaseId === "grid-carbon-forecast";
   const aiHostingGuideComposerProgress = useMemo(() => {
     if (!isAiHostingGuideUseCase || messages.length === 0) return null;
     const last = messages[messages.length - 1];
@@ -1621,6 +1658,11 @@ export function App() {
     },
     [adjustInputHeight, changeModel, requestEnableWebSearch, setActiveThreadWebSearch, stop],
   );
+
+  const openGridCarbonForecastUseCase = useCallback(() => {
+    if (activeUseCaseId === "grid-carbon-forecast") return;
+    activateUseCase("grid-carbon-forecast");
+  }, [activeUseCaseId, activateUseCase]);
 
   const newChat = useCallback(() => {
     stop();
@@ -2622,8 +2664,10 @@ export function App() {
         ? activeUseCase.formatSubmissionMessage(rawTextBeforeFormat)
         : rawTextBeforeFormat;
 
-    const includeCo2Guide = isPlaygroundCo2Question(rawTextBeforeFormat);
+    const includeCo2Guide =
+      !activeUseCase?.prefersGridCarbonForecast && isPlaygroundCo2Question(rawTextBeforeFormat);
     const includeAuthorGuide = isPlaygroundAuthorQuestion(rawTextBeforeFormat);
+    const skipMittwaldProfile = activeUseCase?.prefersGridCarbonForecast === true;
 
     const webSearchDirectQueries =
       activeUseCase?.webSearchDirectQueries?.(rawTextBeforeFormat);
@@ -2757,13 +2801,82 @@ export function App() {
       }
     }
 
+    if (
+      activeUseCase?.id === "grid-carbon-forecast" &&
+      typeof userContent === "string" &&
+      !file &&
+      rawTextBeforeFormat.trim().length > 0
+    ) {
+      try {
+        const summaryForStatic =
+          gridCarbonSummary ?? (await fetchGridCarbonSummary());
+        const staticGridCarbonResponse = getGridCarbonForecastStaticResponse(
+          rawTextBeforeFormat,
+          summaryForStatic,
+        );
+        if (staticGridCarbonResponse) {
+          if (summaryForStatic && !gridCarbonSummary) {
+            setGridCarbonSummary(summaryForStatic);
+          }
+          trackPlaygroundUseCaseSend(activeUseCase);
+          setMessages([
+            ...messagesBeforeSend,
+            {
+              role: "user",
+              content: userContent,
+              playgroundUseCaseId: "grid-carbon-forecast",
+            },
+            {
+              role: "assistant",
+              content: staticGridCarbonResponse,
+              playgroundUseCaseId: "grid-carbon-forecast",
+            },
+          ]);
+          return;
+        }
+      } catch (e) {
+        if (isAbortError(e)) throw e;
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        return;
+      }
+    }
+
     let mittwaldFeatureRequestsPayload: MittwaldFeatureRequestsResponse | undefined;
     let mittwaldAiHostingDocsPayload: MittwaldAiHostingDocsResponse | undefined;
     let mittwaldAiHostingTariffAdvisorPayload: MittwaldAiHostingTariffAdvisorResponse | undefined;
     let weekendVisitPayload: WeekendVisitData | undefined;
     let priceComparePayload: PriceCompareSearchResponse | undefined;
+    let gridCarbonForecastPayload: GridCarbonSummary | undefined;
+
+    const wantsGridCarbonForecastChat =
+      activeUseCase?.prefersGridCarbonForecast &&
+      typeof userContent === "string" &&
+      rawTextBeforeFormat.length > 0 &&
+      !file;
 
     trackPlaygroundUseCaseSend(activeUseCase);
+
+    if (wantsGridCarbonForecastChat) {
+      try {
+        const data = gridCarbonSummary ?? (await fetchGridCarbonSummary());
+        if (!data?.series24h?.length) {
+          setAppError({
+            kind: "plain",
+            message:
+              "Strommix-Forecast konnte nicht geladen werden. Bitte „Aktualisieren“ im Panel und erneut versuchen.",
+          });
+          return;
+        }
+        gridCarbonForecastPayload = data;
+        if (!gridCarbonSummary) setGridCarbonSummary(data);
+      } catch (e) {
+        if (isAbortError(e)) throw e;
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        return;
+      }
+    }
 
     const wantsExternalPrefetch =
       wantsMittwaldFeatureRequests ||
@@ -2987,6 +3100,7 @@ export function App() {
         : {}),
       ...(weekendVisitPayload ? { weekendVisitData: weekendVisitPayload } : {}),
       ...(priceComparePayload ? { priceCompareSearch: priceComparePayload } : {}),
+      ...(gridCarbonForecastPayload ? { gridCarbonForecast: gridCarbonForecastPayload } : {}),
     };
     const nextThread = [...messagesBeforeSend, userMessage];
 
@@ -3001,7 +3115,13 @@ export function App() {
     const threadForApi = isolateWebSearch ? [userMessage] : nextThread;
 
     const buildApiMessages = (streamModelId: string): ApiMessage[] => {
-      const api: ApiMessage[] = [...playgroundSystemContextMessages({ includeCo2Guide, includeAuthorGuide })];
+      const api: ApiMessage[] = [
+        ...playgroundSystemContextMessages({
+          includeCo2Guide,
+          includeAuthorGuide,
+          skipMittwaldProfile,
+        }),
+      ];
       if (streamModelId === MODEL_GPT_OSS) {
         const line = `Reasoning: ${gptOssReasoning}`;
         const rest = systemPrompt.trim();
@@ -3011,10 +3131,12 @@ export function App() {
       }
       for (const m of threadForApi) {
         if (m.role === "user" && m === userMessage && typeof m.content === "string") {
-          let enriched = enrichUserMessageForPlaygroundCo2Question(
-            rawTextBeforeFormat,
-            apiSubmissionText,
-          );
+          let enriched = skipMittwaldProfile
+            ? apiSubmissionText
+            : enrichUserMessageForPlaygroundCo2Question(
+                rawTextBeforeFormat,
+                apiSubmissionText,
+              );
           if (mittwaldFeatureRequestsPayload) {
             enriched = `${enriched}\n\n${formatMittwaldFeatureRequestsContext(mittwaldFeatureRequestsPayload)}`;
           }
@@ -3029,6 +3151,9 @@ export function App() {
           }
           if (priceComparePayload) {
             enriched = `${enriched}\n\n${formatPriceCompareContext(priceComparePayload)}`;
+          }
+          if (gridCarbonForecastPayload) {
+            enriched = `${enriched}\n\n${formatGridCarbonForecastContext(gridCarbonForecastPayload)}`;
           }
           if (webSearchPayload) {
             enriched = `${enriched}\n\n${formatWebSearchContext(webSearchPayload)}`;
@@ -3291,6 +3416,7 @@ export function App() {
     briefingValues,
     compareModelB,
     activeUseCaseId,
+    gridCarbonSummary,
     requestEnableWebSearch,
     models,
     focusComposer,
@@ -3627,6 +3753,11 @@ export function App() {
             />
           </div>
           <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            <GridCarbonBadge
+              summary={gridCarbonSummary}
+              onOpenUseCase={openGridCarbonForecastUseCase}
+              active={isGridCarbonForecastUseCase}
+            />
             {sessionApiKeyActive ? (
               <span className="playground-text-tiny hidden items-center gap-1.5 font-semibold text-playground-muted sm:inline-flex">
                 Eigener API-Key
@@ -3676,6 +3807,7 @@ export function App() {
                   </div>
                 ) : null}
                 {isNetworkPathCheckUseCase ? <NetworkPathCheckPanel /> : null}
+                {isGridCarbonForecastUseCase ? <GridCarbonForecastPanel /> : null}
                 {activeUseCase ? (
                   <PlaygroundUseCaseGuide
                     useCase={activeUseCase}

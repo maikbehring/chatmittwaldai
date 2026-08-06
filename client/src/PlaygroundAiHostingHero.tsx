@@ -221,9 +221,9 @@ export function PlaygroundAiHostingHero({
                 id="playground-ai-hero-title"
                 className="font-display text-[clamp(1.625rem,4vw,2.25rem)] font-semibold leading-[1.08] tracking-tight text-playground-ink"
               >
-                Open Weight AI. Gehostet in{" "}
+                Open Weight AI. Auf{" "}
                 <span className="bg-gradient-to-r from-playground-send to-sky-500 bg-clip-text text-transparent">
-                  Deutschland.
+                  deutscher Infrastruktur.
                 </span>
               </h1>
               <p className="playground-text-body mx-auto max-w-xl font-medium text-playground-muted lg:mx-0">
