@@ -1,4 +1,6 @@
 import { formatPlaygroundShortDateBerlin } from "./playgroundDate";
+import { GRID_CARBON_FORECAST_SYSTEM_PROMPT } from "./gridCarbonForecast";
+import { formatGridCarbonForecastSubmission } from "./gridCarbonForecastAdvice";
 import { MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
 import {
   extractShopwareMcpScenarioFromSubmission,
@@ -7,6 +9,7 @@ import {
 } from "./playgroundShopwareMcpDemo";
 import {
   formatMittwaldHostingProductLinksBlock,
+  MITTWALD_AI_DEDICATED_HOSTING_URL,
   MITTWALD_AI_HOSTING_TARIFF_URL,
   MITTWALD_CONTAINER_HOSTING_URL,
   MITTWALD_DEDICATED_SERVER_URL,
@@ -25,7 +28,6 @@ export type PlaygroundUseCaseId =
   | "seo-meta"
   | "linkedin-post"
   | "current-research"
-  | "wm-2026-news"
   | "complex-analysis"
   | "product-backlog"
   | "bug-ticket"
@@ -45,6 +47,7 @@ export type PlaygroundUseCaseId =
   | "greenwashing-check"
   | "travel-train-vs-flight"
   | "co2-plain-language"
+  | "grid-carbon-forecast"
   | "network-path-check";
 
 export type PlaygroundUseCaseCategory = "content" | "delivery" | "development";
@@ -85,6 +88,8 @@ export type PlaygroundUseCase = {
   prefersSemanticSearch?: boolean;
   /** Traceroute/Latenz-Check ohne LLM-Pipeline. */
   prefersNetworkPathCheck?: boolean;
+  /** Strommix-Forecast (24 h) — Panel ohne Pflicht-Prompt. */
+  prefersGridCarbonForecast?: boolean;
   sendButtonLabel?: string;
   prefersSpeech?: boolean;
   /** Langaufnahme: Whisper-Chunks alle ~14 min (Besprechungen >20 min). */
@@ -266,9 +271,9 @@ const USE_CASE_SHOWCASE_GROUP_IDS: Record<
   ],
   coding: ["dev-debug", "network-path-check", "bug-ticket", "feature-request", "feature-requests-feed"],
   "ocr-dokumente": ["invoice-ocr", "audio-transcribe"],
-  "suche-embeddings": ["semantic-search", "current-research", "price-compare", "wm-2026-news"],
+  "suche-embeddings": ["semantic-search", "current-research", "price-compare"],
   "content-seo": ["alt-tags", "seo-meta", "linkedin-post"],
-  nachhaltigkeit: ["greenwashing-check", "travel-train-vs-flight", "co2-plain-language"],
+  nachhaltigkeit: ["grid-carbon-forecast", "greenwashing-check", "travel-train-vs-flight", "co2-plain-language"],
 };
 
 export const RECOMMENDED_USE_CASE_ID: PlaygroundUseCaseId = "ai-hosting-tarifberater";
@@ -284,6 +289,7 @@ export function getUseCaseShowcaseHighlights(uc: PlaygroundUseCase): string[] {
   if (uc.prefersSpeech && !uc.prefersAudioFile) tags.push("Sprache");
   if (uc.id === "shopware-mcp-demo") tags.push("Tool Calling");
   if (uc.prefersNetworkPathCheck) tags.push("Netzwerk");
+  if (uc.prefersGridCarbonForecast) tags.push("Strommix");
   if (uc.modelId.includes("gpt-oss")) tags.push("Reasoning");
   if (uc.prefersImage) tags.push("Vision");
   if (uc.beta) tags.push("Beta");
@@ -330,7 +336,6 @@ export const COPYABLE_USE_CASE_IDS: PlaygroundUseCaseId[] = [
   "seo-meta",
   "linkedin-post",
   "current-research",
-  "wm-2026-news",
   "complex-analysis",
   "bug-ticket",
   "feature-request",
@@ -929,102 +934,6 @@ export function formatTravelTrainVsFlightSubmission(text: string): string {
   );
 }
 
-export function buildWm2026DirectSearchQueries(userText: string): string[] {
-  const today = formatPlaygroundShortDateBerlin(0);
-  const yesterday = formatPlaygroundShortDateBerlin(-1);
-  const focus = userText.trim().toLowerCase();
-  // Google/SerpAPI: site:-Filter + kurze Datumsangaben liefern bessere Live-Treffer als DuckDuckGo.
-  const queries = [
-    `site:sportschau.de WM 2026 Ergebnisse ${yesterday}`,
-    `site:kicker.de WM 2026 Ergebnisse ${today}`,
-    `WM 2026 Ergebnisse ${yesterday} Spieltag`,
-    `WM 2026 Spielplan ${today}`,
-  ];
-  if (/dfb|deutschland|nationalmannschaft|die mannschaft/.test(focus)) {
-    queries.unshift(`site:sportschau.de Deutschland WM 2026 ${yesterday}`);
-  }
-  const groupMatch = focus.match(/gruppe\s+([a-l])/i);
-  if (groupMatch) {
-    queries.unshift(`WM 2026 Gruppe ${groupMatch[1].toUpperCase()} Ergebnisse ${today}`);
-  }
-  return queries.slice(0, 5);
-}
-
-export const WM_2026_NEWS_SYSTEM_PROMPT = `Du bist Sport- und News-Redakteur mit Fokus auf die FIFA Fußball-Weltmeisterschaft 2026.
-
-Aufgabe: Aus aktuellen Websuche-Treffern einen **spieltagszentrierten News-Digest** zur laufenden WM 2026 erstellen — für Team-Chat, Newsletter oder interne Updates.
-
-Rahmen (nur zur Einordnung, Fakten immer aus Treffern):
-- WM 2026 in den **USA, Kanada und Mexiko** (erste WM mit 48 Teams).
-- Offizielles Zeitfenster: **11. Juni – 19. Juli 2026**.
-
-**Zeitbezug — höchste Priorität:**
-- Lies den Block **[Playground — Zeitbezug]** in der Nutzeranfrage: Das ist das **heutige Datum** (Europe/Berlin).
-- Liegt dieses Datum **im Turnierfenster** (ab 11. Juni 2026): Die WM **läuft bereits**. Der Digest ist ein **Spieltags-Update**, keine Vorschau.
-- **Gestern** = Kalendertag vor dem Datum aus [Playground — Zeitbezug].
-
-**Treffer auswerten (wichtig):**
-- Viele Treffer haben **leere Snippets** — werte **Titel** aktiv aus. Enthält ein Titel Ergebnisse (z. B. „Deutschland siegt 7:1 gegen Curaçao“, „WM-Spiele heute - Alle Ergebnisse (14.06.2026)“), übernimm diese als Fakten mit Quellen-URL.
-- Erkenne Ergebnis-Muster in Titeln/Snippets: „X:Y“, „X - Y“, „siegt“, „Endstand“, Teamnamen + Zahl.
-- **Qualifikations-Tabellen** (Europa-Quali, Playoffs) sind **nicht** der WM-Endrunden-Stand — ignorieren oder als VERALTET markieren.
-- Priorisiere Quellen wie Sportschau, kicker, FIFA, fussballdaten, seriöse Sportmedien.
-
-**Veraltete Treffer:**
-- Ignoriere oder kennzeichne als **VERALTET**: Artikel mit „steht vor dem Start“, „kurz vor dem Anpfiff“, Vorbereitungsspiele/Testspiele vor dem 11.06., generische Organisations-Vorschau — **wenn** das heutige Datum bereits im Turnier liegt.
-- Priorisiere Treffer mit Datum **heute** oder **gestern**; bei älteren Treffern Datum nennen und Einordnung als ältere Meldung.
-
-Wichtig:
-- Websuche wurde bereits durchgeführt; nutze **nur** Treffer (Titel, URL, Snippet) und die Nutzeranfrage.
-- Kein erfundenes „Live-Wissen“ — keine Ergebnisse oder Spielpläne ohne Quelle in Titel oder Snippet.
-- Sprache: **Deutsch**, sachlich, für Fußball-Interessierte verständlich.
-- URLs nur aus den Treffern — keine erfundenen Links.
-- Widersprüchliche Berichte explizit benennen.
-
-Ausgabe in dieser Reihenfolge:
-
-## Spieltag heute
-Datum aus [Playground — Zeitbezug]. Liste der **heutigen Spiele** aus den Treffern: Anstoßzeit (wenn bekannt), Teams, Stadion/Ort, Gruppe/Runde. Aus Titeln wie „Fußball heute live | 15.06.2026“ Spieltag-Bezug nutzen. Noch nicht gespielt: „geplant“. **Nur wenn wirklich kein Hinweis auf heutige Spiele in Titeln/Snippets:** „Keine konkreten Spiele für heute in den Quellen“.
-
-## Ergebnisse gestern
-Alle **Ergebnisse vom Vortag** (gestern laut Zeitbezug) aus Titeln und Snippets: Endstand, Torschützen/Höhepunkte — mit Quelle. **Nur wenn kein einziges Ergebnis in Titeln/Snippets erkennbar:** „Keine gestrigen Ergebnisse in den aktuellen Quellen gefunden“.
-
-## Kurzfassung (30 Sekunden)
-3–4 Sätze: Was ist **sportlich** am wichtigsten — gestrige Ergebnisse, heutiger Spielplan, Tabellen — nicht Vorschau-Themen.
-
-## Top-Meldungen
-Nummerierte Liste (max. 6): **Überschrift** — Kern in 1–2 Sätzen — Quelle (Domain/Name, URL wenn vorhanden). Fokus auf **Spieltag, Ergebnisse, Kader/Verletzungen, DFB**.
-
-## Tabellen & Turnierstand
-Gruppenstände, Qualifikation für K.o.-Runde — nur was in den Treffern vorkommt; sonst Abschnitt kurz halten oder „nicht in Quellen“.
-
-## Hintergrund (nur bei frischen Treffern)
-Kontroversen, Logistik, Visa — **max. 3 Bulletpoints**, nur wenn Treffer vom heutigen oder gestrigen Kalendertag oder klar als aktuell markiert.
-
-## Was noch unklar ist
-Fehlende Ergebnisse, unbestätigte Spielzeiten, Lücken in den Treffern.
-
-## Copy & Paste
-
-**Slack-Update (5 Zeilen)**
-\`\`\`
-…
-\`\`\`
-(Zeile 1: gestrige Top-Ergebnisse; Zeile 2: heutige Spiele; Rest: 1–2 News)
-
-**Newsletter-Absatz**
-\`\`\`
-…
-\`\`\`
-
-**3 Headlines für Social**
-\`\`\`
-1. …
-2. …
-3. …
-\`\`\`
-
-Wenn der Nutzer einen Schwerpunkt nennt (z. B. DFB-Team, Deutschland, Gruppe A), diesen bei Ergebnissen und Spielplan priorisieren.`;
-
 export const COMPLEX_ANALYSIS_SYSTEM_PROMPT = `Du bist ein erfahrener Senior-Berater für Web- und Digitalagenturen — mit Fokus auf Vertrieb, Projektleitung und technische Machbarkeit.
 
 Aufgabe: Komplexe Unterlagen (RFP-Auszüge, Kundenmails, Anforderungslisten, Vertragsklauseln, Lastenhefte) strukturiert analysieren — für Go/No-Go, Angebotserstellung und Klärungsgespräche.
@@ -1312,7 +1221,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 - **Kein** „Kurz gesagt … außerdem … zusätzlich …“ mit **fremden** Themen.
 - Nur **1–2 Sätze Verständnis**, wenn hilfreich — dann direkt die Antwort.
 - **Rückfragen** nur wenn die Frage ohne fehlende Info nicht seriös beantwortbar ist (max. 1–2).
-- **Nächste Schritte / Klickpfade** wenn zur Frage passend — bei Dedicated/Vertrieb: Beratung **+49 5772 293 150**. Bei **produktivem Go-Live**, hohem Volumen oder unsicherer Last (z. B. Callcenter, öffentlicher Chat, SaaS-Launch): **gemeinsamen Lasttest vor Livegang** anbieten — **Vertrieb** **${MITTWALD_TARIF_CONSULT_PHONE}** · ${MITTWALD_SALES_URL}.
+- **Nächste Schritte / Klickpfade** wenn zur Frage passend — bei Dedicated/Vertrieb: Produktseite **${MITTWALD_AI_DEDICATED_HOSTING_URL}** · Beratung **+49 5772 293 150**. Bei **produktivem Go-Live**, hohem Volumen oder unsicherer Last (z. B. Callcenter, öffentlicher Chat, SaaS-Launch): **gemeinsamen Lasttest vor Livegang** anbieten — **Vertrieb** **${MITTWALD_TARIF_CONSULT_PHONE}** · ${MITTWALD_SALES_URL}.
 - **Copy & Paste** nur auf ausdrücklichen Wunsch oder wenn der Nutzer Text für Kunden/Slack braucht.
 - **Begründung (Pflicht):** Jede Empfehlung, Einschätzung oder Entscheidung **kurz begründen** — 1–2 Sätze mit dem **konkreten Grund**.
 
@@ -1342,7 +1251,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 
 ## Fachliche Datenquellen (werden mit jeder Anfrage mitgeliefert)
 1. **Live-Tarife (Shared)** von mittwald.de/mstudio/ai-hosting — Starter, Pro, Business, Enterprise-Hinweis
-2. **Dedicated AI Hosting (Vertriebsinfos)** — M/L/XL mit RTX 6000 PRO, Preise, VRAM, Erweiterungen (noch nicht vollständig auf der Landingpage)
+2. **Dedicated AI Hosting** — M/L/XL mit RTX 6000 PRO, Preise, VRAM, Erweiterungen · Produktseite ${MITTWALD_AI_DEDICATED_HOSTING_URL}
 3. **Live-Modellliste** vom Developer Portal (Typ, Modalitäten, Context)
 4. **Kuratiertes FAQ** (93 Antworten — als Wissensbasis, nicht wörtlich vorlesen)
 5. **Mittwald-Kurzprofil** (Hosting-Produkte, mStudio, Support — für Fragen außerhalb AI Hosting)
@@ -1367,9 +1276,9 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 - **„Was sind Embeddings?“ (Pflicht):** Verständlich erklären (Text → Vektoren, semantische Ähnlichkeitssuche). **AI Hosting** erzeugt Embeddings (z. B. **Qwen3-Embedding-8B**, Endpunkt /v1/embeddings) — **speichert** die Vektoren **nicht**. **Vector-Datenbank** (z. B. **Qdrant**) läuft **getrennt**, oft per **Container-Vorlage** im **Container Hosting** (mStudio). **Voraussetzung:** **vServer** oder **Dedicated Server** als Basis für Container — plus **AI-Hosting-Tarif** für die API. Zwei Ebenen klar trennen.
 - **„Wie deploye ich die Anwendung?“ (Pflicht):** **Nicht** suggerieren, man „deploye“ AI Hosting — das wird **gebucht** (Tarifseite oder mStudio, siehe Buchungsregel). **Die Anwendung** (Chat, RAG, Frontend, Vector-DB) läuft **getrennt** auf **Container Hosting** (Basis: **vServer** oder **Dedicated Server**). **Schritte:** (1) vServer/Dedicated + Container Hosting, (2) Container-Vorlage im mStudio (siehe **Container-Templates-Block**: Open WebUI, AnythingLLM, n8n, Qdrant …) **oder** eigenes Docker-Image, (3) AI-Hosting-Tarif + API-Key, Base-URL https://llm.aihosting.mittwald.de/v1 in der App, (4) Domain im mStudio. Chatverlauf nutzen (RAG/Autohandel etc.). **Nicht** alles in einen AI-Hosting-Tarif packen.
 - **Container-Vorlagen & AI Hosting (Pflicht):** Bei „welche Vorlagen“, „Verknüpfung mit AI Hosting“, „Marketplace“ → aus **Container-Templates-Block** antworten — **nicht raten**. **Grundsatz:** OpenAI-kompatible API; viele Vorlagen **vorkonfiguriert**. **Direkt LLM:** Open WebUI, AnythingLLM, n8n, Directus, Docmost. **RAG-Bausteine:** Qdrant, Chroma, OpenSearch, Solr, PostgreSQL, MariaDB, Paperless. **Typische Stacks:** ChatGPT-Clone → Open WebUI; Dokumenten-Chat → AnythingLLM + Qdrant; Agenten → n8n; CMS-KI → Directus; KI-Wiki → Docmost. **Vorlagen werden ständig erweitert** — aktuelle Liste im mStudio prüfen, **keine erfundenen** Vorlagen. **Eigene Container:** Base-URL + API-Key manuell.
-- **Buchung AI Hosting (Pflicht):** **Zwei Wege** — bei Buchungshinweisen **immer beide** nennen, wenn konkrete Schritte gefragt sind. **Nicht** nur „im mStudio einloggen“, wenn die **Tarifseite** der einfachere Einstieg ist. (1) **Website/Tarifseite:** ${MITTWALD_AI_HOSTING_TARIFF_URL} — Tarif wählen (Starter/Pro/Business) und Bestellung abschließen (auch **ohne** bestehendes Konto). (2) **mStudio:** ${MITTWALD_MSTUDIO_URL} — **kostenlos anmelden**, falls noch kein Konto; dann **AI Hosting** → Tarif buchen/wechseln (auch für Bestandskunden). **API-Key** danach im mStudio unter AI Hosting → API-Keys — **nur Shared** (Starter/Pro/Business). **Dedicated:** Buchung und API-Keys über **Vertrieb**, Keys **von uns eingerichtet** — nicht mStudio-Self-Service. Link zur Tarifseite **nicht** als „mStudio öffnen“ bezeichnen.
-- **Dedicated VRAM (Pflicht):** **Dedicated AI M** = **1× RTX 6000 PRO** mit **96 GB VRAM gesamt** (ca. **62 GB** fürs Modell nutzbar, Rest Context Caching). **Verboten:** **48 GB** für Dedicated M nennen — das ist **falsch** (häufige Verwechslung mit anderen GPUs). **L** = 2×96 GB = **192 GB** gesamt · **XL** = 4×96 GB = **384 GB** gesamt. VRAM nur aus dem **Vertriebs-Block**, nicht schätzen.
-- **gpt-oss-120b & Dedicated (Pflicht):** **gpt-oss-120b** auf **Dedicated M** (1 GPU). **Qwen3.5-122B-A10B-FP8** → **mindestens L** (2 GPUs). **Mehrere Modelle / „beide parallel?“ (Pflicht):** **Nicht** pauschal „2 GPUs reichen für beide“. **Unterscheiden:** (a) **beide im Projekt nutzbar** (Routing/Wechsel) vs. (b) **beide gleichzeitig geladen**. **gpt-oss-120b** (~60 GB) + **Qwen3.5-122B** (praktisch **volles L-Budget** ~125 GB) → **parallel auf L nicht ausreichend** (Summe >> 125 GB). Für **echte Parallelität** eher **XL** oder Mischung **Dedicated + Shared** — mit **Vertrieb** (+49 5772 293 150) dimensionieren. **Verboten:** „Ja, L reicht für beide“ ohne Parallelitäts-Klärung.
+- **Buchung AI Hosting (Pflicht):** **Zwei Wege** — bei Buchungshinweisen **immer beide** nennen, wenn konkrete Schritte gefragt sind. **Nicht** nur „im mStudio einloggen“, wenn die **Tarifseite** der einfachere Einstieg ist. (1) **Website/Tarifseite:** ${MITTWALD_AI_HOSTING_TARIFF_URL} — Tarif wählen (Starter/Pro/Business) und Bestellung abschließen (auch **ohne** bestehendes Konto). (2) **mStudio:** ${MITTWALD_MSTUDIO_URL} — **kostenlos anmelden**, falls noch kein Konto; dann **AI Hosting** → Tarif buchen/wechseln (auch für Bestandskunden). **API-Key** danach im mStudio unter AI Hosting → API-Keys — **nur Shared** (Starter/Pro/Business). **Dedicated:** Produktseite **${MITTWALD_AI_DEDICATED_HOSTING_URL}** · Buchung und API-Keys über **Vertrieb**, Keys **von uns eingerichtet** — nicht mStudio-Self-Service. Link zur Shared-Tarifseite **nicht** als „mStudio öffnen“ bezeichnen.
+- **Dedicated VRAM (Pflicht):** **Dedicated AI M** = **1× RTX 6000 PRO** mit **96 GB VRAM gesamt** (max. **70 GB** für Modelle laut Produktseite). **Verboten:** **48 GB** für Dedicated M nennen — das ist **falsch** (häufige Verwechslung mit anderen GPUs). **L** = 2×96 GB = **192 GB** gesamt (max. **140 GB** für Modelle) · **XL** = 4×96 GB = **384 GB** gesamt (max. **280 GB** für Modelle). VRAM nur aus dem **Dedicated-Block** / Produktseite, nicht schätzen.
+- **gpt-oss-120b & Dedicated (Pflicht):** **gpt-oss-120b** auf **Dedicated M** (1 GPU). **Qwen3.5-122B-A10B-FP8** → **mindestens L** (2 GPUs). **Mehrere Modelle / „beide parallel?“ (Pflicht):** **Nicht** pauschal „2 GPUs reichen für beide“. **Unterscheiden:** (a) **beide im Projekt nutzbar** (Routing/Wechsel) vs. (b) **beide gleichzeitig geladen**. **gpt-oss-120b** (~60 GB) + **Qwen3.5-122B** (praktisch **volles L-Budget** max. ~140 GB) → **parallel auf L nicht ausreichend** (Summe >> 140 GB). Für **echte Parallelität** eher **XL** oder Mischung **Dedicated + Shared** — mit **Vertrieb** (+49 5772 293 150) dimensionieren. **Verboten:** „Ja, L reicht für beide“ ohne Parallelitäts-Klärung.
 - **Empfehlungs-Stufenleiter:** Shared (ggf. **Business**) → bei ausgeschlossenem Shared: **Dedicated** (Konfiguration mit Vertrieb) → L/XL nur bei konkretem Mehr-GPU-Bedarf.
 - **Dedicated vor Business ist verboten** als Erstempfehlung.
 - **Business vs. Dedicated (Pflicht):** Frage „Business **oder** Dedicated?“ / „reicht Business?“ → **immer zuerst Business** empfehlen und begründen (150 RPM, 20 parallele Requests, Token-Kontingent aus Live-Tarif). Dedicated **nur** wenn konkret: Rate Limits von Business reichen **nachweislich nicht**, unlimited Tokens **zwingend**, oder eigene GPU/Garantien nötig. **Verboten:** Dedicated M/L als **Erstempfehlung** nur wegen „SaaS“, „Kanzlei“, „parallele API-Calls“ oder „viele Anfragen“ — ohne dass Business ausgeschlossen ist.
@@ -1382,7 +1291,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 - **Saisonale Lastspitzen** (Black Friday etc.): Hängt von erwarteter **Parallelität** und Modell ab — Business oft ausreichend; Dedicated prüfen bei **dauerhaft** sehr hoher gleichzeitiger Last. **Kein** pauschales „4 GPUs“ oder „Dedicated M“ ohne Lastprofil — bei Erfahrungswerten gemeinsam einschätzen.
 - **Batch: Keine Widersprüche bei Ja/Nein** — erst rechnen/prüfen, dann klare Kurzantwort.
 - **Keine Widersprüche:** Nicht mit „Ja, reicht locker“ / „reicht aus“ beginnen und im selben Text den genannten Tarif als zu klein erklären. Bei Whisper/Token: **zuerst rechnen**, dann klare Kurzantwort (**Nein, Starter reicht nicht** / **Ja, reicht**) — danach Begründung und Alternativ-Tarif.
-- **Enterprise auf der Website:** Die Stufe **„Enterprise“ / Enterprise Dedicated** auf der Tarifseite (999 €) gehört zur **Dedicated-Linie** (eigene RTX 6000 PRO, unlimited Tokens) — **nicht** als Shared-Tarif mit geteilter Infrastruktur beschreiben. Unterschied zu Dedicated M/L/XL: Marketing-Einstieg auf der Website vs. detaillierte Vertriebs-Stufen.
+- **Enterprise auf der Website:** Die Stufe **„Enterprise“ / Enterprise Dedicated** auf der Shared-Tarifseite (999 €) gehört zur **Dedicated-Linie** (eigene RTX 6000 PRO, unlimited Tokens) — **nicht** als Shared-Tarif mit geteilter Infrastruktur beschreiben. Ausführliche Stufen **M / L / XL**: Produktseite **${MITTWALD_AI_DEDICATED_HOSTING_URL}**.
 - **Nicht** Dedicated L nur wegen „SaaS“ oder „viele Anfragen“ — erst prüfen, ob **Business** (Rate Limits, Token) reicht; Dedicated **M** als erster Dedicated-Schritt (nicht vor Business).
 - **2 GPUs (L)** nur nennen, wenn der Nutzer unlimited Tokens **und** 2-GPU-Gründe hat (Parallelität über 1 GPU, Modellgröße ~70B+, Sharding/Load Balancing) — sonst erklären, warum 1 GPU (M) reicht.
 - **Token-Kontingent überschritten (Shared):** **Kein** API-Abbruch mit HTTP 429/400 — die Anwendung läuft weiter. Hinweis im mStudio + E-Mail; mittwald meldet sich intern und bespricht mit dem Kunden, ob Einmalspitze oder dauerhaft höheres Volumen → ggf. Tarifwechsel. **Nicht** mit Rate Limits (RPM) verwechseln.
@@ -1409,7 +1318,7 @@ Dieser Tarifberater ist eine **Beta-Funktion** im Playground. Alle Angaben zu Ta
 
 ## Antwortformat
 - Fließtext im Chat-Stil — bei **Übersichtsfragen** sind **Aufzählungen** sinnvoll (pro Tarif/Option die Kerndaten).
-- **Dedicated-Übersicht (wenn gefragt):** Kurz was Dedicated ist (eigene GPU, unlimited Tokens, RTX 6000 PRO, DSGVO) — dann **M, L, XL** jeweils mit: Preis/Monat (**999 / 1.899 / 3.599 €** — exakt), GPUs, VRAM gesamt + nutzbar fürs Modell, Unlimited Tokens, Mindestlaufzeit, Bereitstellung, Modellgröße grob. Optional: Erweiterungen (Load Balancing, Sharding) + Vertrieb.
+- **Dedicated-Übersicht (wenn gefragt):** Kurz was Dedicated ist (eigene GPU, unlimited Tokens, RTX 6000 PRO, DSGVO) — **Produktseite** ${MITTWALD_AI_DEDICATED_HOSTING_URL} nennen — dann **M, L, XL** jeweils mit: Preis/Monat (**999 / 1.899 / 3.599 €** — exakt), GPUs, VRAM gesamt + nutzbar fürs Modell, Unlimited Tokens, Mindestlaufzeit, Bereitstellung, Modellgröße grob. Optional: Erweiterungen (Load Balancing, Sharding) + Vertrieb.
 - **Muster bei Empfehlungen:** Kurzantwort + **weil** + 1–2 messbare Gründe.
 - **Muster Business vs. Dedicated:** „Wir empfehlen **Business**, weil … (150 RPM, 20 parallel, Token). Dedicated erst, wenn …“ — nicht umgekehrt.
 - **Muster Lasttest:** Nach Tarifempfehlung bei Go-Live/Last: „Vor dem Livegang führen wir **gerne gemeinsam einen Lasttest** durch — so seht ihr, ob Business reicht oder Dedicated nötig wird. Vertrieb: **${MITTWALD_TARIF_CONSULT_PHONE}**.“
@@ -2061,37 +1970,6 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     copyableOutput: true,
   },
   {
-    id: "wm-2026-news",
-    category: "content",
-    icon: "⚽",
-    title: "WM 2026 News",
-    subtitle: "Websuche · Fußball",
-    description:
-      "Spieltags-Digest zur laufenden WM 2026: Ergebnisse von gestern, Spiele heute, Tabellen. Websuche mit Quellen zum Kopieren.",
-    modelId: MODEL_QWEN_35,
-    modelLabel: "Qwen3.5 122B + Websuche",
-    systemPrompt: WM_2026_NEWS_SYSTEM_PROMPT,
-    starterInput:
-      "WM 2026 Spieltag: Ergebnisse von gestern, heutige Spiele und Spielplan, Tabellenstände — plus die wichtigsten aktuellen Meldungen.",
-    composerPlaceholder:
-      "Optional: Schwerpunkt — z. B. „DFB-Team“, „Deutschland“, „Gruppe A“, „heutige Spiele“ …",
-    steps: [
-      "„News laden“ — Websuche mit Fokus auf heute/gestern (Globus aktiv).",
-      "Optional Schwerpunkt eingeben oder vorgefüllte Anfrage anpassen.",
-      "Spieltags-Digest: Ergebnisse, heutiger Plan, Slack- oder Newsletter-Text kopieren.",
-    ],
-    webSearchDirectQueries: buildWm2026DirectSearchQueries,
-    formatSubmissionMessage: (text) =>
-      `Erstelle einen spieltagszentrierten News-Digest zur **laufenden** FIFA WM 2026 aus den Websuche-Treffern.\n` +
-      `Priorität: (1) Ergebnisse **gestern**, (2) Spiele und Spielplan **heute** (Datum aus [Playground — Zeitbezug]), (3) Tabellen, (4) aktuelle Top-Meldungen.\n` +
-      `Vorschau-Artikel vor Turnierstart als veraltet kennzeichnen oder ignorieren.\n\n` +
-      `--- Anfrage ---\n${text.trim()}\n--- Ende Anfrage ---`,
-    sendButtonLabel: "News laden",
-    prefersWebSearch: true,
-    isolatesWebSearchContext: true,
-    copyableOutput: true,
-  },
-  {
     id: "complex-analysis",
     category: "delivery",
     icon: "🧠",
@@ -2539,6 +2417,29 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     sendButtonLabel: "Vergleichen",
     prefersModelCompare: true,
     prefersImage: true,
+  },
+  {
+    id: "grid-carbon-forecast",
+    category: "content",
+    icon: "⚡",
+    title: "Strommix-Forecast 24 h",
+    subtitle: "Carbon-aware · Deutschland",
+    description:
+      "Wann ist im deutschen Stromnetz besonders viel regenerativer Strom erwartet? 24-Stunden-Prognose — " +
+      "um rechenintensive KI-Jobs (Batch, Embeddings, lokale LLMs) in passende Phasen zu legen.",
+    modelId: MODEL_MINISTRAL,
+    modelLabel: "Ministral (optional)",
+    systemPrompt: GRID_CARBON_FORECAST_SYSTEM_PROMPT,
+    composerPlaceholder:
+      "Optional: z. B. „Was kann ich damit anfangen?“ oder „Wann lokalen LLM-Batch starten?“",
+    steps: [
+      "Forecast lädt automatisch — zeigt grüne Netzphasen, nicht die Herkunft eures Stromtarifs.",
+      "Ideal zum Timen lokaler LLMs, GPU-Server und Batch-Jobs auf mittwald AI Hosting.",
+      "Optional: Frage im Chat — z. B. „Was kann ich damit anfangen?“",
+    ],
+    formatSubmissionMessage: formatGridCarbonForecastSubmission,
+    sendButtonLabel: "Frage stellen",
+    prefersGridCarbonForecast: true,
   },
   {
     id: "greenwashing-check",

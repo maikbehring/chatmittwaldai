@@ -18,6 +18,4 @@ docs/customer.js
 railpack-info.json
 railpack-plan.json
 
-# Lokales Deploy-Skript (projektspezifisch, nicht ins Repo)
-scripts/deploy-mittwald.sh
 .mittwald-api-token

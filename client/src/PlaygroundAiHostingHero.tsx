@@ -1,6 +1,10 @@
 import { PlaygroundAiHostingHeroIllustration } from "./PlaygroundAiHostingHeroIllustration";
 import { assetUrl } from "./appPaths";
-import { MITTWALD_AI_HOSTING_TARIFF_URL } from "./playgroundSalesLinks";
+import {
+  MITTWALD_AI_DEDICATED_HOSTING_URL,
+  MITTWALD_AI_HOSTING_TARIFF_URL,
+} from "./playgroundSalesLinks";
+import { trackUmamiEvent, UMAMI_EVENT_DEDICATED_HOSTING } from "./umami";
 
 const MODEL_DOCS_URL =
   "https://developer.mittwald.de/de/docs/v2/platform/aihosting/models/";
@@ -64,12 +68,6 @@ const SHOWCASE_MODELS_LEADING: ShowcaseModel[] = [
 ];
 
 const SHOWCASE_MODELS_TRAILING: ShowcaseModel[] = [
-  {
-    id: "Mistral-Medium-3.5-128B",
-    label: "Mistral Medium 128B",
-    logo: "mistral",
-    iconClass: "bg-orange-500/10",
-  },
   {
     id: "Ministral-3-14B-Instruct-2512",
     label: "Ministral 3 14B",
@@ -221,9 +219,9 @@ export function PlaygroundAiHostingHero({
                 id="playground-ai-hero-title"
                 className="font-display text-[clamp(1.625rem,4vw,2.25rem)] font-semibold leading-[1.08] tracking-tight text-playground-ink"
               >
-                Open Weight AI. Gehostet in{" "}
+                Open Weight AI. Auf{" "}
                 <span className="bg-gradient-to-r from-playground-send to-sky-500 bg-clip-text text-transparent">
-                  Deutschland.
+                  deutscher Infrastruktur.
                 </span>
               </h1>
               <p className="playground-text-body mx-auto max-w-xl font-medium text-playground-muted lg:mx-0">
@@ -240,6 +238,32 @@ export function PlaygroundAiHostingHero({
                 zur Verfügung.
               </p>
             </div>
+            <a
+              href={MITTWALD_AI_DEDICATED_HOSTING_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={() =>
+                trackUmamiEvent(UMAMI_EVENT_DEDICATED_HOSTING, { platzierung: "hero" })
+              }
+              className="group mx-auto flex max-w-xl flex-col gap-1 rounded-2xl border border-playground-send/25 bg-gradient-to-r from-playground-send/[0.08] to-sky-500/[0.06] px-4 py-3 text-left transition hover:border-playground-send/45 hover:from-playground-send/[0.12] hover:to-sky-500/[0.1] sm:mx-0 sm:flex-row sm:items-center sm:justify-between sm:gap-4"
+            >
+              <span className="min-w-0">
+                <span className="mb-0.5 inline-flex items-center gap-2">
+                  <span className="rounded bg-playground-send px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                    Neu
+                  </span>
+                  <span className="playground-text-small font-bold text-playground-ink">
+                    Dedicated AI Hosting
+                  </span>
+                </span>
+                <span className="playground-text-tiny mt-0.5 block text-playground-muted">
+                  Eigene RTX 6000 PRO GPUs — Managed Dedicated AI M, L und XL
+                </span>
+              </span>
+              <span className="playground-text-small shrink-0 font-bold text-playground-send transition group-hover:translate-x-0.5">
+                Tarife ansehen →
+              </span>
+            </a>
             <ul className="grid grid-cols-2 gap-3 sm:grid-cols-4 sm:gap-4 sm:text-left">
               {PILLARS.map((p) => (
                 <li key={p.title} className="flex flex-col items-center gap-1.5 sm:items-start">

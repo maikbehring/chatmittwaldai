@@ -1,0 +1,983 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Open WebUI bei mittwald — ChatGPT-Gefühl auf deutscher Infrastruktur</title>
+  <meta name="description" content="Schritt-für-Schritt-Anleitung: Open WebUI mit mittwald AI Hosting aufsetzen, Modelle wählen, Websuche und RAG einrichten — auch ohne Technik-Vorkenntnisse." />
+  <style>
+    :root {
+      --ink: #0f1c2e;
+      --muted: #5a6b7d;
+      --border: #d7e0ea;
+      --bg: #f3f7fb;
+      --card: #ffffff;
+      --accent: #0074c8;
+      --accent-dark: #005a9c;
+      --accent-soft: #e8f4fc;
+      --ok: #0d7a4f;
+      --ok-soft: #e6f6ef;
+      --warn: #9a6700;
+      --warn-soft: #fff6e0;
+      --danger: #b42318;
+      --danger-soft: #fdecea;
+      --radius: 14px;
+      --shadow: 0 10px 30px rgba(15, 28, 46, 0.06);
+      --font: "Segoe UI", system-ui, -apple-system, sans-serif;
+      --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      font-family: var(--font);
+      color: var(--ink);
+      background:
+        radial-gradient(1200px 500px at 10% -10%, #d9ecfa 0%, transparent 55%),
+        radial-gradient(900px 420px at 100% 0%, #e8f6f1 0%, transparent 50%),
+        var(--bg);
+      line-height: 1.55;
+    }
+
+    a { color: var(--accent); }
+    a:hover { color: var(--accent-dark); }
+
+    .wrap {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 1.5rem 1.25rem 4rem;
+    }
+
+    header.hero {
+      background: linear-gradient(145deg, #0b2740 0%, #0f4c75 55%, #1677a8 100%);
+      color: #fff;
+      border-radius: calc(var(--radius) + 4px);
+      padding: 2rem 1.75rem 1.75rem;
+      box-shadow: var(--shadow);
+      margin-bottom: 1.5rem;
+    }
+    header.hero .brand {
+      font-size: 0.85rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+      opacity: 0.85;
+      margin: 0 0 0.75rem;
+    }
+    header.hero h1 {
+      margin: 0 0 0.75rem;
+      font-size: clamp(1.55rem, 4vw, 2.15rem);
+      line-height: 1.15;
+      font-weight: 700;
+    }
+    header.hero p {
+      margin: 0;
+      max-width: 42rem;
+      opacity: 0.95;
+      font-size: 1.05rem;
+    }
+    header.hero .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 1.25rem;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      padding: 0.35rem 0.7rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.14);
+      font-size: 0.82rem;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+
+    nav.toc {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1rem 1.25rem;
+      margin-bottom: 1.5rem;
+      box-shadow: var(--shadow);
+    }
+    nav.toc h2 {
+      margin: 0 0 0.65rem;
+      font-size: 0.95rem;
+    }
+    nav.toc ol {
+      margin: 0;
+      padding-left: 1.2rem;
+      columns: 1;
+    }
+    @media (min-width: 700px) {
+      nav.toc ol { columns: 2; }
+    }
+    nav.toc li { margin: 0.25rem 0; break-inside: avoid; }
+    nav.toc a { text-decoration: none; font-weight: 600; }
+    nav.toc a:hover { text-decoration: underline; }
+
+    section.card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 1.35rem 1.35rem 1.2rem;
+      margin-bottom: 1.15rem;
+      box-shadow: var(--shadow);
+    }
+    section.card > h2 {
+      margin: 0 0 0.35rem;
+      font-size: 1.35rem;
+      scroll-margin-top: 1rem;
+    }
+    section.card > .lead {
+      color: var(--muted);
+      margin: 0 0 1rem;
+    }
+    h3 {
+      margin: 1.25rem 0 0.5rem;
+      font-size: 1.05rem;
+    }
+    h4 {
+      margin: 1rem 0 0.4rem;
+      font-size: 0.95rem;
+    }
+    p { margin: 0.55rem 0; }
+    ul, ol { margin: 0.4rem 0 0.8rem; padding-left: 1.25rem; }
+    li { margin: 0.3rem 0; }
+
+    .callout {
+      border-radius: 12px;
+      padding: 0.85rem 1rem;
+      margin: 0.9rem 0;
+      border: 1px solid transparent;
+    }
+    .callout.tip { background: var(--ok-soft); border-color: #b7e4cf; }
+    .callout.note { background: var(--accent-soft); border-color: #b7d7f0; }
+    .callout.warn { background: var(--warn-soft); border-color: #f0d48a; }
+    .callout strong { display: block; margin-bottom: 0.15rem; }
+
+    .steps {
+      counter-reset: step;
+      list-style: none;
+      padding: 0;
+      margin: 0.75rem 0;
+    }
+    .steps > li {
+      position: relative;
+      padding: 0.85rem 0.9rem 0.85rem 3.1rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin: 0.55rem 0;
+      background: #fbfcfe;
+    }
+    .steps > li::before {
+      counter-increment: step;
+      content: counter(step);
+      position: absolute;
+      left: 0.75rem;
+      top: 0.85rem;
+      width: 1.7rem;
+      height: 1.7rem;
+      border-radius: 999px;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 700;
+      font-size: 0.85rem;
+      display: grid;
+      place-items: center;
+    }
+    .steps > li strong.label {
+      display: block;
+      margin-bottom: 0.2rem;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.92rem;
+      margin: 0.75rem 0 0.4rem;
+    }
+    th, td {
+      border: 1px solid var(--border);
+      padding: 0.65rem 0.7rem;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #eef5fb; }
+    tr:nth-child(even) td { background: #fafcfe; }
+    code, .mono {
+      font-family: var(--mono);
+      font-size: 0.86em;
+      background: #eef3f8;
+      padding: 0.1em 0.35em;
+      border-radius: 5px;
+    }
+    pre {
+      background: #0f1c2e;
+      color: #e8eef5;
+      padding: 0.9rem 1rem;
+      border-radius: 10px;
+      overflow-x: auto;
+      font-family: var(--mono);
+      font-size: 0.82rem;
+      line-height: 1.45;
+      margin: 0.6rem 0;
+    }
+    pre code {
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      font-size: inherit;
+    }
+
+    details {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.55rem 0.85rem;
+      margin: 0.7rem 0;
+      background: #fbfcfe;
+    }
+    details summary {
+      cursor: pointer;
+      font-weight: 700;
+      color: var(--accent-dark);
+      padding: 0.25rem 0;
+    }
+    details[open] summary { margin-bottom: 0.45rem; }
+
+    .checklist label {
+      display: flex;
+      gap: 0.55rem;
+      align-items: flex-start;
+      padding: 0.45rem 0.2rem;
+      border-bottom: 1px solid var(--border);
+    }
+    .checklist label:last-child { border-bottom: 0; }
+    .checklist input { margin-top: 0.3rem; }
+
+    .grid-2 {
+      display: grid;
+      gap: 0.75rem;
+    }
+    @media (min-width: 720px) {
+      .grid-2 { grid-template-columns: 1fr 1fr; }
+    }
+    .mini {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 0.9rem 1rem;
+      background: #fbfcfe;
+    }
+    .mini h3 { margin-top: 0; }
+    .badge {
+      display: inline-block;
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      padding: 0.15rem 0.45rem;
+      border-radius: 999px;
+      background: var(--accent-soft);
+      color: var(--accent-dark);
+      margin-left: 0.25rem;
+      vertical-align: middle;
+    }
+    .badge.ok { background: var(--ok-soft); color: var(--ok); }
+
+    footer {
+      margin-top: 2rem;
+      color: var(--muted);
+      font-size: 0.88rem;
+      border-top: 1px solid var(--border);
+      padding-top: 1rem;
+    }
+    footer ul { padding-left: 1.1rem; }
+
+    .print-hint { display: none; }
+    @media print {
+      body { background: #fff; }
+      header.hero { box-shadow: none; break-inside: avoid; }
+      section.card { box-shadow: none; break-inside: avoid; }
+      nav.toc { display: none; }
+      details { open: true; }
+      details[open] summary, details summary { display: list-item; }
+      .print-hint { display: block; }
+    }
+
+    .disclaimer {
+      background: linear-gradient(180deg, #fffef9 0%, #ffffff 100%);
+      border: 1px solid #e8dfc8;
+      border-radius: var(--radius);
+      padding: 1.25rem 1.4rem 1.15rem;
+      margin-bottom: 1.25rem;
+      box-shadow: var(--shadow);
+    }
+    .disclaimer .eyebrow {
+      margin: 0 0 0.45rem;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--warn);
+    }
+    .disclaimer h2 {
+      margin: 0 0 0.65rem;
+      font-size: 1.15rem;
+      line-height: 1.3;
+    }
+    .disclaimer p {
+      margin: 0.45rem 0;
+      color: var(--ink);
+    }
+    .disclaimer .pros {
+      display: grid;
+      gap: 0.55rem;
+      margin: 0.9rem 0 0.2rem;
+    }
+    @media (min-width: 700px) {
+      .disclaimer .pros { grid-template-columns: 1fr 1fr; }
+    }
+    .disclaimer .pros div {
+      background: var(--ok-soft);
+      border: 1px solid #b7e4cf;
+      border-radius: 10px;
+      padding: 0.7rem 0.85rem;
+      font-size: 0.92rem;
+    }
+    .disclaimer .pros strong {
+      display: block;
+      margin-bottom: 0.15rem;
+      color: var(--ok);
+      font-size: 0.88rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <p class="brand">mittwald · AI Hosting + Container Hosting</p>
+      <h1>Open WebUI bei mittwald — Dein ChatGPT auf deutscher Infrastruktur</h1>
+      <p>
+        Diese Anleitung führt dich von null zu einem Open WebUI mit dem Gefühl von ChatGPT:
+        passende Modelle, sinnvolle Einstellungen, Websuche und eine kleine Wissensdatenbank (RAG).
+        Auch ohne Technik-Vorkenntnisse.
+      </p>
+      <div class="meta">
+        <span class="pill">⏱ ca. 30–45 Min. komplett</span>
+        <span class="pill">🚀 Schnellstart ~10 Min.</span>
+        <span class="pill">🇩🇪 Daten in DE</span>
+        <span class="pill">📄 Stand: Aug 2026</span>
+      </div>
+    </header>
+
+    <aside class="disclaimer" role="note" aria-label="Ehrlicher Hinweis">
+      <p class="eyebrow">Ehrlicher Hinweis</p>
+      <h2>ChatGPT bleibt oft die stärkere Allzweck-KI — und das ist okay.</h2>
+      <p>
+        OpenAI steckt enorme Mittel in sehr große Modelle und in ein Nutzererlebnis, das über Jahre
+        poliert wurde. In reiner Sprachqualität, Kreativität und „es klappt einfach“ liegt ChatGPT
+        deshalb häufig vorne. Wer das erwartet, sollte ehrlich damit rechnen.
+      </p>
+      <p>
+        Open WebUI bei mittwald ersetzt ChatGPT nicht Eins-zu-eins — es gibt euch etwas anderes:
+        <strong>souveräne KI unter eurer Kontrolle</strong>, mit dem vertrauten Chat-Gefühl,
+        aber ohne dass Firmendaten durch eine öffentliche Konsum-Cloud wandern müssen.
+      </p>
+      <div class="pros">
+        <div>
+          <strong>Daten &amp; Standort</strong>
+          Modelle auf deutscher Infrastruktur, Chats und Dokumente in eurem Projekt — nicht in einem
+          fremden Massen-Account.
+        </div>
+        <div>
+          <strong>Euer Wissen, eure Regeln</strong>
+          Eigene Nutzer, eigene Wissensdatenbanken, Websuche nach Wahl — für Team und Kunden,
+          nicht nur für dich privat.
+        </div>
+        <div>
+          <strong>Open Weight, klare Kosten</strong>
+          Transparente Open-Weight-Modelle statt Blackbox. Ihr wählt Größe und Preis — vom kleinen
+          Allrounder bis zum starken Reasoning-Modell.
+        </div>
+        <div>
+          <strong>ChatGPT-Workflow, euer Stack</strong>
+          Chat, Mikrofon, Dateien, RAG: die Oberfläche fühlt sich vertraut an — betrieben bei euch,
+          angebunden an mittwald AI Hosting.
+        </div>
+      </div>
+      <p style="margin-top:0.85rem;color:var(--muted);font-size:0.92rem;">
+        Kurz: Wo ChatGPT oft noch die Spitze der Qualität markiert, gewinnt Open WebUI bei
+        Kontrolle, Datenschutz und Team-Einsatz. Mit den richtigen Modellen und Einstellungen
+        kommt ihr dem bekannten Chat-Gefühl sehr nahe — und behaltet das Steuer.
+      </p>
+    </aside>
+
+    <nav class="toc" aria-label="Inhalt">
+      <h2>Inhalt</h2>
+      <ol>
+        <li><a href="#was">Was bekommst du?</a></li>
+        <li><a href="#schnellstart">Schnellster Weg (10 Min.)</a></li>
+        <li><a href="#manuell">Manuell im mStudio</a></li>
+        <li><a href="#modelle">Welches Modell wofür?</a></li>
+        <li><a href="#einstellungen">Optimale Einstellungen (Verbindung, Parameter, Whisper)</a></li>
+        <li><a href="#websuche">Websuche einrichten</a></li>
+        <li><a href="#rag">Wissensdatenbank (RAG)</a></li>
+        <li><a href="#checkliste">Checkliste für Team &amp; Kunden</a></li>
+        <li><a href="#faq">FAQ &amp; Troubleshooting</a></li>
+        <li><a href="#quellen">Quellen</a></li>
+      </ol>
+    </nav>
+
+    <!-- A -->
+    <section class="card" id="was">
+      <h2>1. Was bekommst du?</h2>
+      <p class="lead">Kurz: ChatGPT-Gefühl — aber unter deiner Kontrolle.</p>
+      <p>
+        Open WebUI ist eine Chat-Oberfläche, die du selbst betreibst. Die KI-Modelle kommen von
+        <strong>mittwald AI Hosting</strong> (OpenAI-kompatible API, Rechenzentrum in Deutschland).
+        Du bestimmst Nutzer, Modelle und welche Firmendokumente die KI kennen darf.
+      </p>
+      <div class="grid-2">
+        <div class="mini">
+          <h3>Für dich bedeutet das</h3>
+          <ul>
+            <li>Chat, Texte, Analysen — wie gewohnt</li>
+            <li>Optional: aktuelle Infos per Websuche</li>
+            <li>Optional: Antworten aus euren PDFs &amp; Handbüchern</li>
+            <li>Eigene Nutzerverwaltung, kein öffentliches ChatGPT-Konto</li>
+          </ul>
+        </div>
+        <div class="mini">
+          <h3>Was du brauchst</h3>
+          <ul>
+            <li>mStudio-Projekt mit <strong>Container Hosting</strong></li>
+            <li><strong>AI Hosting</strong>-Tarif (Starter reicht zum Testen)</li>
+            <li>Einen API-Key aus dem mStudio</li>
+            <li>Ca. 10 Minuten für den Schnellstart</li>
+          </ul>
+        </div>
+      </div>
+      <div class="callout tip">
+        <strong>Tipp für Nicht-Techniker</strong>
+        Nutze den Schnellstart unten. Du klickst dich durchs mStudio — Terminal und Docker-Kenntnisse sind nicht nötig.
+      </div>
+    </section>
+
+    <!-- B -->
+    <section class="card" id="schnellstart">
+      <h2>2. Schnellster Weg <span class="badge ok">empfohlen</span></h2>
+      <p class="lead">Managed Deployment: Open WebUI wird beim Anlegen des API-Keys mitinstalliert.</p>
+
+      <ol class="steps">
+        <li>
+          <strong class="label">AI Hosting buchen</strong>
+          Im mStudio AI Hosting aktivieren. Der Starter-Tarif reicht zum Ausprobieren.
+          Details: <a href="https://www.mittwald.de/mstudio/ai-hosting" target="_blank" rel="noopener">AI Hosting</a>.
+        </li>
+        <li>
+          <strong class="label">API-Key anlegen + Open WebUI mitinstallieren</strong>
+          Im mStudio unter AI Hosting einen API-Key anlegen. Wenn dein Produkt Container unterstützt,
+          aktiviere die Option, Open WebUI <strong>automatisch mitzuinstallieren</strong>.
+        </li>
+        <li>
+          <strong class="label">Admin-Benutzer direkt im Dialog setzen</strong>
+          Im selben Dialog legst du den <strong>Admin-Benutzer</strong> (E-Mail/Passwort) fest.
+          So startet Open WebUI nicht „blank“ und öffentlich im Netz — der erste Zugang ist schon geschützt,
+          bevor du die Oberfläche öffnest. Neue Selbst-Registrierungen sind damit von Anfang an nicht nötig
+          (bzw. bleiben gesperrt).
+        </li>
+        <li>
+          <strong class="label">Domain verbinden &amp; anmelden</strong>
+          Weise dem Container eine Domain/Subdomain zu (z.&nbsp;B. <code>ki.meine-firma.de</code>)
+          und melde dich mit dem Admin-Zugang aus dem Dialog an.
+        </li>
+        <li>
+          <strong class="label">Ersten Chat starten</strong>
+          Wähle als Default-Modell <code>Qwen3.6-35B-A3B-FP8</code> (Allrounder) und stelle eine Testfrage.
+          Wenn eine Antwort kommt: Verbindung zu AI Hosting steht.
+        </li>
+      </ol>
+
+      <div class="callout tip">
+        <strong>Warum der Admin im Dialog?</strong>
+        Ohne vorab gesetzten Admin könnte Open WebUI kurzzeitig mit offener Erst-Registrierung erreichbar sein.
+        Der AI-Hosting-Dialog verhindert genau das: Admin zuerst, dann öffentlich erreichbar.
+      </div>
+
+      <div class="callout note">
+        <strong>Fertig in ~10 Minuten</strong>
+        Ab hier kannst du schon produktiv chatten. Websuche und Wissensdatenbank sind optional — aber genau das macht das „ChatGPT-Plus-Gefühl“.
+      </div>
+    </section>
+
+    <!-- C -->
+    <section class="card" id="manuell">
+      <h2>3. Manuell im mStudio (falls kein Auto-Install)</h2>
+      <p class="lead">Schritt für Schritt über die Oberfläche — CLI-Variante einklappbar darunter.</p>
+
+      <ol class="steps">
+        <li>
+          <strong class="label">Container erstellen</strong>
+          Projekt → <em>Container</em> → <em>Container erstellen</em>.
+          Beschreibung z.&nbsp;B. „Open WebUI“.
+        </li>
+        <li>
+          <strong class="label">Image angeben</strong>
+          Image: <code>ghcr.io/open-webui/open-webui:main</code><br />
+          Entrypoint und Command: unverändert lassen.
+        </li>
+        <li>
+          <strong class="label">Volume für Daten</strong>
+          Persistentes Volume auf <code>/app/backend/data</code> —
+          speichert Chats, Einstellungen und hochgeladene Dokumente.
+          Ohne Volume gehen Daten bei Updates verloren.
+        </li>
+        <li>
+          <strong class="label">Umgebungsvariablen setzen</strong>
+<pre><code>PORT=8080
+WEBUI_NAME=mittwald AI Chat
+ENABLE_SIGNUP=false
+OPENAI_API_BASE_URL=https://llm.aihosting.mittwald.de/v1
+OPENAI_API_KEY=dein_api_key_hier</code></pre>
+          Beim manuellen Weg: zuerst Admin in Open WebUI anlegen, danach
+          <code>ENABLE_SIGNUP=false</code> setzen (ENV oder Admin Panel) —
+          sonst steht die Instanz kurz mit offener Registrierung im Netz.
+          Beim Managed-Weg (API-Key-Dialog) ist der Admin bereits im Dialog gesetzt.
+        </li>
+        <li>
+          <strong class="label">Port &amp; Domain</strong>
+          Port <code>8080</code> freigeben und eine Domain auf den Container legen.
+          Danach erreichst du Open WebUI unter <code>https://deine-domain/</code>.
+          Volumes werden im Projekt-Backup mitgesichert.
+        </li>
+      </ol>
+
+      <details>
+        <summary>Alternative für Profis: CLI (<code>mw container run</code>)</summary>
+<pre><code>mw container run \
+  --name openwebui \
+  --description "Open WebUI - AI Chat Interface" \
+  --publish 8080:8080 \
+  --env "OPENAI_API_BASE_URL=https://llm.aihosting.mittwald.de/v1" \
+  --env "OPENAI_API_KEY=dein_api_key_hier" \
+  --env "WEBUI_NAME=mittwald AI Chat" \
+  --env "ENABLE_SIGNUP=false" \
+  --volume "openwebui-data:/app/backend/data" \
+  --create-volumes \
+  ghcr.io/open-webui/open-webui:main</code></pre>
+        Danach Domain zuweisen.
+      </details>
+
+      <details>
+        <summary>Alternative: <code>docker-compose.yml</code> + <code>mw stack deploy</code></summary>
+<pre><code>services:
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    ports:
+      - "8080:8080"
+    volumes:
+      - "openwebui-data:/app/backend/data"
+    environment:
+      PORT: "8080"
+      WEBUI_NAME: "mittwald AI Chat"
+      OPENAI_API_BASE_URL: "https://llm.aihosting.mittwald.de/v1"
+      OPENAI_API_KEY: "dein_api_key_hier"
+      ENABLE_SIGNUP: "false"
+volumes:
+  openwebui-data: {}</code></pre>
+        Im Verzeichnis mit der Datei: <code>mw stack deploy</code>
+      </details>
+
+      <details>
+        <summary>Verbindung nachträglich im Admin Panel</summary>
+        <ol>
+          <li>Profil → Settings → Connections</li>
+          <li>OpenAI API → neue Verbindung</li>
+          <li>Base URL: <code>https://llm.aihosting.mittwald.de/v1</code></li>
+          <li>API-Key eintragen und speichern</li>
+        </ol>
+        Open WebUI erkennt danach alle verfügbaren Modelle automatisch.
+      </details>
+    </section>
+
+    <!-- D -->
+    <section class="card" id="modelle">
+      <h2>4. Welches Modell wofür?</h2>
+      <p class="lead">Das ist der Schlüssel zum ChatGPT-Gefühl: das richtige Modell für die Aufgabe.</p>
+
+      <div class="callout tip">
+        <strong>Default-Empfehlung</strong>
+        Setze <code>Qwen3.6-35B-A3B-FP8</code> als Standardmodell.
+        Starkes Reasoning, Vision, großer Kontext — und günstiger als die großen 120B-Modelle.
+        Regel von mittwald: immer mit dem kleinsten ausreichenden Modell starten.
+      </div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Aufgabe im Alltag</th>
+            <th>Modell</th>
+            <th>Warum</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Standard-Chat, E-Mails, Texte (Allrounder)</td>
+            <td><code>Qwen3.6-35B-A3B-FP8</code></td>
+            <td>Reasoning + Vision, 256k Kontext, gutes Preis-/Leistungsverhältnis — <strong>Default</strong></td>
+          </tr>
+          <tr>
+            <td>Komplexe Analysen, Fachtexte, höchste Qualität</td>
+            <td><code>gpt-oss-120b</code> oder <code>Qwen3.5-122B-A10B-FP8</code></td>
+            <td>Große Modelle, starkes Reasoning; 122B zusätzlich Vision</td>
+          </tr>
+          <tr>
+            <td>Bilder verstehen (Screenshots, Fotos, Scans)</td>
+            <td><code>Qwen3.5-122B-A10B-FP8</code> / <code>Ministral-3-14B-Instruct-2512</code></td>
+            <td>Vision-Modalität</td>
+          </tr>
+          <tr>
+            <td>Massenaufgaben, Klassifizierung, Routing</td>
+            <td><code>Qwen3.5-0.8B</code></td>
+            <td>Schnell und kostengünstig</td>
+          </tr>
+          <tr>
+            <td>Diktieren statt tippen</td>
+            <td><code>whisper-large-v3-turbo</code></td>
+            <td>Speech-to-Text, 99+ Sprachen — <strong>aus der Chat-Liste ausblenden</strong></td>
+          </tr>
+          <tr>
+            <td>Wissensdatenbank / RAG</td>
+            <td><code>Qwen3-Embedding-8B</code></td>
+            <td>Embedding-Modell (kein Chat)</td>
+          </tr>
+          <tr>
+            <td>PDF / Scan → Text</td>
+            <td><code>GLM-OCR</code></td>
+            <td>Dokument-OCR</td>
+          </tr>
+          <tr>
+            <td>RAG-Treffer nachschärfen (optional)</td>
+            <td><code>Qwen3-VL-Reranker-2B</code></td>
+            <td>Zweiter Schritt nach der Vektorsuche</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="lead" style="margin-top:0.75rem">
+        Chat + Reasoning: <code>gpt-oss-120b</code> (131k), <code>Qwen3.5-0.8B</code> (262k),
+        <code>Qwen3.6-35B-A3B-FP8</code> (256k), <code>Qwen3.5-122B-A10B-FP8</code> (245k Vision),
+        <code>Ministral-3-14B-Instruct-2512</code> (262k Vision). Spezial:
+        Embedding <code>Qwen3-Embedding-8B</code>, OCR <code>GLM-OCR</code>,
+        STT <code>whisper-large-v3-turbo</code>, Reranker <code>Qwen3-VL-Reranker-2B</code>.
+      </p>
+    </section>
+
+    <!-- E Einstellungen -->
+    <section class="card" id="einstellungen">
+      <h2>5. Optimale Einstellungen in Open WebUI</h2>
+      <p class="lead">
+        Inhalt aus der offiziellen mittwald-Anleitung „Open WebUI mit mittwald AI Hosting“ —
+        hier vollständig, damit du nicht hin- und herspringen musst.
+      </p>
+
+      <h3>Verbindung prüfen (falls nicht schon per Managed Deployment)</h3>
+      <p>
+        Beim Managed Deployment (API-Key-Dialog) ist die Verbindung bereits gesetzt.
+        Sonst im Admin Panel:
+      </p>
+      <ol>
+        <li>Gehe zu <strong>„Settings“</strong> und wähle <strong>„Connections“</strong></li>
+        <li>Im Bereich <strong>„OpenAI API“</strong> füge eine weitere Verbindung hinzu</li>
+        <li>Basis-URL: <code>https://llm.aihosting.mittwald.de/v1</code></li>
+        <li>API-Key eintragen und speichern</li>
+      </ol>
+      <p>Open WebUI erkennt danach automatisch alle verfügbaren Modelle.</p>
+
+      <h3>Modelle aufräumen</h3>
+      <ol>
+        <li>Admin Settings → Models</li>
+        <li>Spezialmodelle ausblenden („Hide model“):
+          <code>whisper-large-v3-turbo</code>, <code>Qwen3-Embedding-8B</code>,
+          <code>GLM-OCR</code>, <code>Qwen3-VL-Reranker-2B</code></li>
+        <li>Default-Modell auf <code>Qwen3.6-35B-A3B-FP8</code> setzen</li>
+      </ol>
+      <div class="callout note">
+        <strong>Hinweis von mittwald</strong>
+        Embedding-Modelle in der Modellauswahl ausblenden — sie werden von Open WebUI erkannt,
+        lassen sich aber nicht in einem Chat verwenden.
+      </div>
+
+      <h3>Optimierung der Modell-Parameter (Advanced Params)</h3>
+      <p>
+        Für optimale Ergebnisse die Standard-Parameter von Open WebUI je Modell anpassen:
+      </p>
+      <ol>
+        <li>Navigiere zum Bereich <strong>„Models“</strong> in Open WebUI</li>
+        <li>Wähle das Modell aus, das du konfigurieren möchtest</li>
+        <li>Unter <strong>„Advanced Params“</strong> setze die empfohlenen Parameter aus der jeweiligen Modell-Dokumentation,
+          z.&nbsp;B. <code>top_p</code>, <code>top_k</code> und <code>temperature</code></li>
+      </ol>
+
+      <h3>Speech-to-Text (Mikrofon / Whisper)</h3>
+      <p>
+        <code>whisper-large-v3-turbo</code> unterstützt über 99 Sprachen und ist für Audio-Transkription
+        über die gehostete mittwald-API optimiert.
+      </p>
+
+      <h4>Konfiguration im Admin Panel</h4>
+      <p>In den Admin Settings unter <strong>„Audio“</strong>:</p>
+      <ul>
+        <li><strong>Speech-to-Text Engine:</strong> „OpenAI“</li>
+        <li><strong>API Base URL:</strong> <code>https://llm.aihosting.mittwald.de/v1</code></li>
+        <li><strong>API Key:</strong> dein API-Key</li>
+        <li><strong>STT Model:</strong> <code>whisper-large-v3-turbo</code></li>
+      </ul>
+
+      <h4>Whisper aus Chat-Modellen ausblenden</h4>
+      <p>
+        Whisper erscheint nach der Verbindung in der Modellliste, gehört aber nicht in die Chat-Auswahl
+        (es ist für Transkription, nicht für konversationelle KI):
+      </p>
+      <ol>
+        <li>Admin settings → Models</li>
+        <li><code>whisper-large-v3-turbo</code> wählen</li>
+        <li><strong>„Hide model“</strong> aktivieren</li>
+      </ol>
+
+      <h4>Benutzereinstellungen (pro Nutzer, nicht Admin)</h4>
+      <p>Unter Benutzereinstellungen → <strong>„Audio“</strong>:</p>
+      <ul>
+        <li><strong>Language:</strong> Sprachcode explizit setzen (z.&nbsp;B. <code>de</code> oder <code>en</code>)</li>
+        <li><strong>Instant Auto-Send After Voice Transcription:</strong> optional aktivieren, damit Transkriptionen ohne Bestätigung gesendet werden</li>
+      </ul>
+
+      <h4>Empfohlene Parameter für Whisper</h4>
+      <p>Im Admin Panel oder in den Chat-Einstellungen unter Additional Parameters:</p>
+      <ul>
+        <li><code>temperature=1.0</code></li>
+        <li><code>top_p=1.0</code></li>
+      </ul>
+
+      <h4>Testen</h4>
+      <ol>
+        <li>Mikrofon-Symbol in einem Chat anklicken</li>
+        <li>In der konfigurierten Sprache sprechen</li>
+        <li>Transkription läuft über <code>/v1/audio/transcriptions</code> — Formate: MP3, OGG, WAV, FLAC (max. 25&nbsp;MB)</li>
+      </ol>
+      <div class="callout warn">
+        <strong>Tipp für Genauigkeit</strong>
+        Sprachparameter immer explizit setzen — besonders bei nicht-deutschen Audioeingaben.
+      </div>
+    </section>
+
+    <!-- F Websuche -->
+    <section class="card" id="websuche">
+      <h2>6. Websuche einrichten</h2>
+      <p class="lead">Damit die KI aktuelle Infos aus dem Netz holen kann — wie bei ChatGPT mit Suche.</p>
+
+      <div class="grid-2">
+        <div class="mini">
+          <h3>Einfach <span class="badge ok">für die meisten</span></h3>
+          <p><strong>Brave Search API</strong> — kein zweiter Container nötig.</p>
+          <ol>
+            <li>API-Key bei Brave Search holen (Free Tier: ca. 2.000 Suchen/Monat)</li>
+            <li>Open WebUI → Admin → Tools → Web Search</li>
+            <li>Enable Web Search aktivieren</li>
+            <li>Engine: <code>brave</code></li>
+            <li>API-Key eintragen</li>
+            <li><strong>Concurrent Requests = 1</strong> (sonst oft 429-Fehler im Free Tier)</li>
+            <li>Speichern</li>
+          </ol>
+        </div>
+        <div class="mini">
+          <h3>Souverän <span class="badge">Profis</span></h3>
+          <p><strong>SearXNG</strong> als zweiter Container im selben Projekt.</p>
+          <ol>
+            <li>SearXNG-Container starten (interner DNS-Name, z.&nbsp;B. <code>searxng</code>)</li>
+            <li>In SearXNG JSON-Format in <code>settings.yml</code> aktivieren (sonst 403)</li>
+            <li>In Open WebUI Engine: <code>searxng</code></li>
+            <li>Query URL z.&nbsp;B.<br /><code>http://searxng:8080/search?q=&lt;query&gt;</code></li>
+          </ol>
+          <p>Vorteil: keine externe Such-API, alles im eigenen Projekt.</p>
+        </div>
+      </div>
+
+      <div class="callout note">
+        <strong>Nutzung im Chat</strong>
+        Websuche im Chat aktivieren (Globus-Symbol / Web-Search-Toggle).
+        Achtung: Einstellungen im Admin-Panel überschreiben Umgebungsvariablen.
+      </div>
+
+      <details>
+        <summary>ENV-Beispiel Brave (optional, UI hat Vorrang)</summary>
+<pre><code>ENABLE_WEB_SEARCH=True
+WEB_SEARCH_ENGINE=brave
+BRAVE_SEARCH_API_KEY=dein_brave_key
+WEB_SEARCH_RESULT_COUNT=3
+WEB_SEARCH_CONCURRENT_REQUESTS=1</code></pre>
+      </details>
+    </section>
+
+    <!-- G RAG -->
+    <section class="card" id="rag">
+      <h2>7. Kleines RAG-System (Wissensdatenbank)</h2>
+      <p class="lead">
+        Open WebUI kann Wissen in Form von Dokumenten hinterlegen (Retrieval-Augmented Generation / RAG).
+        Die KI antwortet dann auf Basis eurer PDFs und Handbücher — nicht nur aus dem Modellwissen.
+      </p>
+
+      <h3>Schritt A — Embedding-Modell konfigurieren</h3>
+      <p>Für performantere Verarbeitung ein Embedding-Modell von mittwald AI Hosting nutzen:</p>
+      <ol class="steps">
+        <li>
+          <strong class="label">Admin Settings → Documents</strong>
+          Menüpunkt <strong>„Documents“</strong> öffnen.
+        </li>
+        <li>
+          <strong class="label">Embedding Engine „OpenAI“</strong>
+          Im Bereich <strong>„Embedding“</strong> im Dropdown <strong>„OpenAI“</strong> als Embedding Model Engine wählen.
+        </li>
+        <li>
+          <strong class="label">Endpunkt &amp; API-Key</strong>
+          Endpunkt: <code>https://llm.aihosting.mittwald.de/v1</code><br />
+          API-Key: dein generierter AI-Hosting-Key
+        </li>
+        <li>
+          <strong class="label">Embedding-Modell &amp; Stapelgröße</strong>
+          Unter <strong>„Embedding Model“</strong>: <code>Qwen3-Embedding-8B</code><br />
+          <strong>Embedding-Stapelgröße</strong> auf <strong>32</strong> setzen (mittwald-Empfehlung).
+        </li>
+        <li>
+          <strong class="label">Retrieval feinjustieren (optional)</strong>
+          Im Bereich <strong>„Retrieval“</strong> die Parameter <strong>„Top K“</strong> und
+          <strong>„RAG Template“</strong> nach Bedarf anpassen — für den Einstieg reichen die Startwerte.
+        </li>
+      </ol>
+
+      <h3>Schritt B — Dokumente hochladen (Knowledge)</h3>
+      <ol class="steps">
+        <li>
+          <strong class="label">Workspace → Knowledge</strong>
+          In der linken Menüleiste zu <strong>„Workspace“</strong> navigieren.
+        </li>
+        <li>
+          <strong class="label">Neue Wissensdatenbank</strong>
+          Reiter <strong>„Knowledge“</strong> → Button <strong>„New Knowledge“</strong> —
+          Name vergeben (z.&nbsp;B. „Firmenhandbuch“).
+        </li>
+        <li>
+          <strong class="label">Dokumente hochladen</strong>
+          PDFs und Docs hochladen, die verfügbar sein sollen.
+        </li>
+        <li>
+          <strong class="label">Im Chat nutzen</strong>
+          Über <strong>„Attach knowledge“</strong> im Chat-Eingabefeld (oder <code>#firmenhandbuch</code>)
+          die Wissensdatenbank anhängen.
+        </li>
+        <li>
+          <strong class="label">Prüfen</strong>
+          Eine Frage stellen, die nur aus dem Dokument beantwortbar ist — so siehst du, ob RAG greift.
+        </li>
+      </ol>
+
+      <div class="callout tip">
+        <strong>Ausblick, wenn es wächst</strong>
+        Für größere RAG-Setups: AnythingLLM + Qdrant als Container-Templates im mStudio.
+        Kein Extra-RAG-Tarif nötig — es läuft über AI Hosting + Container.
+      </div>
+    </section>
+
+    <!-- H Checkliste -->
+    <section class="card" id="checkliste">
+      <h2>8. Checkliste — bereit für Team &amp; Kunden</h2>
+      <p class="lead">Hake ab, bevor du den Link an Kollegen oder Kunden gibst.</p>
+      <div class="checklist">
+        <label><input type="checkbox" /> Domain mit HTTPS erreichbar</label>
+        <label><input type="checkbox" /> Admin-Benutzer im AI-Hosting-Dialog gesetzt (oder manuell: erster Account + Signup sperren)</label>
+        <label><input type="checkbox" /> Keine offene Selbst-Registrierung (<code>ENABLE_SIGNUP=false</code> bzw. Admin-Einstellung) — beim Managed-Weg bereits im Dialog erledigt</label>
+        <label><input type="checkbox" /> Default-Modell gesetzt (<code>Qwen3.6-35B-A3B-FP8</code>)</label>
+        <label><input type="checkbox" /> Whisper / Embedding / OCR / Reranker aus Chat-Liste ausgeblendet</label>
+        <label><input type="checkbox" /> Testchat ohne Fehler</label>
+        <label><input type="checkbox" /> Websuche getestet (eine aktuelle Frage)</label>
+        <label><input type="checkbox" /> Knowledge mit einem Testdokument geprüft</label>
+        <label><input type="checkbox" /> Volume auf <code>/app/backend/data</code> vorhanden (Backup über Projekt-Backup)</label>
+        <label><input type="checkbox" /> Optional: Update-Zeitplan für Image-Tag <code>:main</code> im mStudio gesetzt</label>
+      </div>
+    </section>
+
+    <!-- I FAQ -->
+    <section class="card" id="faq">
+      <h2>9. FAQ &amp; Troubleshooting</h2>
+
+      <details open>
+        <summary>Es erscheinen keine Modelle</summary>
+        <p>Prüfe Base URL <code>https://llm.aihosting.mittwald.de/v1</code> (mit <code>/v1</code>) und den API-Key.
+        Key neu erzeugen und in Connections bzw. ENV aktualisieren. Container danach neu starten, falls ENV geändert wurde.</p>
+      </details>
+      <details>
+        <summary>Websuche liefert nichts / Fehler 429</summary>
+        <p>Bei Brave Free Tier: Concurrent Requests auf <strong>1</strong> setzen.
+        Engine und API-Key im Admin Panel prüfen — UI-Einstellungen überschreiben ENV.</p>
+      </details>
+      <details>
+        <summary>SearXNG: Fehler 403</summary>
+        <p>JSON-Format in der SearXNG-<code>settings.yml</code> aktivieren. Ohne JSON lehnt SearXNG die Anfragen von Open WebUI ab.</p>
+      </details>
+      <details>
+        <summary>Wo liegen meine Daten?</summary>
+        <p>Im Volume unter <code>/app/backend/data</code> im mittwald-Projekt (RZ Deutschland).
+        Projekt-Backups sichern Volumes mit. Chat-Inhalte gehen nicht an öffentliche ChatGPT-Clouds.</p>
+      </details>
+      <details>
+        <summary>Was kostet das?</summary>
+        <p>AI Hosting (z.&nbsp;B. Starter zum Testen) + Container Hosting.
+        Die eingebaute Knowledge-/RAG-Funktion in Open WebUI braucht keinen Extra-RAG-Tarif —
+        du zahlst die Embedding-/Chat-Nutzung über AI Hosting.</p>
+      </details>
+      <details>
+        <summary>Antworten sind schwach / „nicht wie ChatGPT“</summary>
+        <p>Default auf <code>Qwen3.6-35B-A3B-FP8</code> stellen, Advanced Params laut Modell-Doku setzen,
+        Websuche und Knowledge aktivieren. Für schwere Fachfragen kurz auf <code>gpt-oss-120b</code> oder
+        <code>Qwen3.5-122B-A10B-FP8</code> wechseln.</p>
+      </details>
+      <details>
+        <summary>Glossar (Kurz)</summary>
+        <ul>
+          <li><strong>API-Key</strong> — Zugangsschlüssel zu den KI-Modellen</li>
+          <li><strong>Container</strong> — fertig verpackte App, die mittwald für dich betreibt</li>
+          <li><strong>Embedding</strong> — wandelt Texte in Zahlenvektoren um, damit Suche in Dokumenten funktioniert</li>
+          <li><strong>RAG</strong> — „Retrieval Augmented Generation“: erst relevante Docs holen, dann antworten</li>
+          <li><strong>Volume</strong> — dauerhafter Speicher, der Container-Neustarts überlebt</li>
+        </ul>
+      </details>
+    </section>
+
+    <!-- Quellen -->
+    <section class="card" id="quellen">
+      <h2>10. Quellen &amp; Stand</h2>
+      <p>
+        Abschnitte 5 und 7 enthalten den Inhalt der offiziellen Seite
+        <em>Open WebUI mit mittwald AI Hosting</em> vollständig (Verbindung, Modell-Parameter, RAG, Whisper) —
+        Stand August 2026. Bei Abweichungen gilt die aktuelle Developer-Portal-Dokumentation.
+      </p>
+      <ul>
+        <li>Open WebUI mit mittwald AI Hosting (Inhalt hier integriert)</li>
+        <li>Open WebUI betreiben — Deployment (mStudio / CLI / Compose)</li>
+        <li>Verfügbare Modelle — Typ, Modalitäten, Kontext</li>
+        <li>Container-Workloads — Volumes, Domains, Updates</li>
+        <li>Open WebUI Docs — Web Search / SearXNG / Brave</li>
+      </ul>
+    </section>
+
+    <footer>
+      <p>
+        Anleitung basierend auf <code>docs/use-case-openwebui-konzept.md</code> und dem Inhalt von
+        developer.mittwald.de (AI Hosting → Beispiele → Open WebUI).
+        Preise und Modellnamen können sich ändern.
+      </p>
+      <p class="print-hint">Druckversion: Inhaltsverzeichnis wird ausgeblendet.</p>
+    </footer>
+  </div>
+</body>
+</html>

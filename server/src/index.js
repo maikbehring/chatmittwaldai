@@ -42,6 +42,7 @@ import {
   buildNetworkPathCheck,
   NETWORK_PATH_TARGETS,
 } from "./networkPathCheck.js";
+import { getGridCarbonConfig, getGridCarbonSummary } from "./gridCarbonForecast.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.join(__dirname, "../..");
@@ -450,7 +451,27 @@ async function main() {
       aiHostingUrl:
         process.env.PLAYGROUND_LINK_AI_HOSTING_URL?.trim() || DEFAULT_AI_HOSTING_URL,
       selfHostRepoUrl: SELF_HOST_REPO_URL,
+      gridCarbon: getGridCarbonConfig(),
     });
+  });
+
+  app.get("/api/carbon/grid-de", modelsLimiter, async (_req, res) => {
+    const cfg = getGridCarbonConfig();
+    if (!cfg.enabled) {
+      return jsonError(res, 404, "not_enabled", "Strommix-Badge ist deaktiviert.");
+    }
+    try {
+      const summary = await getGridCarbonSummary();
+      res.json(summary);
+    } catch (e) {
+      console.error(e);
+      return jsonError(
+        res,
+        502,
+        "grid_forecast_failed",
+        "Strommix-Prognose konnte nicht geladen werden.",
+      );
+    }
   });
 
   const webSearchLimiter = rateLimit({
@@ -1141,9 +1162,30 @@ async function main() {
 
   const staticDir = path.join(__dirname, "../../client/dist");
   if (fs.existsSync(staticDir)) {
+    // robots/sitemap explizit (korrektes Content-Type, kein SPA-Fallback)
+    const seoFile = (name, type) => {
+      const filePath = path.join(staticDir, name);
+      if (!fs.existsSync(filePath)) return null;
+      return (req, res) => {
+        res.type(type);
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        res.sendFile(filePath);
+      };
+    };
+    const robotsHandler = seoFile("robots.txt", "text/plain; charset=utf-8");
+    const sitemapHandler = seoFile("sitemap.xml", "application/xml; charset=utf-8");
+    const llmsHandler = seoFile("llms.txt", "text/plain; charset=utf-8");
+    const llmHandler = seoFile("llm.txt", "text/plain; charset=utf-8");
+    if (robotsHandler) app.get("/robots.txt", robotsHandler);
+    if (sitemapHandler) app.get("/sitemap.xml", sitemapHandler);
+    if (llmsHandler) app.get("/llms.txt", llmsHandler);
+    if (llmHandler) app.get("/llm.txt", llmHandler);
+
     app.use(express.static(staticDir, { index: false, maxAge: "1h" }));
     app.get("*", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
+      // Keine HTML-SPA für Crawler-Dateien / Assets ohne Treffer
+      if (/\.(txt|xml|ico|json|webmanifest|map)$/i.test(req.path)) return next();
       res.sendFile(path.join(staticDir, "index.html"));
     });
   }

@@ -15,8 +15,12 @@ export const MITTWALD_EMAIL_MIGRATION_URL = "https://www.mittwald.de/lp/e-mail-m
 export const MITTWALD_MSTUDIO_PRODUCT_URL = "https://www.mittwald.de/mstudio";
 export const MITTWALD_CONTAINER_HOSTING_URL = "https://www.mittwald.de/mstudio/container-hosting";
 
-/** AI-Hosting-Tarifseite (Website) — Tarif wählen & buchen. */
+/** AI-Hosting-Tarifseite (Website) — Shared-Tarife wählen & buchen. */
 export const MITTWALD_AI_HOSTING_TARIFF_URL = "https://www.mittwald.de/mstudio/ai-hosting";
+
+/** Dedicated AI Hosting — Produktseite (Managed Dedicated AI M / L / XL). */
+export const MITTWALD_AI_DEDICATED_HOSTING_URL =
+  "https://www.mittwald.de/mstudio/ai-dedicated-hosting";
 
 /** mStudio-Kundenportal — Anmeldung (auch kostenlos neu), Verwaltung, API-Keys. */
 export const MITTWALD_MSTUDIO_URL = "https://mstudio.mittwald.de/";

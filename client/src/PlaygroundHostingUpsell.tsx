@@ -1,7 +1,9 @@
+import { MITTWALD_AI_DEDICATED_HOSTING_URL } from "./playgroundSalesLinks";
 import {
   trackUmamiEvent,
   UMAMI_EVENT_AI_HOSTING_BOOK,
   UMAMI_EVENT_CONSULT_CALL,
+  UMAMI_EVENT_DEDICATED_HOSTING,
 } from "./umami";
 
 export const TARIF_CONSULT_PHONE = "+49 5772 293 150";
@@ -15,6 +17,22 @@ type Props = {
   /** Sidebar-Karte unten links; Banner unter den Use Cases auf der Startseite */
   variant: UpsellPlacement;
 };
+
+function DedicatedLink({ placement }: { placement: UpsellPlacement }) {
+  return (
+    <a
+      href={MITTWALD_AI_DEDICATED_HOSTING_URL}
+      target="_blank"
+      rel="noreferrer"
+      onClick={() =>
+        trackUmamiEvent(UMAMI_EVENT_DEDICATED_HOSTING, { platzierung: placement })
+      }
+      className="playground-text-tiny text-center font-semibold text-playground-link underline decoration-playground-link/25 underline-offset-2 transition hover:text-playground-link-hover"
+    >
+      Neu: Dedicated AI Hosting
+    </a>
+  );
+}
 
 function BookCta({
   href,
@@ -78,6 +96,7 @@ export function PlaygroundHostingUpsell({ aiHostingUrl, variant, className = "" 
         <div className="mt-3 flex flex-col gap-2">
           <BookCta href={aiHostingUrl} placement={variant} />
           <CallCta placement={variant} />
+          <DedicatedLink placement={variant} />
         </div>
       </div>
     );
@@ -96,9 +115,10 @@ export function PlaygroundHostingUpsell({ aiHostingUrl, variant, className = "" 
             AI Hosting buchen oder kurz mit uns sprechen — Tarifberatung in unter einer Minute.
           </p>
         </div>
-        <div className="flex w-full flex-col gap-2 sm:w-auto sm:min-w-[220px]">
+        <div className="flex w-full flex-col items-center gap-2 sm:w-auto sm:min-w-[220px]">
           <BookCta href={aiHostingUrl} placement={variant} />
           <CallCta placement={variant} />
+          <DedicatedLink placement={variant} />
         </div>
       </div>
     </div>
