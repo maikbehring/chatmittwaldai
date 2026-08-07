@@ -28,7 +28,8 @@ export function formatPlaygroundMittwaldContext(): string {
     `• **mStudio** — Verwaltung: https://mstudio.mittwald.de/ · Produktinfo: https://www.mittwald.de/mstudio\n` +
     `• **CMS-/Shop-Hosting** — u. a. TYPO3, WordPress, Joomla!, Shopware, Magento, WooCommerce (eigene Produktseiten auf mittwald.de).\n` +
     `• **AI Hosting** — OpenAI-kompatible API, Modelle fully managed in Deutschland, Verwaltung im mStudio. ` +
-    `Technik/Doku: https://developer.mittwald.de/de/docs/v2/platform/aihosting/ · Produkt: https://www.mittwald.de/mstudio/ai-hosting\n` +
+    `Technik/Doku: https://developer.mittwald.de/de/docs/v2/platform/aihosting/ · Shared-Tarife: https://www.mittwald.de/mstudio/ai-hosting · ` +
+    `Dedicated AI Hosting (eigene GPUs): https://www.mittwald.de/mstudio/ai-dedicated-hosting\n` +
     `• **Container Hosting** — Docker-Container im mStudio, Vorlagen, kombinierbar mit AI Hosting: https://www.mittwald.de/mstudio/container-hosting\n` +
     `• **n8n Hosting** — weitere mStudio-Produkte (Details auf mittwald.de).\n\n` +
     `## Support & Beratung\n` +

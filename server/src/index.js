@@ -1162,9 +1162,30 @@ async function main() {
 
   const staticDir = path.join(__dirname, "../../client/dist");
   if (fs.existsSync(staticDir)) {
+    // robots/sitemap explizit (korrektes Content-Type, kein SPA-Fallback)
+    const seoFile = (name, type) => {
+      const filePath = path.join(staticDir, name);
+      if (!fs.existsSync(filePath)) return null;
+      return (req, res) => {
+        res.type(type);
+        res.setHeader("Cache-Control", "public, max-age=3600");
+        res.sendFile(filePath);
+      };
+    };
+    const robotsHandler = seoFile("robots.txt", "text/plain; charset=utf-8");
+    const sitemapHandler = seoFile("sitemap.xml", "application/xml; charset=utf-8");
+    const llmsHandler = seoFile("llms.txt", "text/plain; charset=utf-8");
+    const llmHandler = seoFile("llm.txt", "text/plain; charset=utf-8");
+    if (robotsHandler) app.get("/robots.txt", robotsHandler);
+    if (sitemapHandler) app.get("/sitemap.xml", sitemapHandler);
+    if (llmsHandler) app.get("/llms.txt", llmsHandler);
+    if (llmHandler) app.get("/llm.txt", llmHandler);
+
     app.use(express.static(staticDir, { index: false, maxAge: "1h" }));
     app.get("*", (req, res, next) => {
       if (req.path.startsWith("/api")) return next();
+      // Keine HTML-SPA für Crawler-Dateien / Assets ohne Treffer
+      if (/\.(txt|xml|ico|json|webmanifest|map)$/i.test(req.path)) return next();
       res.sendFile(path.join(staticDir, "index.html"));
     });
   }

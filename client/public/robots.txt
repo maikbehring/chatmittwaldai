@@ -1,0 +1,10 @@
+# mittwald KI-Playground — https://playground.mittwald.de/ai/
+User-agent: *
+Allow: /
+
+# Sitemap (App läuft unter /ai/)
+Sitemap: https://playground.mittwald.de/ai/sitemap.xml
+
+# LLM-Kontext (llms.txt Spec + Alias)
+# https://playground.mittwald.de/ai/llms.txt
+# https://playground.mittwald.de/ai/llm.txt

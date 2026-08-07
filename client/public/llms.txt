@@ -1,0 +1,35 @@
+# mittwald KI-Playground
+> Öffentliche Demo für mittwald AI Hosting: Open-Weight-KI-Modelle im Browser testen. Dieselben Modelle stehen produktiv über eine OpenAI-kompatible API auf Infrastruktur in Deutschland (DSGVO) bereit.
+
+Wichtige Hinweise für Assistenten:
+- Playground-URL: https://playground.mittwald.de/ai/ (Base-Path `/ai/`)
+- Das ist eine Demo — für Produktion AI Hosting buchen und eigenen API-Key im mStudio anlegen
+- Base-URL der API: `https://llm.aihosting.mittwald.de/v1`
+- Shared-Tarife (Starter/Pro/Business) vs. Dedicated AI Hosting (eigene GPUs, M/L/XL) nicht verwechseln
+- mittwald betreibt Modelle selbst in DE — kein Proxy zu OpenAI/Anthropic/Google-APIs
+
+## Playground
+- [KI-Playground](https://playground.mittwald.de/ai/): Interaktiver Chat und Use Cases (Tarifberatung, Docs, Strommix-Forecast u. a.)
+- [robots.txt](https://playground.mittwald.de/ai/robots.txt): Crawler-Regeln
+- [sitemap.xml](https://playground.mittwald.de/ai/sitemap.xml): Indexierbare URLs
+
+## Produkte
+- [AI Hosting (Shared)](https://www.mittwald.de/mstudio/ai-hosting): Starter/Pro/Business — Token-Kontingente, Rate Limits, Self-Service im mStudio
+- [Dedicated AI Hosting](https://www.mittwald.de/mstudio/ai-dedicated-hosting): Managed Dedicated AI M/L/XL — eigene RTX 6000 PRO GPUs, unlimited Tokens, Buchung über Vertrieb
+- [mStudio](https://mstudio.mittwald.de/): Kundenportal — Anmeldung, AI Hosting, API-Keys (Shared)
+- [Container Hosting](https://www.mittwald.de/mstudio/container-hosting): Apps (z. B. Open WebUI, n8n, Qdrant) neben der Modell-API
+
+## Dokumentation
+- [AI Hosting Developer Docs](https://developer.mittwald.de/de/docs/v2/platform/aihosting/): API, Modelle, Integration
+- [Modellliste](https://developer.mittwald.de/de/docs/v2/platform/aihosting/models/): Verfügbare Open-Weight-Modelle
+- [mittwald Developer Portal](https://developer.mittwald.de/de/): Plattform- und CLI-Dokumentation
+
+## Kontakt & Beratung
+- [Vertrieb](https://www.mittwald.de/darum-mittwald/vertrieb): Tarif- und Architekturberatung
+- Tarifberatung telefonisch: +49 5772 293 150
+
+## Optional
+- [mittwald Startseite](https://www.mittwald.de/): Hosting, Agenturen, Produkte
+- [100 % Ökostrom (Blog)](https://www.mittwald.de/blog/nachhaltigkeit/100-oekostrom-mit-herkunftsnachweis-so-sichern-wir-nachhaltige-energie-bei-mittwald): Strombezug mittwald
+- [Agent Skills (GitHub)](https://github.com/mittwald/agent-skills): Öffentliche Skills mittwald-migrate / mittwald-zerodeploy
+- [Agentic Integration Docs](https://developer.mittwald.de/docs/v2/agentic-integration/): MCP und Agent Skills

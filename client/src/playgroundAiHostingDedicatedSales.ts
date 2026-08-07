@@ -1,7 +1,9 @@
 /**
- * Dedicated AI Hosting — Vertriebsinfos (RTX 6000 PRO).
- * Noch nicht vollständig auf der öffentlichen Landingpage; vom Vertrieb in Gesprächen genutzt.
+ * Dedicated AI Hosting — Managed Dedicated AI M / L / XL (RTX 6000 PRO).
+ * Produktseite: https://www.mittwald.de/mstudio/ai-dedicated-hosting
  */
+
+import { MITTWALD_AI_DEDICATED_HOSTING_URL } from "./playgroundSalesLinks";
 
 export type DedicatedAiPlan = {
   id: "M" | "L" | "XL";
@@ -53,12 +55,12 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
       priceMonthly: "999 €",
       gpus: "1× RTX 6000 PRO",
       vramTotal: "96 GB VRAM",
-      vramForModel: "ca. 62 GB für Modell nutzbar",
+      vramForModel: "max. 70 GB für Modelle nutzbar",
       tokens: "Unlimited Tokens",
       provisioning: "Bereitstellung ca. 2–4 Wochen",
       minTerm: "Mindestlaufzeit: 3 Monate",
       modelSizeHint:
-        "Aktuell alle Katalog-Modelle — Ausnahme: Mistral-Medium-3.5-128B und Qwen3.5-122B-A10B-FP8 (→ mindestens L)",
+        "Aktuell alle Katalog-Modelle — Ausnahme: Qwen3.5-122B-A10B-FP8 (→ mindestens L)",
     },
     {
       id: "L",
@@ -66,12 +68,12 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
       priceMonthly: "1.899 €",
       gpus: "2× RTX 6000 PRO",
       vramTotal: "192 GB VRAM",
-      vramForModel: "ca. 125 GB für Modell nutzbar",
+      vramForModel: "max. 140 GB für Modelle nutzbar",
       tokens: "Unlimited Tokens",
       provisioning: "Bereitstellung ca. 2–4 Wochen",
       minTerm: "Mindestlaufzeit: 6 Monate",
       modelSizeHint:
-        "Mindestens für Mistral-Medium-3.5-128B und Qwen3.5-122B-A10B-FP8 (2 GPUs); auch Load Balancing / Sharding",
+        "Mindestens für Qwen3.5-122B-A10B-FP8 (2 GPUs); auch Load Balancing / Sharding",
     },
     {
       id: "XL",
@@ -79,7 +81,7 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
       priceMonthly: "3.599 €",
       gpus: "4× RTX 6000 PRO",
       vramTotal: "384 GB VRAM",
-      vramForModel: "ca. 250 GB für Modell nutzbar",
+      vramForModel: "max. 280 GB für Modelle nutzbar",
       tokens: "Unlimited Tokens",
       provisioning: "Bereitstellung ca. 2–4 Wochen",
       minTerm: "Mindestlaufzeit: 6 Monate",
@@ -100,10 +102,10 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
     "Dedicated AI L/XL (ab 2 GPUs): Mindestlaufzeit 6 Monate — mehr Planung, Einrichtung und laufende Abstimmung; Infrastruktur wird langfristig reserviert.",
   dedicatedModelCatalog:
     "**Aktueller Stand (Dedicated, eigene GPU):**\n" +
-    "- **Dedicated AI M (1 GPU):** Laufen **alle** Modelle aus dem Katalog — **Ausnahme:** **Mistral-Medium-3.5-128B** und **Qwen3.5-122B-A10B-FP8** (diese benötigen **mindestens 2 GPUs**).\n" +
-    "- **Dedicated AI L (2 GPUs):** Erforderlich für **Mistral-Medium-3.5-128B** und **Qwen3.5-122B-A10B-FP8**; auch für Load Balancing / Model-Sharding bei hoher Last.\n" +
+    "- **Dedicated AI M (1 GPU):** Laufen **alle** Modelle aus dem Katalog — **Ausnahme:** **Qwen3.5-122B-A10B-FP8** (benötigt **mindestens 2 GPUs**).\n" +
+    "- **Dedicated AI L (2 GPUs):** Erforderlich für **Qwen3.5-122B-A10B-FP8**; auch für Load Balancing / Model-Sharding bei hoher Last.\n" +
     "- **gpt-oss-120b** und die übrigen Katalog-Modelle laufen auf **Dedicated M**.\n" +
-    "**Mehrere große Modelle gleichzeitig:** Nicht „1 GPU pro Modell“ — aber **VRAM-Budget** begrenzt, was **parallel geladen** sein kann. **gpt-oss-120b** (~60 GB) + **Qwen3.5-122B-A10B-FP8** (mindestens **2 GPUs**, nutzt großteils das L-Budget ~125 GB) **gleichzeitig auf Dedicated L (2 GPUs) reicht in der Regel nicht** — Summe deutlich über 125 GB modellnutzbar. Für **beide parallel**: eher **XL** oder Architektur mit Vertrieb klären; **nur eines von beiden auf Dedicated + anderes auf Shared** kann sinnvoll sein.\n" +
+    "**Mehrere große Modelle gleichzeitig:** Nicht „1 GPU pro Modell“ — aber **VRAM-Budget** begrenzt, was **parallel geladen** sein kann. **gpt-oss-120b** (~60 GB) + **Qwen3.5-122B-A10B-FP8** (mindestens **2 GPUs**, nutzt großteils das L-Budget max. ~140 GB) **gleichzeitig auf Dedicated L (2 GPUs) reicht in der Regel nicht** — Summe deutlich über 140 GB modellnutzbar. Für **beide parallel**: eher **XL** oder Architektur mit Vertrieb klären; **nur eines von beiden auf Dedicated + anderes auf Shared** kann sinnvoll sein.\n" +
     "Bei Dedicated-Modellfragen: **sachlich antworten**, konkrete Konfiguration und Vertrag mit dem **Vertrieb** klären (+49 5772 293 150).",
   customModels:
     "**Eigene & spezielle Modelle (nur Dedicated):**\n" +
@@ -128,17 +130,15 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
   sizingGuidance:
     "Dedicated-Stufenleiter (kleinster passender Schritt zuerst):\n" +
     "1. **Shared (Starter/Pro/Business)** — Standard für die meisten Projekte, auch SaaS mit moderatem Traffic. Business bei hoher Last (Rate Limits, Token-Kontingent).\n" +
-    "2. **Dedicated AI M (1 GPU)** — Einstieg Dedicated: unlimited Tokens, eigene GPU; **aktuell alle Katalog-Modelle** außer Mistral-Medium-3.5-128B und Qwen3.5-122B-A10B-FP8.\n" +
-    "3. **Dedicated AI L (2 GPUs)** — wenn **Mistral-Medium-3.5-128B** oder **Qwen3.5-122B-A10B-FP8** auf Dedicated, oder Load Balancing / Sharding / nachweislich 1 GPU nicht reicht.\n" +
+    "2. **Dedicated AI M (1 GPU)** — Einstieg Dedicated: unlimited Tokens, eigene GPU; **aktuell alle Katalog-Modelle** außer Qwen3.5-122B-A10B-FP8.\n" +
+    "3. **Dedicated AI L (2 GPUs)** — wenn **Qwen3.5-122B-A10B-FP8** auf Dedicated, oder Load Balancing / Sharding / nachweislich 1 GPU nicht reicht.\n" +
     "4. **Dedicated AI XL (4 GPUs)** — sehr große Sonderkonfigurationen oder extreme Last.\n" +
     "„Viele Anfragen“ allein rechtfertigt nicht automatisch 2 GPUs — erst Business prüfen, dann ggf. Dedicated M.",
   modelSizing:
     "Hardware: **RTX 6000 PRO** = **96 GB VRAM pro GPU** (nicht 48 GB — nicht mit anderen GPU-Modellen verwechseln).\n" +
-    "35 % VRAM reservieren wir für Context Caching (stabile, schnelle Antworten bei parallelen Anfragen). " +
-    "Nur ca. 65 % des VRAM sind für das Modell selbst eingeplant: " +
-    "M (1 GPU) → **96 GB gesamt**, ca. 62 GB fürs Modell · L (2 GPUs) → 192 GB gesamt, ca. 125 GB fürs Modell · XL (4 GPUs) → 384 GB gesamt, ca. 250 GB fürs Modell. " +
-    "Die genaue Modellgröße hängt von Quantisierung, Architektur und Betriebsmodus (Single, Load Balancing, Model-Sharding) ab — " +
-    "die Werte sind praxisnahe Orientierung.",
+    "Produktseite (Orientierung für Modellgröße): M → max. **70 GB** · L → max. **140 GB** · XL → max. **280 GB** für Modelle nutzbar. " +
+    "Intern rechnen wir zusätzlich mit Context-Caching-Reserve — genaue Passung hängt von Quantisierung, Architektur und Betriebsmodus (Single, Load Balancing, Model-Sharding) ab. " +
+    "Die Werte sind praxisnahe Orientierung; Details mit dem Vertrieb klären.",
   onboarding: [
     "Anfrage stellen",
     "Technisches Briefing",
@@ -149,7 +149,7 @@ export const PLAYGROUND_AI_HOSTING_DEDICATED_SALES = {
   provisioningNote: "Start in der Regel innerhalb von 2–4 Wochen, je nach Konfiguration.",
   cta:
     "Lassen Sie uns gemeinsam klären, welche GPU-Konfiguration optimal zu Ihrem Use Case passt. " +
-    "Dedicated anfragen: Beratung +49 5772 293 150 · https://www.mittwald.de/mstudio/ai-hosting",
+    `Produktseite: ${MITTWALD_AI_DEDICATED_HOSTING_URL} · Beratung +49 5772 293 150`,
   priceNote: "Alle Preise zzgl. gesetzlicher USt.",
 } as const;
 
@@ -173,10 +173,12 @@ export function formatPlaygroundAiHostingDedicatedSalesContext(): string {
   const onboarding = d.onboarding.map((step, i) => `${i + 1}. ${step}`).join("\n");
 
   return (
-    `[Playground — Dedicated AI Hosting (Vertriebsinfos, RTX 6000 PRO — noch nicht vollständig auf der öffentlichen Landingpage)]\n` +
+    `[Playground — Dedicated AI Hosting (Managed Dedicated AI M/L/XL, RTX 6000 PRO)]\n` +
+    `Produktseite: ${MITTWALD_AI_DEDICATED_HOSTING_URL}\n` +
     `WICHTIG: Dedicated-Preise (M/L/XL) und Erweiterungen NUR aus diesem Block — nicht aus Live-Tarifdaten erfinden oder Shared-Tarife (Starter/Pro/Business) verwechseln. ` +
     `Dedicated M = 1× RTX 6000 PRO = **96 GB VRAM gesamt** (nicht 48 GB).\n` +
-    `**Preis-Tabelle (exakt, nicht schätzen):** M **999 €** · L **1.899 €** · XL **3.599 €** pro Monat zzgl. USt. — **niemals** 2.999 € oder andere erfundene XL-Preise.\n\n` +
+    `**Preis-Tabelle (exakt, nicht schätzen):** M **999 €** · L **1.899 €** · XL **3.599 €** pro Monat zzgl. USt. — **niemals** 2.999 € oder andere erfundene XL-Preise.\n` +
+    `Bei Dedicated-Fragen die **Produktseite** nennen (${MITTWALD_AI_DEDICATED_HOSTING_URL}) und bei Buchung/Dimensionierung den **Vertrieb** (+49 5772 293 150).\n\n` +
     `## ${d.title}\n${d.subtitle}\n\n${d.pitch}\n\n` +
     `### Warum Dedicated AI Hosting?\n${d.benefits.map((b) => `- ${b}`).join("\n")}\n\n` +
     `### Einfach erklärt\n${glossary}\n\n` +

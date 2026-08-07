@@ -3,12 +3,89 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-    <meta name="description" content="Öffentlicher KI-Playground für mittwald AI-Hosting — Chat bleibt im Browser." />
-    <title>Mittwald KI-Playground</title>
+    <title>Mittwald KI-Playground — Open-Weight-Modelle auf deutscher Infrastruktur</title>
+    <meta
+      name="description"
+      content="Öffentlicher KI-Playground von mittwald: Open-Weight-Chat-Modelle testen (u. a. Qwen, gpt-oss, Ministral), OpenAI-kompatible API, Hosting in Deutschland. Use Cases zu AI Hosting, Tarifberatung und mehr."
+    />
+    <meta name="robots" content="index, follow, max-image-preview:large, max-snippet:-1" />
+    <meta name="author" content="mittwald" />
+    <link rel="canonical" href="https://playground.mittwald.de/ai/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="de_DE" />
+    <meta property="og:site_name" content="mittwald KI-Playground" />
+    <meta property="og:url" content="https://playground.mittwald.de/ai/" />
+    <meta
+      property="og:title"
+      content="Mittwald KI-Playground — Open-Weight-Modelle auf deutscher Infrastruktur"
+    />
+    <meta
+      property="og:description"
+      content="Chat-Modelle live im Browser testen. Dieselben Open-Weight-Modelle stehen produktiv über mittwald AI Hosting (OpenAI-kompatible API) zur Verfügung — DSGVO-konform in Deutschland."
+    />
+    <meta property="og:image" content="https://playground.mittwald.de/ai/brand/ai-hosting-hero-de-dsgvo.jpg" />
+
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta
+      name="twitter:title"
+      content="Mittwald KI-Playground — Open-Weight-Modelle auf deutscher Infrastruktur"
+    />
+    <meta
+      name="twitter:description"
+      content="Öffentlicher KI-Playground für mittwald AI Hosting: Modelle testen, Use Cases ausprobieren, API in Deutschland."
+    />
+    <meta name="twitter:image" content="https://playground.mittwald.de/ai/brand/ai-hosting-hero-de-dsgvo.jpg" />
+
     <link rel="icon" href="favicon.ico" sizes="any" />
   </head>
   <body class="antialiased">
     <div id="root"></div>
+
+    <!-- Crawlbarer Fallback (sichtbar nur ohne JS; Meta/Canonical gelten immer) -->
+    <noscript>
+      <main style="max-width: 42rem; margin: 2rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; line-height: 1.5">
+        <h1>Mittwald KI-Playground</h1>
+        <p>
+          Öffentliche Demo für <strong>mittwald AI Hosting</strong>: Open-Weight-Chat-Modelle im Browser
+          testen. Produktiv nutzt du dieselbe OpenAI-kompatible API auf Infrastruktur in Deutschland
+          (DSGVO).
+        </p>
+        <p>Im Playground u. a. Use Cases zu Tarifberatung, Dokumentation und nachhaltigem Strommix-Forecast.</p>
+        <ul>
+          <li><a href="https://www.mittwald.de/mstudio/ai-hosting">AI Hosting Tarife (Shared)</a></li>
+          <li><a href="https://www.mittwald.de/mstudio/ai-dedicated-hosting">Dedicated AI Hosting</a></li>
+          <li>
+            <a href="https://developer.mittwald.de/de/docs/v2/platform/aihosting/"
+              >Developer-Dokumentation AI Hosting</a
+            >
+          </li>
+          <li><a href="https://www.mittwald.de/">mittwald</a></li>
+        </ul>
+        <p>Bitte JavaScript aktivieren, um den interaktiven Playground zu nutzen.</p>
+      </main>
+    </noscript>
+
+    <!-- Zusätzlicher Text für Crawler (visuell verborgen, inhaltlich legitim) -->
+    <div
+      id="seo-crawl-copy"
+      style="position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0"
+    >
+      <h1>Mittwald KI-Playground</h1>
+      <p>
+        Teste Open-Weight-KI-Modelle von mittwald AI Hosting direkt im Browser — u. a. Qwen, gpt-oss,
+        Ministral, Whisper und GLM-OCR. Hosting und Modelle in Deutschland, OpenAI-kompatible API für
+        produktive Anwendungen.
+      </p>
+      <p>
+        Weiterführend:
+        <a href="https://www.mittwald.de/mstudio/ai-hosting">AI Hosting buchen</a>,
+        <a href="https://www.mittwald.de/mstudio/ai-dedicated-hosting">Dedicated AI Hosting</a>,
+        <a href="https://developer.mittwald.de/de/docs/v2/platform/aihosting/">API-Dokumentation</a>,
+        <a href="https://playground.mittwald.de/ai/llms.txt">llms.txt</a>.
+      </p>
+    </div>
+
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

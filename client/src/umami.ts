@@ -27,6 +27,7 @@ export function trackUmamiEvent(
 }
 
 export const UMAMI_EVENT_AI_HOSTING_BOOK = "ai-hosting-buchen";
+export const UMAMI_EVENT_DEDICATED_HOSTING = "dedicated-ai-hosting";
 export const UMAMI_EVENT_CONSULT_CALL = "beratung-anrufen";
 export const UMAMI_EVENT_USE_CASE_START = "use-case-start";
 export const UMAMI_EVENT_USE_CASE_SEND = "use-case-send";
