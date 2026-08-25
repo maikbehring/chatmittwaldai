@@ -5,6 +5,7 @@ import {
   MODEL_MINISTRAL,
   MODEL_QWEN_35,
   MODEL_QWEN_36,
+  MODEL_QWEN_38,
 } from "./modelPresets";
 
 const MODEL_DOCS_URL =
@@ -40,6 +41,12 @@ const MODEL_ROWS: { id: string; title: string; teaser: string }[] = [
     title: "Qwen 3.6 (35B)",
     teaser:
       "Effizientes Qwen‑Modell mit hohem Kontext; gleiche Instruct‑Logik wie 3.5, andere Modellgröße.",
+  },
+  {
+    id: MODEL_QWEN_38,
+    title: "Qwen 3.8 (27B)",
+    teaser:
+      "Neuestes Qwen mit Thinking-Modus und drei Reasoning-Tiefen (low / medium / xhigh); stark bei Code und Agenten.",
   },
 ];
 

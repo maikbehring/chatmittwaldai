@@ -1,4 +1,4 @@
-import type { GptOssReasoning } from "./modelPresets";
+import type { GptOssReasoning, Qwen38ReasoningEffort } from "./modelPresets";
 
 type ContentPart =
   | { type: "text"; text: string }
@@ -8,6 +8,7 @@ export type StoredChatMessage = {
   role: "user" | "assistant";
   content: string | ContentPart[];
   usage?: Record<string, unknown>;
+  ttsResult?: import("./textToSpeech").TtsResultPayload;
 };
 
 export const STORAGE_KEY_V3 = "mittwald-ai-playground-state-v3";
@@ -35,6 +36,8 @@ export type PlaygroundSettings = {
   maxTokens: number | null;
   systemPrompt: string;
   qwenVisionOcr: boolean;
+  qwen38ThinkingEnabled?: boolean;
+  qwen38ReasoningEffort?: Qwen38ReasoningEffort;
   /** Standard für neu erstellte Chats (nur Browser). */
   webSearchDefaultEnabled?: boolean;
 };

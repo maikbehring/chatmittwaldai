@@ -63,7 +63,7 @@ const ALLOWED_MODELS = (process.env.PLAYGROUND_ALLOWED_MODELS || "")
   .map((s) => s.trim())
   .filter(Boolean);
 /** Intern für Playground-Pipelines (z. B. Rechnungs-OCR), nicht im Modell-Dropdown. */
-const INTERNAL_PLAYGROUND_MODELS = new Set(["GLM-OCR"]);
+const INTERNAL_PLAYGROUND_MODELS = new Set(["GLM-OCR", "Qwen3-TTS-12Hz-1.7B-CustomVoice"]);
 const MAX_BODY_BYTES = Math.min(
   Math.max(Number(process.env.MAX_BODY_BYTES || 10 * 1024 * 1024), 512 * 1024),
   25 * 1024 * 1024,
@@ -89,6 +89,12 @@ const SELF_HOST_REPO_URL = "https://github.com/maikbehring/chatmittwaldai";
 const WHISPER_MODEL =
   process.env.PLAYGROUND_WHISPER_MODEL || "whisper-large-v3-turbo";
 const WHISPER_LANGUAGE = process.env.PLAYGROUND_WHISPER_LANGUAGE || "de";
+const TTS_MODEL =
+  process.env.PLAYGROUND_TTS_MODEL || "Qwen3-TTS-12Hz-1.7B-CustomVoice";
+const TTS_MAX_INPUT_CHARS = Math.min(
+  Math.max(Number(process.env.PLAYGROUND_TTS_MAX_INPUT_CHARS || 4000), 100),
+  8000,
+);
 const EMBEDDING_MODEL =
   process.env.PLAYGROUND_EMBEDDING_MODEL || "Qwen3-Embedding-8B";
 const RERANK_MODEL =
@@ -217,6 +223,28 @@ function summarizeUpstreamError(raw) {
   return slice;
 }
 
+const TTS_DOCS_URL =
+  "https://developer.mittwald.de/de/docs/v2/platform/aihosting/models/qwen3-tts-customvoice/";
+
+/** Hilfreiche Meldung, wenn die TTS-Route upstream 5xx liefert (häufig: Modell-Nutzungsbedingungen). */
+function formatTtsUpstreamError(status, raw) {
+  const base = summarizeUpstreamError(raw);
+  const lower = base.toLowerCase();
+  if (
+    status >= 500 ||
+    lower.includes("internal server error") ||
+    lower.includes("internal_server_error")
+  ) {
+    return (
+      `Text-to-Speech derzeit nicht erreichbar (${TTS_MODEL}). ` +
+      `Im mStudio unter AI Hosting die Nutzungsbedingungen für dieses Modell akzeptieren — ` +
+      `oder im Playground einen eigenen API-Key mit freigeschaltetem TTS hinterlegen. ` +
+      `Details: ${TTS_DOCS_URL} · Upstream: ${base}`
+    );
+  }
+  return base;
+}
+
 function isTariffAdvisorChatRequest(req, body) {
   const header = req?.get?.("x-playground-use-case") ?? req?.get?.("X-Playground-Use-Case");
   if (header === TARIFF_ADVISOR_USE_CASE) return true;
@@ -323,6 +351,9 @@ async function main() {
     helmet({
       contentSecurityPolicy: false,
       crossOriginEmbedderPolicy: false,
+      // Auf HTTP-Staging (TLS noch nicht bereit) sonst Browser-Warnungen zu COOP/Origin-Agent-Cluster.
+      crossOriginOpenerPolicy: false,
+      originAgentCluster: false,
     }),
   );
   app.use(
@@ -435,6 +466,11 @@ async function main() {
         model: WHISPER_MODEL,
         language: WHISPER_LANGUAGE,
         maxAudioBytes: MAX_AUDIO_BYTES,
+      },
+      textToSpeech: {
+        enabled: true,
+        model: TTS_MODEL,
+        maxInputChars: TTS_MAX_INPUT_CHARS,
       },
       semanticSearch: {
         enabled: true,
@@ -889,6 +925,98 @@ async function main() {
       } catch {
         return jsonError(res, 502, "bad_upstream", "Ungültige Whisper-Antwort.");
       }
+    },
+  );
+
+  app.post(
+    "/api/audio/speech",
+    requireApiKey,
+    requireAllowedOrigin,
+    transcribeLimiter,
+    express.json({ limit: "512kb" }),
+    async (req, res) => {
+      const input = typeof req.body?.input === "string" ? req.body.input.trim() : "";
+      if (!input) {
+        return jsonError(res, 400, "validation_error", "input fehlt.");
+      }
+      if (input.length > TTS_MAX_INPUT_CHARS) {
+        return jsonError(
+          res,
+          400,
+          "validation_error",
+          `Text zu lang (max. ${TTS_MAX_INPUT_CHARS} Zeichen).`,
+        );
+      }
+
+      const voiceRaw = typeof req.body?.voice === "string" ? req.body.voice.trim() : "";
+      const voice = voiceRaw || "vivian";
+
+      const formatRaw =
+        typeof req.body?.response_format === "string"
+          ? req.body.response_format.trim().toLowerCase()
+          : "opus";
+      const allowedFormats = new Set(["wav", "pcm", "flac", "mp3", "opus"]);
+      const responseFormat = allowedFormats.has(formatRaw) ? formatRaw : "opus";
+
+      let speed = Number(req.body?.speed);
+      if (!Number.isFinite(speed)) speed = 0.95;
+      speed = Math.min(4, Math.max(0.25, speed));
+
+      const instructions =
+        typeof req.body?.instructions === "string" ? req.body.instructions.trim() : "";
+      if (instructions.length > 500) {
+        return jsonError(res, 400, "validation_error", "instructions max. 500 Zeichen.");
+      }
+
+      const language =
+        typeof req.body?.language === "string" && req.body.language.trim()
+          ? req.body.language.trim()
+          : "German";
+
+      // language gehört ins JSON-Body (SDK: extra_body — bei raw fetch top-level).
+      const payload = {
+        model: TTS_MODEL,
+        input,
+        voice,
+        response_format: responseFormat,
+        speed,
+        language,
+      };
+      if (instructions && language === "English") payload.instructions = instructions;
+
+      let upstream;
+      try {
+        upstream = await fetch(`${BASE_URL}/audio/speech`, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${resolveUpstreamApiKey(req, API_KEY)}`,
+            "Content-Type": "application/json",
+            Accept: "audio/*",
+          },
+          body: JSON.stringify(payload),
+        });
+      } catch (e) {
+        console.error(e);
+        return jsonError(res, 502, "upstream_unreachable", "Verbindung zur TTS-API fehlgeschlagen.");
+      }
+
+      if (!upstream.ok) {
+        const errText = await upstream.text();
+        const proxyStatus =
+          upstream.status >= 500 ? 502 : upstream.status >= 400 && upstream.status < 600 ? upstream.status : 502;
+        return jsonError(res, proxyStatus, "upstream_error", formatTtsUpstreamError(upstream.status, errText));
+      }
+
+      const buffer = Buffer.from(await upstream.arrayBuffer());
+      const contentType =
+        upstream.headers.get("content-type") ||
+        (responseFormat === "mp3"
+          ? "audio/mpeg"
+          : responseFormat === "opus"
+            ? "audio/ogg"
+            : `audio/${responseFormat}`);
+      res.set("Content-Type", contentType);
+      return res.send(buffer);
     },
   );
 

@@ -3,6 +3,7 @@ import {
   MODEL_MINISTRAL,
   MODEL_QWEN_35,
   MODEL_QWEN_36,
+  MODEL_QWEN_38,
 } from "./modelPresets";
 
 /** Eingabe-Token zählen mit 1/4 Gewicht (Prefill vs. Decode). */
@@ -12,6 +13,7 @@ export const PROMPT_TOKEN_ENERGY_WEIGHT = 0.25;
  * Gemessene GPU-Energie pro 1 Mio. gewichtete Token (kWh) an der mittwald AI-Hosting-Infrastruktur.
  */
 export const KWH_PER_MILLION_TOKENS: Record<string, number> = {
+  [MODEL_QWEN_38]: 0.55,
   [MODEL_QWEN_36]: 0.55,
   [MODEL_GPT_OSS]: 0.73,
   [MODEL_QWEN_35]: 1.31,
@@ -56,7 +58,7 @@ export function estimateInferenceCo2Grams(
 export const CO2_FOOTPRINT_TOOLTIP =
   "Schätzung für diese Antwort: gewichtete Token (Eingabe × ¼ + Ausgabe) × gemessene GPU-Energie je Modell × UBA-Jahresmittel 344 g/kWh. " +
   "Orientierungswert — basiert noch auf dem Jahresmittel, nicht auf dem Live-Strommix-Forecast. " +
-  "kWh/Mio.: Qwen3.6 0,55 · gpt-oss 0,73 · Qwen3.5 1,31 · Ministral 1,50.";
+  "kWh/Mio.: Qwen3.8/Qwen3.6 0,55 · gpt-oss 0,73 · Qwen3.5 1,31 · Ministral 1,50.";
 
 export const SESSION_CO2_TOOLTIP =
   `${CO2_FOOTPRINT_TOOLTIP} Summe aller Antworten über alle Chats in diesem Browser.`;
