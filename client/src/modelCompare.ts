@@ -3,11 +3,15 @@ import {
   MODEL_MINISTRAL,
   MODEL_QWEN_35,
   MODEL_QWEN_36,
+  MODEL_QWEN_38,
   getInferencePreset,
   getQwenVisionInference,
   getQwenVisionOcrInference,
   isQwen3Model,
+  isQwen38Model,
+  resolveQwen38InferenceParams,
   type GptOssReasoning,
+  type Qwen38ReasoningEffort,
 } from "./modelPresets";
 import { normalizeApiMessagesForModel } from "./playgroundSystemContext";
 
@@ -45,6 +49,7 @@ const MODEL_SHORT_LABELS: Record<string, string> = {
   [MODEL_GPT_OSS]: "gpt-oss 120B",
   [MODEL_QWEN_35]: "Qwen3.5 122B",
   [MODEL_QWEN_36]: "Qwen3.6 35B",
+  [MODEL_QWEN_38]: "Qwen3.8 27B",
 };
 
 export function modelShortLabel(modelId: string): string {
@@ -114,7 +119,26 @@ export function inferenceParamsForCompareModel(
   hasVision: boolean,
   qwenVisionOcr: boolean,
   userMaxTokens: number | null,
+  qwen38?: { thinkingEnabled: boolean; reasoningEffort: Qwen38ReasoningEffort },
 ): CompareInferenceParams {
+  if (isQwen38Model(modelId) && qwen38) {
+    const q = resolveQwen38InferenceParams({
+      thinkingEnabled: qwen38.thinkingEnabled,
+      reasoningEffort: qwen38.reasoningEffort,
+      hasVision,
+      qwenVisionOcr,
+      userMaxTokens,
+    });
+    return {
+      temperature: q.temperature,
+      topP: q.topP,
+      topK: q.topK,
+      presencePenalty: q.presencePenalty,
+      maxTokens: q.maxTokens,
+      extraBody: q.extraBody,
+    };
+  }
+
   const preset = getInferencePreset(modelId);
   let effTemp = preset.temperature;
   let effTopP = preset.topP;

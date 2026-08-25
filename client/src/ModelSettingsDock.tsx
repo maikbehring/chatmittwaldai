@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  applyQwen38ModeToState,
   getInferencePreset,
+  isQwen38Model,
   isQwen3Model,
   MODEL_GPT_OSS,
   type GptOssReasoning,
+  type Qwen38ReasoningEffort,
 } from "./modelPresets";
 
 export type ModelSettingsDockProps = {
@@ -31,6 +34,10 @@ export type ModelSettingsDockProps = {
   setGptOssReasoning: (v: GptOssReasoning) => void;
   qwenVisionOcr: boolean;
   setQwenVisionOcr: (v: boolean) => void;
+  qwen38ThinkingEnabled: boolean;
+  setQwen38ThinkingEnabled: (v: boolean) => void;
+  qwen38ReasoningEffort: Qwen38ReasoningEffort;
+  setQwen38ReasoningEffort: (v: Qwen38ReasoningEffort) => void;
   systemPrompt: string;
   setSystemPrompt: (v: string) => void;
   webSearchConfig: import("./webSearch").WebSearchConfig | null;
@@ -90,6 +97,10 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
     setGptOssReasoning,
     qwenVisionOcr,
     setQwenVisionOcr,
+    qwen38ThinkingEnabled,
+    setQwen38ThinkingEnabled,
+    qwen38ReasoningEffort,
+    setQwen38ReasoningEffort,
     systemPrompt,
     setSystemPrompt,
     webSearchConfig,
@@ -273,6 +284,64 @@ export function ModelSettingsDock(props: ModelSettingsDockProps) {
                 ))}
               </div>
             </fieldset>
+          ) : null}
+
+          {isQwen38Model(modelId) ? (
+            <>
+              <label className="mb-2 flex cursor-pointer items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={!qwen38ThinkingEnabled}
+                  onChange={(e) => {
+                    const off = e.target.checked;
+                    setQwen38ThinkingEnabled(!off);
+                    applyQwen38ModeToState(!off, qwen38ReasoningEffort, {
+                      setTemperature,
+                      setTopP,
+                      setTopK,
+                      setPresencePenalty,
+                      setExtraBody,
+                      setMaxTokens,
+                    });
+                  }}
+                  className="accent-neutral-800 dark:accent-neutral-200"
+                />
+                <span className="text-neutral-800 dark:text-neutral-100">
+                  Non-Thinking (enable_thinking false)
+                </span>
+              </label>
+              {qwen38ThinkingEnabled ? (
+                <fieldset className="mb-2">
+                  <legend className="mb-1 text-neutral-600 dark:text-neutral-400">
+                    reasoning_effort
+                  </legend>
+                  <div className="flex flex-wrap gap-2">
+                    {(["low", "medium", "xhigh"] as const).map((r) => (
+                      <label key={r} className="inline-flex cursor-pointer items-center gap-1.5">
+                        <input
+                          type="radio"
+                          name="qwen38-reasoning"
+                          checked={qwen38ReasoningEffort === r}
+                          onChange={() => {
+                            setQwen38ReasoningEffort(r);
+                            applyQwen38ModeToState(true, r, {
+                              setTemperature,
+                              setTopP,
+                              setTopK,
+                              setPresencePenalty,
+                              setExtraBody,
+                              setMaxTokens,
+                            });
+                          }}
+                          className="accent-neutral-800 dark:accent-neutral-200"
+                        />
+                        <span className="text-neutral-800 dark:text-neutral-100">{r}</span>
+                      </label>
+                    ))}
+                  </div>
+                </fieldset>
+              ) : null}
+            </>
           ) : null}
 
           {isQwen3Model(modelId) ? (

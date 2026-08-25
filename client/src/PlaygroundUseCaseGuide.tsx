@@ -317,6 +317,17 @@ export function PlaygroundUseCaseGuide({
         </p>
       ) : null}
 
+      {useCase.id === "text-to-speech" ? (
+        <p className="playground-text-small mb-3 rounded-xl border border-indigo-200/80 bg-indigo-50/80 px-3 py-2.5 font-medium text-indigo-950 dark:border-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-100">
+          <span className="mr-1.5" aria-hidden>
+            🔊
+          </span>
+          <strong>Kurz:</strong> Nur dein Text im Eingabefeld wird vorgelesen. Deutsch-Default:{" "}
+          <strong>vivian</strong>, Tempo <strong>0.95</strong>, <strong>opus</strong> — Anglizismen werden
+          automatisch eingedeutscht.
+        </p>
+      ) : null}
+
       {useCase.id === "semantic-search" ? (
         <p className="playground-text-small mb-3 rounded-xl border border-violet-200/80 bg-violet-50/80 px-3 py-2.5 font-medium text-violet-950 dark:border-violet-800 dark:bg-violet-950/40 dark:text-violet-100">
           <span className="mr-1.5" aria-hidden>

@@ -29,6 +29,7 @@ type ShowcaseModel = {
 /** Über dedizierte Use Cases testbar (nicht zwingend im Chat-Dropdown). */
 const USE_CASE_PLAYGROUND_MODEL_IDS = new Set([
   "Whisper",
+  "Qwen3-TTS-12Hz-1.7B-CustomVoice",
   "Qwen3-Embedding-8B",
   "Qwen3-VL-Reranker-2B",
 ]);
@@ -47,6 +48,12 @@ const QWEN_SIZE_SHOWCASE_MODELS: ShowcaseModel[] = [
   {
     id: "Qwen3.6-35B-A3B-FP8",
     label: "Qwen3.6 35B",
+    logo: "qwen",
+    iconClass: "bg-indigo-500/10",
+  },
+  {
+    id: "Qwen3.8-27B-NVFP4",
+    label: "Qwen3.8 27B",
     logo: "qwen",
     iconClass: "bg-indigo-500/10",
   },
@@ -85,6 +92,12 @@ const SHOWCASE_MODELS_TRAILING: ShowcaseModel[] = [
     label: "Whisper",
     logo: "whisper",
     iconClass: "bg-violet-500/15",
+  },
+  {
+    id: "Qwen3-TTS-12Hz-1.7B-CustomVoice",
+    label: "Qwen3-TTS",
+    logo: "qwen",
+    iconClass: "bg-sky-500/10",
   },
   {
     id: "GLM-OCR",

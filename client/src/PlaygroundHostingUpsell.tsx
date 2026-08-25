@@ -9,24 +9,18 @@ import {
 export const TARIF_CONSULT_PHONE = "+49 5772 293 150";
 export const TARIF_CONSULT_PHONE_HREF = "tel:+495772293150";
 
-type UpsellPlacement = "sidebar" | "banner";
-
 type Props = {
   aiHostingUrl: string;
   className?: string;
-  /** Sidebar-Karte unten links; Banner unter den Use Cases auf der Startseite */
-  variant: UpsellPlacement;
 };
 
-function DedicatedLink({ placement }: { placement: UpsellPlacement }) {
+function DedicatedLink() {
   return (
     <a
       href={MITTWALD_AI_DEDICATED_HOSTING_URL}
       target="_blank"
       rel="noreferrer"
-      onClick={() =>
-        trackUmamiEvent(UMAMI_EVENT_DEDICATED_HOSTING, { platzierung: placement })
-      }
+      onClick={() => trackUmamiEvent(UMAMI_EVENT_DEDICATED_HOSTING, { platzierung: "banner" })}
       className="playground-text-tiny text-center font-semibold text-playground-link underline decoration-playground-link/25 underline-offset-2 transition hover:text-playground-link-hover"
     >
       Neu: Dedicated AI Hosting
@@ -34,23 +28,13 @@ function DedicatedLink({ placement }: { placement: UpsellPlacement }) {
   );
 }
 
-function BookCta({
-  href,
-  placement,
-  className = "",
-}: {
-  href: string;
-  placement: UpsellPlacement;
-  className?: string;
-}) {
+function BookCta({ href, className = "" }: { href: string; className?: string }) {
   return (
     <a
       href={href}
       target="_blank"
       rel="noreferrer"
-      onClick={() =>
-        trackUmamiEvent(UMAMI_EVENT_AI_HOSTING_BOOK, { platzierung: placement })
-      }
+      onClick={() => trackUmamiEvent(UMAMI_EVENT_AI_HOSTING_BOOK, { platzierung: "banner" })}
       className={`playground-cta-gradient playground-text-small flex h-10 w-full items-center justify-center rounded-full px-4 font-bold !leading-5 text-white transition hover:brightness-110 ${className}`.trim()}
     >
       AI Hosting buchen
@@ -58,19 +42,11 @@ function BookCta({
   );
 }
 
-function CallCta({
-  placement,
-  className = "",
-}: {
-  placement: UpsellPlacement;
-  className?: string;
-}) {
+function CallCta({ className = "" }: { className?: string }) {
   return (
     <a
       href={TARIF_CONSULT_PHONE_HREF}
-      onClick={() =>
-        trackUmamiEvent(UMAMI_EVENT_CONSULT_CALL, { platzierung: placement })
-      }
+      onClick={() => trackUmamiEvent(UMAMI_EVENT_CONSULT_CALL, { platzierung: "banner" })}
       className={`flex w-full flex-col items-center justify-center rounded-full border border-playground-border bg-playground-main/60 px-3 py-2 transition hover:border-playground-muted/25 hover:bg-playground-muted/[0.06] ${className}`.trim()}
     >
       <span className="playground-text-tiny font-bold text-playground-ink">Beratung anrufen</span>
@@ -81,27 +57,8 @@ function CallCta({
   );
 }
 
-export function PlaygroundHostingUpsell({ aiHostingUrl, variant, className = "" }: Props) {
-  if (variant === "sidebar") {
-    return (
-      <div
-        className={`rounded-2xl border border-playground-border bg-gradient-to-b from-playground-muted/[0.06] to-transparent p-3.5 ${className}`.trim()}
-      >
-        <p className="playground-text-small font-bold leading-snug text-playground-ink">
-          Für Kundenprojekte
-        </p>
-        <p className="playground-text-tiny mt-1 leading-snug text-playground-muted">
-          KI fully managed in Deutschland — API-Key im mStudio, OpenAI-kompatibel.
-        </p>
-        <div className="mt-3 flex flex-col gap-2">
-          <BookCta href={aiHostingUrl} placement={variant} />
-          <CallCta placement={variant} />
-          <DedicatedLink placement={variant} />
-        </div>
-      </div>
-    );
-  }
-
+/** Banner unter den Use Cases auf der Startseite. */
+export function PlaygroundHostingUpsell({ aiHostingUrl, className = "" }: Props) {
   return (
     <div
       className={`w-full max-w-[960px] rounded-2xl border border-playground-border bg-playground-sidebar px-4 py-4 sm:rounded-3xl sm:px-6 sm:py-5 ${className}`.trim()}
@@ -116,9 +73,9 @@ export function PlaygroundHostingUpsell({ aiHostingUrl, variant, className = "" 
           </p>
         </div>
         <div className="flex w-full flex-col items-center gap-2 sm:w-auto sm:min-w-[220px]">
-          <BookCta href={aiHostingUrl} placement={variant} />
-          <CallCta placement={variant} />
-          <DedicatedLink placement={variant} />
+          <BookCta href={aiHostingUrl} />
+          <CallCta />
+          <DedicatedLink />
         </div>
       </div>
     </div>

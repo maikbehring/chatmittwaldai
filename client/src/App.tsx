@@ -5,12 +5,25 @@ import {
   getQwenVisionInference,
   getQwenVisionOcrInference,
   isQwen3Model,
+  isQwen38Model,
   MODEL_GPT_OSS,
   MODEL_MINISTRAL,
   MODEL_QWEN_35,
   MODEL_QWEN_36,
+  MODEL_QWEN_38,
+  resolveQwen38InferenceParams,
   type GptOssReasoning,
+  type Qwen38ReasoningEffort,
 } from "./modelPresets";
+import { TtsAudioPlayer } from "./TtsAudioPlayer";
+import {
+  blobToBase64,
+  buildTtsResultMarkdown,
+  resolveTtsFromBriefing,
+  synthesizeSpeech,
+  TTS_MAX_INPUT_CHARS,
+  type TtsResultPayload,
+} from "./textToSpeech";
 import { PlaygroundUseCaseCards } from "./PlaygroundUseCaseCards";
 import { PlaygroundUseCaseGuide } from "./PlaygroundUseCaseGuide";
 import { NetworkPathCheckPanel } from "./NetworkPathCheckPanel";
@@ -244,6 +257,7 @@ export type ChatMessage = {
   priceCompareSearch?: PriceCompareSearchResponse;
   gridCarbonForecast?: GridCarbonSummary;
   compare?: ModelComparePayload;
+  ttsResult?: TtsResultPayload;
 };
 
 const DEFAULT_MODEL = MODEL_GPT_OSS;
@@ -708,7 +722,10 @@ const ChatMessageRow = memo(function ChatMessageRow({
               accentClassName="emerald"
             />
           ) : (
-            renderMessageContent(assistantDisplayContent, streaming, onImageOpen)
+            <>
+              {message.ttsResult ? <TtsAudioPlayer result={message.ttsResult} /> : null}
+              {renderMessageContent(assistantDisplayContent, streaming, onImageOpen)}
+            </>
           )}
         </div>
         {message.usage ? <AssistantTokenFooter stats={message.usage} /> : null}
@@ -758,6 +775,7 @@ export function App() {
     useState<SemanticSearchPhase | null>(null);
   const [semanticSearchProgress, setSemanticSearchProgress] =
     useState<SemanticSearchProgress | null>(null);
+  const [ttsPhase, setTtsPhase] = useState<"synthesize" | null>(null);
   const [audioFileDurationSec, setAudioFileDurationSec] = useState<number | null>(null);
   const [voiceRecording, setVoiceRecording] = useState<{
     active: boolean;
@@ -796,6 +814,16 @@ export function App() {
       initial.gptOssReasoning === "high"
       ? initial.gptOssReasoning
       : "medium",
+  );
+  const [qwen38ThinkingEnabled, setQwen38ThinkingEnabled] = useState(
+    initial.qwen38ThinkingEnabled !== false,
+  );
+  const [qwen38ReasoningEffort, setQwen38ReasoningEffort] = useState<Qwen38ReasoningEffort>(
+    initial.qwen38ReasoningEffort === "medium" ||
+      initial.qwen38ReasoningEffort === "xhigh" ||
+      initial.qwen38ReasoningEffort === "low"
+      ? initial.qwen38ReasoningEffort
+      : "low",
   );
   const [qwenVisionOcr, setQwenVisionOcr] = useState(Boolean(initial.qwenVisionOcr));
   const [maxTokens, setMaxTokens] = useState<number | null>(() => {
@@ -1036,6 +1064,10 @@ export function App() {
     if (modelId === MODEL_GPT_OSS) {
       setGptOssReasoning("medium");
     }
+    if (modelId === MODEL_QWEN_38) {
+      setQwen38ThinkingEnabled(true);
+      setQwen38ReasoningEffort("low");
+    }
     setQwenVisionOcr(false);
   }, []);
 
@@ -1123,6 +1155,8 @@ export function App() {
         presencePenalty,
         extraBody,
         gptOssReasoning,
+        qwen38ThinkingEnabled,
+        qwen38ReasoningEffort,
         maxTokens,
         systemPrompt,
         qwenVisionOcr,
@@ -1141,6 +1175,8 @@ export function App() {
     presencePenalty,
     extraBody,
     gptOssReasoning,
+    qwen38ThinkingEnabled,
+    qwen38ReasoningEffort,
     maxTokens,
     systemPrompt,
     qwenVisionOcr,
@@ -1301,6 +1337,7 @@ export function App() {
   const isClientWeekendUseCase = activeUseCaseId === "client-weekend";
   const isPriceCompareUseCase = activeUseCaseId === "price-compare";
   const isSemanticSearchUseCase = activeUseCaseId === "semantic-search";
+  const isTextToSpeechUseCase = activeUseCaseId === "text-to-speech";
   const isNetworkPathCheckUseCase = activeUseCaseId === "network-path-check";
   const isGridCarbonForecastUseCase = activeUseCaseId === "grid-carbon-forecast";
   const aiHostingGuideComposerProgress = useMemo(() => {
@@ -1387,7 +1424,9 @@ export function App() {
   const audioPipelineBusy = audioTranscribePhase !== null;
   const semanticSearchPipelineBusy = semanticSearchPhase !== null;
   const attachmentPipelineBusy = ocrPipelineBusy || audioPipelineBusy;
-  const composerPipelineBusy = attachmentPipelineBusy || semanticSearchPipelineBusy;
+  const ttsPipelineBusy = ttsPhase !== null;
+  const composerPipelineBusy =
+    attachmentPipelineBusy || semanticSearchPipelineBusy || ttsPipelineBusy;
   const attachmentPipelineStatus = audioPipelineBusy
     ? audioTranscribeProgress
       ? audioTranscribeStatusLine(audioTranscribeProgress)
@@ -1396,11 +1435,13 @@ export function App() {
           ? "Qwen bereinigt Volltranskript …"
           : "Transkribiere …")
     : ocrProgress ?? "Rechnung wird verarbeitet …";
-  const composerPipelineStatus = semanticSearchPipelineBusy
-    ? semanticSearchProgress?.detail
-      ? `${semanticSearchProgress.message} — ${semanticSearchProgress.detail}`
-      : semanticSearchProgress?.message ?? "Semantische Suche …"
-    : attachmentPipelineStatus;
+  const composerPipelineStatus = ttsPipelineBusy
+    ? "Qwen3-TTS synthetisiert Audio …"
+    : semanticSearchPipelineBusy
+      ? semanticSearchProgress?.detail
+        ? `${semanticSearchProgress.message} — ${semanticSearchProgress.detail}`
+        : semanticSearchProgress?.message ?? "Semantische Suche …"
+      : attachmentPipelineStatus;
 
   const composerFileAccept = useMemo(() => {
     if (activeUseCase?.prefersAudioFile) return AUDIO_FILE_ACCEPT;
@@ -1447,7 +1488,9 @@ export function App() {
         ? attachmentIsAudio
         : isSemanticSearchUseCase
           ? semanticSearchPassageCount >= 2 && t.length > 0
-          : hasBriefing || t.length > 0 || hasFile;
+          : isTextToSpeechUseCase
+            ? t.length > 0
+            : hasBriefing || t.length > 0 || hasFile;
     return (
       contentOk &&
       !busy &&
@@ -1461,7 +1504,8 @@ export function App() {
       !speechTranscribing &&
       !ocrPipelineBusy &&
       !audioPipelineBusy &&
-      !semanticSearchPipelineBusy
+      !semanticSearchPipelineBusy &&
+      !ttsPipelineBusy
     );
   }, [
     input,
@@ -1480,9 +1524,11 @@ export function App() {
     ocrPipelineBusy,
     audioPipelineBusy,
     semanticSearchPipelineBusy,
+    ttsPipelineBusy,
     isInvoiceOcrUseCase,
     isAudioTranscribeUseCase,
     isSemanticSearchUseCase,
+    isTextToSpeechUseCase,
     semanticSearchPassageCount,
     attachmentIsAudio,
   ]);
@@ -1492,7 +1538,8 @@ export function App() {
     !speechTranscribing &&
     !ocrPipelineBusy &&
     !audioPipelineBusy &&
-    !semanticSearchPipelineBusy;
+    !semanticSearchPipelineBusy &&
+    !ttsPipelineBusy;
   const composerTextareaWasHiddenRef = useRef(false);
   useEffect(() => {
     if (!composerTextareaVisible) {
@@ -1625,7 +1672,9 @@ export function App() {
         requestEnableWebSearch("thread");
       } else {
         setActiveThreadWebSearch(false);
-        changeModel(uc.modelId);
+        if (!uc.prefersTextToSpeech) {
+          changeModel(uc.modelId);
+        }
       }
       if (uc.defaultCompareModelB) setCompareModelB(uc.defaultCompareModelB);
       setSystemPrompt(uc.systemPrompt);
@@ -1846,6 +1895,7 @@ export function App() {
     const textNow = inputValueRef.current.trim();
     const invoiceOcr = activeUseCaseId === "invoice-ocr";
     const audioTranscribe = activeUseCaseId === "audio-transcribe";
+    const textToSpeech = activeUseCaseId === "text-to-speech";
     const semanticSearch = activeUseCaseId === "semantic-search";
     const hasBriefing = hasBriefingContent(activeUseCase?.briefingFields, briefingValues);
     const hasContent = invoiceOcr
@@ -1855,9 +1905,11 @@ export function App() {
         : semanticSearch
           ? parseSemanticSearchPassages(briefingValues.passagen ?? "").length >= 2 &&
             textNow.length > 0
-          : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
+          : textToSpeech
+            ? textNow.length > 0
+            : hasBriefing || textNow.length > 0 || imageFileRef.current !== null;
     if (!options?.force && !canSend) return;
-    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || aiHostingTariffAdvisorBusy || weekendVisitPhase || priceCompareSearchBusy || ocrPipelineBusy || audioPipelineBusy || semanticSearchPipelineBusy))
+    if (options?.force && (!hasContent || busy || speechBusy || webSearchBusy || featureRequestsBusy || aiHostingDocsBusy || aiHostingTariffAdvisorBusy || weekendVisitPhase || priceCompareSearchBusy || ocrPipelineBusy || audioPipelineBusy || semanticSearchPipelineBusy || ttsPipelineBusy))
       return;
     if (sendLockRef.current) return;
 
@@ -1865,7 +1917,11 @@ export function App() {
     try {
     setAppError((prev) => (prev?.kind === "rate_limit" ? prev : null));
     let text = textNow;
-    if (activeUseCaseId !== "semantic-search" && activeUseCase?.briefingFields?.length) {
+    if (
+      activeUseCaseId !== "semantic-search" &&
+      activeUseCaseId !== "text-to-speech" &&
+      activeUseCase?.briefingFields?.length
+    ) {
       const composed = composeBriefingText(activeUseCase.briefingFields, briefingValues);
       text = textNow ? `${composed}\n\nZusatz:\n${textNow}` : composed;
     }
@@ -1990,6 +2046,9 @@ export function App() {
           hasVision,
           qwenVisionOcr,
           maxTokens,
+          isQwen38Model(modelId)
+            ? { thinkingEnabled: qwen38ThinkingEnabled, reasoningEffort: qwen38ReasoningEffort }
+            : undefined,
         );
         const body = buildCompareChatBody(modelId, apiMessages, params);
         const batch = side === "a" ? deltaBatchA : deltaBatchB;
@@ -2097,6 +2156,105 @@ export function App() {
         });
       } finally {
         setBusy(false);
+        abortRef.current = null;
+        focusComposer();
+      }
+      return;
+    }
+
+    if (textToSpeech) {
+      const spokenText = textNow.trim();
+      if (!spokenText) {
+        setAppError({ kind: "plain", message: "Bitte Text zum Vorlesen ins Eingabefeld schreiben." });
+        return;
+      }
+
+      const ctrl = new AbortController();
+      abortRef.current = ctrl;
+      const ttsParams = resolveTtsFromBriefing({ ...briefingValues, text: spokenText });
+      if (!ttsParams.input) {
+        setAppError({ kind: "plain", message: "Text zum Vorlesen fehlt." });
+        return;
+      }
+      if (ttsParams.input.length > TTS_MAX_INPUT_CHARS) {
+        setAppError({
+          kind: "plain",
+          message: `Text zu lang (max. ${TTS_MAX_INPUT_CHARS} Zeichen laut Doku/Server).`,
+        });
+        return;
+      }
+      const { voice, language, speed, responseFormat: format, instructions, prepared } = ttsParams;
+      const userMessage: ChatMessage = {
+        role: "user",
+        content: spokenText,
+        playgroundUseCaseId: "text-to-speech",
+      };
+      const nextThread = [...messagesBeforeSend, userMessage];
+      setMessages([...nextThread, { role: "assistant", content: "", playgroundUseCaseId: "text-to-speech" }]);
+      setBusy(true);
+      setTtsPhase("synthesize");
+      trackPlaygroundUseCaseSend(activeUseCase);
+      setInput("");
+      inputValueRef.current = "";
+
+      try {
+        const { blob, mimeType, fileName } = await synthesizeSpeech({
+          input: ttsParams.input,
+          voice,
+          language,
+          speed,
+          responseFormat: format,
+          instructions,
+          rateLimits: playgroundRateLimits,
+          signal: ctrl.signal,
+        });
+        const audioBase64 = await blobToBase64(blob);
+        const ttsResult: TtsResultPayload = {
+          audioBase64,
+          mimeType,
+          fileName,
+          voice,
+          language,
+          speed,
+          format,
+          inputChars: ttsParams.input.length,
+          preparedInput: prepared,
+        };
+        const assistantContent = buildTtsResultMarkdown({
+          voice,
+          language,
+          speed,
+          format,
+          inputChars: ttsParams.input.length,
+          fileName,
+          preparedInput: prepared,
+        });
+        setMessages((prev) => {
+          const copy = prev.slice();
+          const last = copy[copy.length - 1];
+          if (last?.role === "assistant") {
+            copy[copy.length - 1] = {
+              role: "assistant",
+              content: assistantContent,
+              playgroundUseCaseId: "text-to-speech",
+              ttsResult,
+            };
+          }
+          return copy;
+        });
+      } catch (e) {
+        const sendErr = appErrorFromSendFailure(e, playgroundRateLimits);
+        if (sendErr) setAppError(sendErr);
+        setMessages((prev) => {
+          const last = prev[prev.length - 1];
+          if (last?.role === "assistant" && assistantMessagePlainText(last.content).trim() === "") {
+            return prev.slice(0, -1);
+          }
+          return prev;
+        });
+      } finally {
+        setBusy(false);
+        setTtsPhase(null);
         abortRef.current = null;
         focusComposer();
       }
@@ -3190,6 +3348,23 @@ export function App() {
           const cap = qv.maxTokens ?? 2048;
           effMax = effMax === null ? cap : Math.min(effMax, cap);
         }
+      } else if (isQwen38Model(streamModelId)) {
+        const q38 = resolveQwen38InferenceParams({
+          thinkingEnabled: qwen38ThinkingEnabled,
+          reasoningEffort: qwen38ReasoningEffort,
+          hasVision: false,
+          qwenVisionOcr,
+          userMaxTokens: maxTokens,
+        });
+        effTemp = q38.temperature;
+        effTopP = typeof q38.topP === "number" ? q38.topP : effTopP;
+        effTopK = typeof q38.topK === "number" ? q38.topK : effTopK;
+        effPresence =
+          typeof q38.presencePenalty === "number" ? q38.presencePenalty : effPresence;
+        effExtra = q38.extraBody ? { ...q38.extraBody } : effExtra;
+        if (typeof q38.maxTokens === "number") {
+          effMax = q38.maxTokens;
+        }
       }
 
       let apiMessages = buildApiMessages(streamModelId);
@@ -3405,6 +3580,8 @@ export function App() {
     extraBody,
     maxTokens,
     gptOssReasoning,
+    qwen38ThinkingEnabled,
+    qwen38ReasoningEffort,
     qwenVisionOcr,
     maxMessages,
     busy,
@@ -3641,11 +3818,6 @@ export function App() {
           >
             {sidebarExpanded ? "Browsercache löschen" : "⌫"}
           </button>
-          {sidebarExpanded ? (
-            <div className="px-3 pt-2">
-              <PlaygroundHostingUpsell variant="sidebar" aiHostingUrl={aiHostingUrl} />
-            </div>
-          ) : null}
         </div>
       </aside>
 
@@ -3740,6 +3912,10 @@ export function App() {
               setGptOssReasoning={setGptOssReasoning}
               qwenVisionOcr={qwenVisionOcr}
               setQwenVisionOcr={setQwenVisionOcr}
+              qwen38ThinkingEnabled={qwen38ThinkingEnabled}
+              setQwen38ThinkingEnabled={setQwen38ThinkingEnabled}
+              qwen38ReasoningEffort={qwen38ReasoningEffort}
+              setQwen38ReasoningEffort={setQwen38ReasoningEffort}
               systemPrompt={systemPrompt}
               setSystemPrompt={setSystemPrompt}
               webSearchConfig={webSearchConfig}
@@ -3841,11 +4017,7 @@ export function App() {
                       disabled={busy || speechBusy}
                       onSelect={activateUseCase}
                     />
-                    <PlaygroundHostingUpsell
-                      variant="banner"
-                      aiHostingUrl={aiHostingUrl}
-                      className="mt-1"
-                    />
+                    <PlaygroundHostingUpsell aiHostingUrl={aiHostingUrl} className="mt-1" />
                   </>
                 )}
               </div>

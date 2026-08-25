@@ -2,6 +2,7 @@ import { formatPlaygroundShortDateBerlin } from "./playgroundDate";
 import { GRID_CARBON_FORECAST_SYSTEM_PROMPT } from "./gridCarbonForecast";
 import { formatGridCarbonForecastSubmission } from "./gridCarbonForecastAdvice";
 import { MODEL_GPT_OSS, MODEL_MINISTRAL, MODEL_QWEN_35, MODEL_QWEN_36 } from "./modelPresets";
+import { MODEL_QWEN_TTS } from "./textToSpeech";
 import {
   extractShopwareMcpScenarioFromSubmission,
   formatPlaygroundShopwareMcpDemoContext,
@@ -40,6 +41,7 @@ export type PlaygroundUseCaseId =
   | "price-compare"
   | "semantic-search"
   | "audio-transcribe"
+  | "text-to-speech"
   | "meeting-protocol"
   | "dev-debug"
   | "invoice-ocr"
@@ -101,6 +103,8 @@ export type PlaygroundUseCase = {
   prefersDocument?: boolean;
   /** Audiodatei per + — lange Transkription mit automatischen Whisper-Chunks. */
   prefersAudioFile?: boolean;
+  /** Text-to-Speech über Qwen3-TTS (/v1/audio/speech). */
+  prefersTextToSpeech?: boolean;
   /** Kopier-Buttons über Assistenten-Antworten (Codeblöcke). */
   copyableOutput?: boolean;
   /** Zwei Modelle parallel vergleichen (Modell A = Header, B = zweites Dropdown). */
@@ -270,7 +274,7 @@ const USE_CASE_SHOWCASE_GROUP_IDS: Record<
     "client-weekend",
   ],
   coding: ["dev-debug", "network-path-check", "bug-ticket", "feature-request", "feature-requests-feed"],
-  "ocr-dokumente": ["invoice-ocr", "audio-transcribe"],
+  "ocr-dokumente": ["invoice-ocr", "audio-transcribe", "text-to-speech"],
   "suche-embeddings": ["semantic-search", "current-research", "price-compare"],
   "content-seo": ["alt-tags", "seo-meta", "linkedin-post"],
   nachhaltigkeit: ["grid-carbon-forecast", "greenwashing-check", "travel-train-vs-flight", "co2-plain-language"],
@@ -286,6 +290,7 @@ export function getUseCaseShowcaseHighlights(uc: PlaygroundUseCase): string[] {
   if (uc.prefersSemanticSearch) tags.push("Embeddings");
   if (uc.prefersDocument) tags.push("GLM-OCR");
   if (uc.prefersAudioFile || uc.prefersSpeech) tags.push("Whisper");
+  if (uc.prefersTextToSpeech) tags.push("TTS");
   if (uc.prefersSpeech && !uc.prefersAudioFile) tags.push("Sprache");
   if (uc.id === "shopware-mcp-demo") tags.push("Tool Calling");
   if (uc.prefersNetworkPathCheck) tags.push("Netzwerk");
@@ -1589,6 +1594,51 @@ Nur wenn der Nutzer in den Hinweisen explizit eine Zusammenfassung wünscht — 
 ## Rohtranskript (Referenz)
 Optional kompakt: Anzahl Zeichen/Wörter, ob alle Abschnitte zusammengeführt wurden.`;
 
+/** Nur Stimme/Format — der Vorlesetext steht im Composer (kein Demo-Prefill). */
+export const TTS_BRIEFING_FIELDS: PlaygroundBriefingField[] = [
+  {
+    id: "voice",
+    label: "Stimme (voice)",
+    placeholder: "DE: vivian (empfohlen) · serena · EN: ryan oder aiden",
+    defaultValue: "vivian",
+  },
+  {
+    id: "language",
+    label: "Sprache (language → extra_body)",
+    placeholder: "German, English, Auto …",
+    defaultValue: "German",
+  },
+  {
+    id: "speed",
+    label: "Tempo (speed, 0.25–4)",
+    placeholder: "0.95 ruhig (DE-Default) · 1.15 etwas dynamischer",
+    defaultValue: "0.95",
+  },
+  {
+    id: "format",
+    label: "Format (response_format)",
+    placeholder: "opus (Web), wav (Weiterverarbeitung), mp3",
+    defaultValue: "opus",
+  },
+  {
+    id: "instructions",
+    label: "Sprechweise (instructions — nur Englisch, max. 500 Zeichen)",
+    placeholder: "Leer lassen für Deutsch — z. B. „Speak calmly and clearly.“",
+    rows: 2,
+    defaultValue: "",
+  },
+];
+
+export const TEXT_TO_SPEECH_SYSTEM_PROMPT = `Du bist ein kurzer Assistent für Text-to-Speech im Mittwald KI-Playground.
+
+Der Nutzer nutzt den Use Case „Text vorlesen“ — der Text aus dem Eingabefeld wird **1:1** über Qwen3-TTS vorgelesen, ohne Umschreibung durch dich.
+
+Wenn der Nutzer ausdrücklich nach Tipps fragt (nicht beim normalen Vorlesen):
+- Route: /v1/audio/speech, Modell Qwen3-TTS-12Hz-1.7B-CustomVoice
+- Stimme/Sprache/Format im Briefing — Vorlesetext nur im Eingabefeld
+
+Antworte knapp auf Deutsch.`;
+
 export const MEETING_PROTOCOL_SYSTEM_PROMPT = `Du bist ein erfahrener Protokollführer — für Agenturen, Unternehmen und private Gespräche gleichermaßen.
 
 Aufgabe: Aus Besprechungs-Transkripten (Rohtext, ggf. in Abschnitten [Abschnitt 1/2 …]) ein passendes Protokoll erstellen. **Format, Ton und Schwerpunkte leitest du aus dem Gesprächsinhalt ab** — nicht pauschal „Business“.
@@ -2293,6 +2343,29 @@ export const PLAYGROUND_USE_CASES: PlaygroundUseCase[] = [
     sendButtonLabel: "Transkribieren",
     prefersAudioFile: true,
     copyableOutput: true,
+    experimental: true,
+  },
+  {
+    id: "text-to-speech",
+    category: "delivery",
+    icon: "🔊",
+    title: "Text vorlesen",
+    subtitle: "Qwen3-TTS · 9 Stimmen",
+    description:
+      "Text in Sprache umwandeln — neun Stimmen. Deutsch-Default: vivian, German, opus, Tempo 0.95.",
+    modelId: MODEL_QWEN_TTS,
+    modelLabel: "Qwen3-TTS CustomVoice",
+    systemPrompt: TEXT_TO_SPEECH_SYSTEM_PROMPT,
+    briefingFields: TTS_BRIEFING_FIELDS,
+    composerPlaceholder:
+      "Text zum Vorlesen — möglichst ohne Anglizismen (Hosting → Webhosting, Deployment → Ausrollen).",
+    steps: [
+      "Text unten ins Eingabefeld — wird 1:1 vorgelesen; bei Deutsch werden gängige Anglizismen automatisch ersetzt.",
+      "Default: vivian · German · opus · Tempo 0.95 — Stimme bei Bedarf wechseln.",
+      "„Vorlesen“ — Audio abspielen oder herunterladen.",
+    ],
+    sendButtonLabel: "Vorlesen",
+    prefersTextToSpeech: true,
     experimental: true,
   },
   {
