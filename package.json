@@ -14,7 +14,7 @@
     "start": "npm run start -w server"
   },
   "devDependencies": {
-    "concurrently": "^10.0.4"
+    "concurrently": "^10.0.5"
   },
   "overrides": {
     "shell-quote": "^1.8.4"
